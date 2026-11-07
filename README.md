@@ -1,120 +1,231 @@
-# EVENTORA — Production Event Booking & RSVP Platform
+# Eventora — Production Event Booking & RSVP Platform
 
-Eventora is a production-quality event booking and RSVP management platform built with Next.js 14, Express.js, and MongoDB. Engineered with vertical slice architecture, atomic concurrency control, zero-trust security boundaries, transactional email confirmations via Resend, and a clean monochrome design system.
+[![Eventora CI](https://github.com/omsardar/eventora/actions/workflows/ci.yml/badge.svg)](https://github.com/omsardar/eventora/actions/workflows/ci.yml)
+[![Tests Passing](https://img.shields.io/badge/tests-85%2F85%20passing-brightgreen)](server/tests/tests.md)
+[![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](LICENSE)
+
+Eventora is a production-quality event booking and RSVP management platform built with **Next.js 14**, **Express.js**, and **MongoDB Atlas**. Engineered as a modular monolith adhering to vertical slice architecture, it guarantees atomic seat reservation consistency under high-concurrency flash crowds, zero-trust backend security boundaries, transactional email receipts via the Resend API, backend-only Cloudinary media management, and a clean monochrome design system.
 
 ---
 
-## 1. Quick Start & Demo Accounts
+## 1. Project Introduction
 
-For instant evaluation, two pre-configured demo accounts are provided with pre-seeded events and bookings:
+### 1.1 The Problem Being Solved
+Traditional event reservation platforms often suffer from critical concurrency vulnerabilities:
+- **Overbooking Race Conditions:** High-volume flash crowds competing for limited seats can breach venue capacity when reads and writes are not executed atomically.
+- **Double-Booking Collisions:** Flawed idempotency controls allow attendees to register multiple times for the same event, artificially exhausting ticket inventories.
+- **Client Credential Leaks:** Direct browser-to-cloud uploads frequently expose third-party cloud credentials, upload signatures, and unvalidated file types (leading to Stored XSS via malicious SVGs).
+- **Inconsistent Delivery Guarantees:** Third-party provider timeouts during notification dispatching often roll back valid database bookings or block response threads.
 
-| Role | Email | Password | Primary Capabilities |
+Eventora solves these challenges through database-level conditional atomic updates, compound unique indexing, a zero-client-credential backend upload boundary with cryptographic magic-bytes verification, and non-blocking transactional email delivery.
+
+### 1.2 User Roles
+Eventora enforces strict, immutable Role-Based Access Control (RBAC):
+- **Organizer:** Authors and manages events, adjusts capacity limits (guarded by capacity floors), uploads event banners, views private attendee rosters, cancels events, and reviews attendee cancellation requests.
+- **Attendee:** Discovers upcoming published events, searches by keyword and category, reserves seats via Free RSVP with atomic concurrency guarantees, receives Resend email receipts, accesses digital tickets, and requests cancellations.
+
+### 1.3 Project Status & Deployments
+- **Project Status:** Production-Ready & Hardened.
+- **Frontend Target:** Deployed on [Vercel](https://vercel.com) (Next.js 14 App Router).
+- **Backend Target:** Deployed on [Render](https://render.com) (Node.js 22 Web Service via [`render.yaml`](render.yaml)).
+- **Database Engine:** [MongoDB Atlas](https://www.mongodb.com/atlas) Clustered Replica Set.
+- **Health Check Endpoint:** `https://eventora-api.onrender.com/api/v1/health` (returns HTTP 200 `{ status: "healthy" }`).
+
+---
+
+## 2. Product Capabilities
+
+### Implemented Capabilities
+
+| Capability | Module | Engineering Implementation |
+|---|---|---|
+| **Authentication** | `authentication` | Stateful sessions in MongoDB (`connect-mongo`), Argon2id password hashing, session fixation rotation (`session.regenerate()`). |
+| **Role-Based Access Control**| `shared/middleware` | Strict role enforcement (`requireAuth`, `requireOrganizer`, `requireAttendee`), role immutability in MongoDB schema. |
+| **Event Discovery & Search** | `events` | Server-rendered catalog, text index keyword search, category pill filtering, pagination, and dynamic OpenGraph metadata. |
+| **Atomic Free RSVP** | `registrations` | Conditional atomic update (`$inc: { seatsBooked: 1 }` with `$expr: { $lt: ['$seatsBooked', '$seatLimit'] }`). Hardware-level document locking prevents overselling. |
+| **Double-Booking Immunity** | `registrations` | Compound unique index `{ eventId: 1, attendeeId: 1 }` prevents duplicate registrations. |
+| **Capacity Floor Protection**| `events` | Organizers cannot reduce an event's seat limit below the currently booked seat count. |
+| **Transactional Email** | `infrastructure/email` | Asynchronous booking receipts dispatched via Resend API (`resend`) with atomic deduplication (`confirmationEmailSent`). |
+| **Backend-Only Banner Upload**| `events` | Multer in-memory buffering, cryptographic magic-bytes inspection (JPEG, PNG, WebP only; rejects SVGs, HTML, and EXEs), server-side Cloudinary SDK streaming with unique server IDs. |
+| **Cancellation Workflow** | `registrations` | Two-phase cancellation: Attendee submits request -> Organizer approves (releasing seat) or rejects. |
+| **In-App Notifications** | `notifications` | Real-time notification bell and alert feed for event cancellations, booking confirmations, and cancellation decisions. |
+| **Smooth Scrolling** | `components/layout` | Inertial smooth scrolling via Lenis synchronized with GSAP ScrollTrigger, honoring `prefers-reduced-motion`. |
+| **Technical SEO & Brand Icons**| `app/seo` | Dynamic JSON-LD structured schemas (`Event`, `WebSite`, `Organization`), dynamic `/robots.txt` and `/sitemap.xml`, theme-adaptive SVG and multi-resolution ICO icons. |
+
+### Planned / Out-of-Scope Capabilities
+- Paid ticketing and payment gateways (intentionally omitted to maintain focused Free RSVP scope).
+- SMS notifications (MSG91 integration intentionally removed to prioritize Resend email confirmations).
+
+---
+
+## 3. Architecture Overview
+
+Eventora is architected as a **Modular Monolith** applying **Vertical Slice Architecture** for feature boundaries and a **Shared Kernel** for cross-cutting policies.
+
+```mermaid
+flowchart TD
+    subgraph ClientApp ["Next.js 14 Frontend (client/)"]
+        AppRouter["App Router (SSR & Dynamic Routes)"]
+        ReactQuery["TanStack Query (Cache & State)"]
+        AuthCtx["AuthContext (Session State)"]
+        LenisGSAP["Lenis & GSAP ScrollTrigger"]
+    end
+
+    subgraph BackendApp ["Express.js Backend (server/)"]
+        ExpressPipeline["Express Security Pipeline (Helmet, CORS, CSRF, RateLimit)"]
+        
+        subgraph FeatureSlices ["Vertical Feature Slices"]
+            AuthSlice["authentication/ (Argon2id & Sessions)"]
+            EventSlice["events/ (CRUD, Filters, Capacity)"]
+            RegSlice["registrations/ (Atomic RSVP & Approvals)"]
+            NotifSlice["notifications/ (In-App Feed)"]
+            AuditSlice["audit/ (Compliance Audit Logs)"]
+        end
+        
+        subgraph SharedKernel ["Shared Kernel"]
+            Middleware["middleware/ (Auth, CSRF, Upload, Errors)"]
+            Validation["validation/ (Zod, Magic Bytes)"]
+            Errors["errors/ (AppError Hierarchy)"]
+        end
+    end
+
+    subgraph ExternalServices ["External Infrastructure"]
+        Atlas["MongoDB Atlas (Sessions, RateLimits, Documents)"]
+        CloudinaryAPI["Cloudinary API (Server SDK Streaming)"]
+        ResendAPI["Resend API (Transactional Receipts)"]
+    end
+
+    Browser["User Browser"] -->|HTTPS (Cookies & CSRF)| ClientApp
+    ClientApp -->|API Requests with HttpOnly Cookies| ExpressPipeline
+    ExpressPipeline --> FeatureSlices
+    FeatureSlices --> SharedKernel
+    FeatureSlices --> Atlas
+    EventSlice -->|upload_stream| CloudinaryAPI
+    RegSlice -->|emails.send| ResendAPI
+```
+
+For comprehensive deep-dive architecture documentation, refer to:
+- **[Frontend Root Architecture (`client/client_root.md`)](client/client_root.md)**
+- **[Backend Root Architecture (`server/server_root.md`)](server/server_root.md)**
+
+---
+
+## 4. Technology Stack
+
+| Technology | Actual Version | Responsibility in Application | Location |
 |---|---|---|---|
-| **Organizer** | `organizer@eventora.demo` | `Organizer@123` | Host events, edit events, view attendee names and emails, cancel events, approve cancellations |
-| **Attendee** | `attendee@eventora.demo` | `Attendee@123` | Discover upcoming events, reserve seats with atomic guarantees, receive Resend transactional email confirmations, view digital tickets, request cancellations |
+| **Node.js** | 22 LTS (ESM) | Backend JavaScript runtime environment | Server |
+| **Express.js** | 4.21.2 | REST API routing and middleware pipeline | Server |
+| **Next.js** | 14.2.23 (App Router) | Full-stack React framework with SSR & Metadata API | Client |
+| **React** | 18.3.1 | UI component rendering library | Client |
+| **TypeScript** | 5.7.2 | Strict static typing and contract enforcement | Client |
+| **MongoDB & Mongoose** | 8.9.5 | Clustered database engine and ODM | Server |
+| **express-session** | 1.18.1 | Stateful HTTP session management | Server |
+| **connect-mongo** | 5.1.0 | MongoDB-backed session persistence with native TTL | Server |
+| **Argon2id (`argon2`)** | 0.41.1 | OWASP-compliant password hashing algorithm | Server |
+| **Resend (`resend`)** | 6.37.0 | Official SDK for transactional email confirmation delivery | Server |
+| **Cloudinary (`cloudinary`)**| 2.11.0 | Official server-side SDK for media asset storage | Server |
+| **Multer (`multer`)** | 2.5.0 | In-memory multipart/form-data upload parsing | Server |
+| **Tailwind CSS** | 3.4.17 | Utility-first styling and theme token system | Client |
+| **TanStack React Query** | 5.62.16 | Server state caching, background polling, and optimistic invalidation | Client |
+| **React Hook Form** | 7.54.2 | High-performance form state management | Client |
+| **Zod** | 3.24.1 (client) / 3.25.76 (server) | Schema validation for payloads and form inputs | Client & Server |
+| **Lenis (`lenis`)** | 1.1.18 | Smooth scrolling physics engine | Client |
+| **GSAP (`gsap`)** | 3.12.5 | Animation platform and ScrollTrigger synchronization | Client |
+| **Pino (`pino`)** | 9.6.0 | Structured JSON logger with automated credential redaction | Server |
+| **Helmet (`helmet`)** | 8.0.0 | HTTP security headers and Content Security Policy | Server |
+| **Node Test Runner** | Native (Node 22) | Automated unit, integration, and security test runner | Server |
+| **Playwright** | 1.49.1 | End-to-end browser test automation (Chromium) | Client |
 
-> **Note:** The login page features **1-Click Demo Fill buttons** that automatically populate these credentials for quick review.
+---
 
-To reset or seed demo data at any time:
-```bash
-npm run seed --prefix server
+## 5. Repository Structure
+
+```text
+EVENTORA/
+├── README.md            # Main project documentation (Level 1)
+├── package.json         # Workspace scripts
+├── render.yaml          # Render Blueprint deployment configuration
+├── .gitignore           # Git ignore rules
+│
+├── client/              # Next.js 14 Frontend Application
+│   ├── client_root.md   # Comprehensive Frontend Architecture (Level 2)
+│   ├── package.json     # Frontend dependencies and scripts
+│   ├── next.config.mjs  # Next.js configuration
+│   ├── tailwind.config.ts # Styling tokens
+│   ├── public/          # Static brand assets, favicon, manifest, OG image
+│   ├── playwright/      # Playwright E2E test suites (17 tests)
+│   │   └── playwright.md
+│   └── src/             # Frontend source code
+│       ├── src.md       # Source root documentation
+│       ├── app/         # App Router routes and layouts
+│       ├── components/  # React views, layout shells, UI primitives
+│       ├── features/    # Domain feature slices and AuthContext
+│       ├── lib/         # API client, siteConfig, utils
+│       └── types/       # TypeScript interfaces and contracts
+│
+├── server/              # Express.js Backend Application
+│   ├── server_root.md   # Comprehensive Backend Architecture (Level 2)
+│   ├── package.json     # Backend dependencies and test scripts
+│   ├── src/             # Backend source code
+│   │   ├── src.md       # Source root documentation
+│   │   ├── app.js       # Express application & middleware pipeline
+│   │   ├── server.js    # Entry point & graceful shutdown
+│   │   ├── infrastructure/ # External adapters, DB, logging, security, session, storage, email
+│   │   ├── modules/     # Vertical feature slices (auth, events, registrations, notifications)
+│   │   ├── scripts/     # Database seeding and migration utilities
+│   │   └── shared/      # Shared kernel (constants, errors, middleware, validation)
+│   └── tests/           # Automated test suites (68 tests)
+│       └── tests.md     # Unit, integration, and security test breakdown
+│
+└── Docs/                # Technical documentation and architecture reports
+    ├── 01-requirements/
+    ├── 02-system-design/
+    ├── 03-database/
+    ├── 04-api-documentation/ # OpenAPI 3.0.3 specification & REST API reference
+    ├── 05-security/
+    ├── 06-testing/
+    ├── 07-deployment/        # Production deployment guide
+    ├── 08-seo/
+    └── 09-production-readiness/ # Technical audits and coverage reports
 ```
 
 ---
 
-## 2. Technology Stack
+## 6. Local Development Setup
 
-### Frontend
-- **Framework:** Next.js 14 (App Router)
-- **Library:** React 18, TypeScript (Strict)
-- **Styling:** Tailwind CSS & shadcn/ui minimal tokens
-- **Smooth Scrolling & Animations:** Lenis & GSAP ScrollTrigger
-- **State Management:** TanStack Query (React Query v5)
-- **Forms & Validation:** React Hook Form & Zod
-- **Icons:** Lucide React
-- **Theme:** `next-themes` (Full Light & Dark modes)
+### 6.1 Prerequisites
+- **Node.js:** >= 20.0.0 LTS (Developed and verified on Node.js 22.18.0)
+- **npm:** >= 10.0.0
+- **MongoDB:** Local instance running at `mongodb://127.0.0.1:27017/eventora` or a free MongoDB Atlas cluster connection string.
 
-### Backend
-- **Runtime:** Node.js 22 LTS (ES Modules)
-- **Web Framework:** Express.js 4
-- **Database Engine:** MongoDB & Mongoose 8
-- **Session Store:** `express-session` with `connect-mongo`
-- **Transactional Email:** Resend API (`resend`) with non-blocking error isolation and atomic idempotency
-- **Password Security:** Argon2id (`argon2`)
-- **HTTP Hardening:** Helmet (Restrictive CSP), CORS (Exact origins)
-- **CSRF Defense:** Synchronizer token pattern & Origin header inspection
-- **Rate Limiting:** Distributed MongoDB-backed store (`rate_limits`)
-- **Image Uploads:** Backend-only Cloudinary server SDK integration (Multer memory storage, cryptographic magic bytes inspection, zero client credentials, automatic asset lifecycle & cleanup)
-- **Logging:** Structured JSON logging with Pino & automatic sensitive data redaction
-
----
-
-## 3. Key Architecture & Business Rules
-
-1. **Vertical Slice Architecture:** Code is organized by business feature (`authentication`, `events`, `registrations`, `cancellations`, `notifications`), preventing sprawling coupling.
-2. **Atomic Concurrency Guarantee:** Seat reservations use atomic MongoDB expressions:
-   ```javascript
-   Event.findOneAndUpdate({
-     _id: eventId,
-     status: 'PUBLISHED',
-     eventDate: { $gt: new Date() },
-     $expr: { $lt: ['$seatsBooked', '$seatLimit'] }
-   }, { $inc: { seatsBooked: 1 } })
-   ```
-   Capacity limits cannot be breached even under high concurrency flash crowds.
-3. **Double-Booking Immunity:** A unique compound index `{ eventId: 1, attendeeId: 1 }` guarantees an attendee can never register more than once for an event.
-4. **Resend Transactional Email Confirmations:**
-   - Dispatched non-blockingly **after** seat allocation commits.
-   - Guaranteed atomic deduplication via `confirmationEmailSent: { $ne: true }`.
-   - Complete responsive HTML template with plain-text fallback.
-   - Resilient error handling (upstream provider failures never roll back or cancel confirmed registrations).
-   - Mock simulation mode when `RESEND_API_KEY` is omitted or in test environments.
-5. **Role Immutability:** User roles are sealed upon registration and can never be modified via profile endpoints.
-6. **Capacity Floor Protection:** Organizers cannot reduce an event's seat limit below the currently booked seat count.
-7. **Cancellation Approval Workflow:** Attendee cancellation requests require organizer approval before the seat is released back to the event.
-8. **Backend-Only Cloudinary Upload Architecture:**
-   - Next.js client has zero Cloudinary credentials, imports zero Cloudinary SDKs, and performs no client-side signature fetching or direct calls to Cloudinary.
-   - Images are uploaded strictly as `multipart/form-data` to authenticated backend endpoints (`POST /api/v1/events/:eventId/banner` or `POST /api/v1/events/banner`).
-   - Express backend validates `ORGANIZER` role and verifies event ownership before accepting payloads.
-   - Strict binary magic bytes verification allows genuine JPEG, PNG, and WebP files (max 5MB), rejecting SVGs, HTML, executables, and spoofed MIME types.
-   - Assets are streamed to Cloudinary via server-side SDK using server-generated public IDs (`eventora/events/banner_...`).
-   - Previous Cloudinary assets are deleted upon banner replacement, and newly uploaded assets are purged if database persistence fails.
-
----
-
-## 4. Local Installation & Setup
-
-### Prerequisites
-- Node.js >= 20.0.0 (Tested on Node.js 22.18.0)
-- npm >= 10.0.0
-- MongoDB instance running locally (port 27017) or MongoDB Atlas URI
-
-### 1. Clone & Install
+### 6.2 Installation Steps
 ```bash
-# Clone the repository
-git clone <repo-url>
+# 1. Clone the repository
+git clone https://github.com/omsardar/eventora.git
 cd EVENTORA
 
-# Install root, backend, and frontend dependencies
+# 2. Install workspace dependencies
 npm run install:all
 ```
 
-### 2. Configure Environment Variables
-Create `server/.env` (or copy from `server/.env.example`):
+### 6.3 Configure Environment Variables
+
+Create `server/.env`:
 ```env
 PORT=5000
 NODE_ENV=development
+LOG_LEVEL=info
 MONGODB_URI=mongodb://127.0.0.1:27017/eventora
 SESSION_SECRET=eventora-super-secret-development-key-minimum-32-chars-long!
 ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
-LOG_LEVEL=info
-
-# Resend Transactional Email (Runs in mock mode when key is placeholder or test)
-RESEND_API_KEY=re_placeholder_replace_with_live_key
-EMAIL_FROM=Eventora <onboarding@resend.dev>
 APP_BASE_URL=http://localhost:3000
 
-# Cloudinary backend integration (never exposed to frontend/browser)
+# Resend Transactional Email (runs in mock simulation mode if key is omitted or placeholder)
+RESEND_API_KEY=re_mock_test_key_for_resend
+EMAIL_FROM=Eventora <onboarding@resend.dev>
+
+# Cloudinary Server Credentials (runs in test/mock mode if omitted or placeholder)
 CLOUDINARY_CLOUD_NAME=your_cloudinary_cloud_name
 CLOUDINARY_API_KEY=your_cloudinary_api_key
 CLOUDINARY_API_SECRET=your_cloudinary_api_secret
@@ -124,16 +235,23 @@ Create `client/.env.local`:
 ```env
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 NEXT_PUBLIC_API_URL=http://localhost:5000/api/v1
-INTERNAL_API_URL=http://localhost:5000/api/v1
 ```
 
-### 3. Seed Database
+### 6.4 Seed Database with Demo Accounts
 ```bash
 npm run seed --prefix server
 ```
+This initializes sample events and provisions two pre-configured demo accounts:
 
-### 4. Run Development Servers
-In separate terminal windows or run together:
+| Role | Email | Password | Primary Capabilities |
+|---|---|---|---|
+| **Organizer** | `organizer@eventora.demo` | `Organizer@123` | Host events, edit events, view attendee rosters, cancel events, approve cancellations |
+| **Attendee** | `attendee@eventora.demo` | `Attendee@123` | Discover events, execute Free RSVPs, receive email receipts, view digital tickets |
+
+> **Note:** The login page features **1-Click Demo Fill buttons** that instantly populate these credentials for quick review.
+
+### 6.5 Run Development Servers
+In separate terminal windows (or together):
 ```bash
 # Start Backend REST API (Port 5000)
 npm run dev:server
@@ -141,87 +259,196 @@ npm run dev:server
 # Start Frontend Next.js Client (Port 3000)
 npm run dev:client
 ```
-Visit `http://localhost:3000` to access the application.
+Visit `http://localhost:3000` to interact with the platform.
 
 ---
 
-## 5. Automated Testing
+## 7. Environment Variables Reference
 
-Eventora includes **85 automated tests** passing at 100% across the backend and frontend suites:
+### 7.1 Backend Environment Variables (`server/.env`)
 
-```bash
-# Run all backend tests (68/68 passing across Unit, Integration, and Security)
-npm test --prefix server
+| Variable Name | Purpose | Required / Optional | Target App | Sensitive Value |
+|---|---|---|---|---|
+| `PORT` | HTTP port listener (defaults to 5000) | Optional | Server | No |
+| `NODE_ENV` | Runtime environment (`development`, `test`, `production`) | **Required** | Server | No |
+| `LOG_LEVEL` | Pino logging threshold (`info`, `debug`, `warn`, `error`) | Optional | Server | No |
+| `MONGODB_URI` | MongoDB Atlas Replica Set connection string | **Required** | Server | **Yes** |
+| `SESSION_SECRET` | 32+ character cryptographically random string for session cookies | **Required** | Server | **Yes** |
+| `ALLOWED_ORIGINS` | Comma-separated trusted origins for CORS and Origin check | **Required** | Server | No |
+| `APP_BASE_URL` | Canonical frontend URL for ticket links in transactional emails | **Required** | Server | No |
+| `RESEND_API_KEY` | Official API key for Resend email delivery (falls back to mock mode if omitted) | Optional | Server | **Yes** |
+| `EMAIL_FROM` | Verified sender email address | **Required** | Server | No |
+| `CLOUDINARY_CLOUD_NAME` | Cloudinary account name | **Required** | Server | No |
+| `CLOUDINARY_API_KEY` | Cloudinary server API key | **Required** | Server | **Yes** |
+| `CLOUDINARY_API_SECRET` | Cloudinary server API secret | **Required** | Server | **Yes** |
 
-# Run individual backend test suites
-npm run test:unit --prefix server        # 11 tests: Password hashing, Zod validation, Resend email template rendering
-npm run test:integration --prefix server # 13 tests: Atomic booking, race conditions, full event, capacity floor, in-app notifications, Resend email idempotency & resilience
-npm run test:security --prefix server    # 44 tests: CSRF, origin check, role guards, privacy isolation, rate limiting, backend-only Cloudinary uploads (magic bytes, MIME spoofing, SVG/exe rejection, replacement & cleanup)
+### 7.2 Frontend Environment Variables (`client/.env.local`)
 
-# Run Playwright E2E & SEO tests (17/17 passing)
-npm run test:e2e --prefix client         # 17 tests: Auth journeys, role authorization, events discovery, Free RSVP & Resend email confirmation flow, backend banner upload controls, Organizer attendee roster, metadata, canonicals, OG tags, JSON-LD schemas, robots.txt & sitemap.xml
-```
-
----
-
-## 6. Technical SEO & Brand Identity System
-
-Eventora is engineered with enterprise-grade technical SEO using native Next.js App Router metadata conventions:
-
-- **Canonical URL & Metadata Base:** Governed by `NEXT_PUBLIC_SITE_URL` via `siteConfig.ts` with strict root `metadataBase`.
-- **Social Graph Sharing:** Pre-rendered 1200x630 Open Graph and Twitter summary cards (`/og-image.png`).
-- **Dynamic Event Metadata (`generateMetadata`):** Server-side fetched event titles, descriptions, canonical links, and social images, with graceful fallback on missing or cancelled events.
-- **Strict Noindex Controls:** Private and sensitive application routes (`/login`, `/register`, `/attendee/*`, `/organizer/*`) enforce `noindex, nofollow` directives to prevent indexing.
-- **Attendee Privacy:** Attendee rosters, email addresses, and booking records are strictly omitted from public metadata and search crawler schemas.
-- **Structured Data (Schema.org):** Safe anti-XSS JSON-LD rendering for `WebSite`, `Organization`, and `Event` (reflecting actual start dates, venues, organizers, and dynamic `InStock` / `SoldOut` capacity states).
-- **Dynamic Metadata Routes:** Native `/robots.txt` and `/sitemap.xml` dynamically querying live published events.
-- **Brand Icon System:** Minimal monochrome geometric ticket beacon monogram rendered in:
-  - `client/public/favicon.svg` (adaptive to `@media (prefers-color-scheme: dark)`)
-  - `client/public/favicon.ico` (multi-resolution 16/32/48 binary ICO)
-  - `client/public/icon.png` (512x512 high-resolution icon)
-  - `client/public/apple-icon.png` (180x180 iOS touch icon)
-  - `client/public/site.webmanifest` (PWA application manifest)
-
-Full documentation available in [`Docs/08-seo/seo-implementation.md`](file:///D:/THE%20OMS%20DEVS/WEB%20DEVS/MERN%20PROJECTS/PERSONAL/EVENTORA/Docs/08-seo/seo-implementation.md).
+| Variable Name | Purpose | Required / Optional | Target App | Sensitive Value |
+|---|---|---|---|---|
+| `NEXT_PUBLIC_SITE_URL` | Canonical site URL for metadata, canonicals, robots, and sitemaps | **Required** | Client | No |
+| `NEXT_PUBLIC_API_URL` | Public Express API URL consumed by browser `fetch` / XHR | **Required** | Client | No |
+| `INTERNAL_API_URL` | Server-side API URL for Next.js SSR fetches (optional) | Optional | Client | No |
 
 ---
 
-## 7. Project Structure
+## 8. Automated Testing
+
+Eventora is verified by **85 automated tests** passing at 100% across the backend and frontend suites:
 
 ```text
-EVENTORA/
-├── client/
-│   ├── src/
-│   │   ├── app/
-│   │   │   ├── (public)/          # Landing page, /events, /events/[eventId]
-│   │   │   ├── (auth)/            # /login, /register
-│   │   │   ├── (organizer)/       # /organizer/dashboard, events, create, edit, attendees
-│   │   │   ├── (attendee)/        # /attendee/registrations
-│   │   │   ├── layout.tsx         # Root layout with ThemeProvider & Navbar/Footer
-│   │   │   └── providers.tsx      # QueryClient & AuthContext
-│   │   ├── components/            # ui/, layout/, shared/ (EventCard)
-│   │   ├── features/              # AuthContext and domain hooks
-│   │   ├── lib/                   # api client, utils, siteConfig
-│   │   └── types/                 # TypeScript interfaces
-│   └── playwright/                # E2E test suites (17 tests)
-│
-├── server/
-│   ├── src/
-│   │   ├── modules/               # authentication/, users/, events/, registrations/, notifications/
-│   │   ├── infrastructure/        # database/, session/, logging/, email/ (Resend), cloudinary/
-│   │   ├── shared/                # middleware/ (uploadMiddleware), validation/ (fileValidation), errors/
-│   │   ├── app.js                 # Express application & security pipeline
-│   │   └── server.js              # Server entry point & graceful shutdown
-│   └── tests/                     # unit/, integration/, security/ (68 tests)
-│
-├── Docs/                          # Complete technical documentation & architecture
-└── README.md
+======================================================================
+  EVENTORA AUTOMATED TEST SUITE SUMMARY
+======================================================================
+  Server Unit Tests:          11 / 11 Passed (100%)
+  Server Integration Tests:   13 / 13 Passed (100%)
+  Server Security Tests:      44 / 44 Passed (100%)
+  Playwright E2E Tests:       17 / 17 Passed (100%)
+----------------------------------------------------------------------
+  Total Automated Tests:      85 / 85 Passed (100%)
+======================================================================
+```
+
+### Run Test Commands
+```bash
+# 1. Run all backend tests (68 tests across Unit, Integration, Security)
+npm test --prefix server
+
+# 2. Run backend sub-suites
+npm run test:unit --prefix server        # Argon2id hashing, Zod schemas, email template rendering
+npm run test:integration --prefix server # Atomic booking, race conditions, capacity floor, notifications
+npm run test:security --prefix server    # CSRF, Origin checks, RBAC guards, rate limits, Cloudinary upload security
+
+# 3. Run frontend lint and production build
+npm run lint --prefix client             # ESLint validation (0 errors, 0 warnings)
+npm run build --prefix client            # Next.js 14 production build (15/15 routes compiled)
+
+# 4. Run Playwright E2E browser tests (17 tests)
+npm run test:e2e --prefix client         # Auth journeys, role guards, Free RSVP, upload UI, SEO & brand assets
 ```
 
 ---
 
-## 8. Deployment Guide
+## 9. Deployment Architecture
 
-- **Frontend:** Deployed on Vercel with environment variable `NEXT_PUBLIC_API_URL`.
-- **Backend:** Deployed on Render with environment variables `MONGODB_URI`, `SESSION_SECRET`, `ALLOWED_ORIGINS`, `RESEND_API_KEY`.
-- **Database:** Hosted on MongoDB Atlas Replica Set (supporting multi-document transactions and conditional atomic updates).
+Eventora is configured for continuous zero-downtime deployment:
+
+```mermaid
+flowchart LR
+    Browser["User Browser"]
+    Vercel["Frontend (Vercel) / Next.js 14 App Router"]
+    Render["Backend (Render) / Node.js 22 Express"]
+    Atlas["Database (MongoDB Atlas) / Clustered Replica Set"]
+    Cloudinary["Cloudinary Media API"]
+    Resend["Resend Transactional Email API"]
+
+    Browser -->|HTTPS| Vercel
+    Vercel -->|Credentials & Cookies| Render
+    Render -->|TLS Connection Pool| Atlas
+    Render -->|Server SDK upload_stream| Cloudinary
+    Render -->|Non-blocking API call| Resend
+```
+
+### 9.1 Backend Web Service on Render ([`render.yaml`](render.yaml))
+- **Blueprint:** Managed via root [`render.yaml`](render.yaml).
+- **Root Directory:** `server`
+- **Build Command:** `npm install` (does not execute or require compilation)
+- **Start Command:** `npm start` (executes `node src/server.js`)
+- **Health Check Path:** `/api/v1/health`
+- **Free-Host Sleep Behavior:** Render free instances spin down after 15 minutes of inactivity. The first incoming request triggers a cold-start delay of 30–50 seconds while the container boots and reconnects to MongoDB Atlas.
+
+### 9.2 Frontend Web App on Vercel
+- **Root Directory:** `client`
+- **Build Command:** `npm run build`
+- **Output Directory:** Next.js default (`.next`)
+- **Environment Variables:** `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_API_URL`
+
+---
+
+## 10. Security Controls & Defense-in-Depth
+
+Eventora enforces a zero-trust architecture across all layers:
+
+1. **Argon2id Password Security:** Passwords hashed with hybrid memory-hard Argon2id (19 MiB RAM, 2 iterations, 1 thread) according to OWASP standards. Passwords are suppressed from query responses via `select: false`.
+2. **Stateful Session Hardening:** Stateful sessions persisted in MongoDB (`sessions` collection). Communicated exclusively through `HttpOnly`, `SameSite: 'none'` (in production), `Secure`, signed cookies (`eventora.sid`).
+3. **Session Fixation Defense:** Sessions are rotated via `req.session.regenerate()` on both login and registration.
+4. **Session Lifetime Enforcement:** Enforces a 30-minute idle inactivity timeout and a 24-hour absolute session expiration.
+5. **Double-Submit CSRF Defense:** Enforces synchronizer token pattern (`X-CSRF-Token`) on all mutating endpoints (`POST`, `PATCH`, `DELETE`).
+6. **Strict Origin & Referer Inspection:** Mutating requests verify that `Origin` or `Referer` headers match explicit trusted domains declared in `ALLOWED_ORIGINS`.
+7. **Role-Based Access Control (RBAC):** Roles (`ATTENDEE`, `ORGANIZER`) are immutable upon registration and strictly evaluated by route middleware.
+8. **Distributed Rate Limiting:** MongoDB-backed store (`rate_limits` collection with native TTL expiry) enforces rate quotas across horizontal server instances, preventing brute-force and DoS attacks.
+9. **Backend-Only Media Upload Boundary:**
+   - Client holds zero Cloudinary credentials and makes zero direct cloud calls.
+   - Files buffered in memory (max 5MB); no unvalidated files touch the local disk.
+   - Cryptographic binary magic bytes verify genuine JPEG, PNG, and WebP payloads.
+   - SVGs, HTML, XML, Windows PE executables (`MZ`), Linux ELF binaries, and spoofed MIME types are strictly rejected.
+   - Uploads streamed via official server-side SDK using server-generated unique public IDs.
+   - Old Cloudinary assets destroyed upon replacement; newly uploaded assets destroyed if database persistence fails.
+10. **Automated Log Redaction:** Pino structured logger automatically censors cookies, authorization headers, CSRF tokens, and passwords with `[REDACTED]`.
+
+---
+
+## 11. Documentation Navigation System
+
+Eventora features a complete 3-level hierarchical documentation system:
+
+```text
+Level 1: Root README.md (This Document)
+├── Level 2: Frontend Architecture (client/client_root.md)
+│   ├── Level 3: App Router (client/src/app/app.md)
+│   │   ├── (public) Route Group (client/src/app/(public)/(public).md)
+│   │   ├── (auth) Route Group (client/src/app/(auth)/(auth).md)
+│   │   ├── (attendee) Route Group (client/src/app/(attendee)/(attendee).md)
+│   │   └── (organizer) Route Group (client/src/app/(organizer)/(organizer).md)
+│   ├── Level 3: UI & Views (client/src/components/components.md)
+│   ├── Level 3: Features & Auth (client/src/features/features.md)
+│   ├── Level 3: Client Utilities (client/src/lib/lib.md)
+│   ├── Level 3: TypeScript Definitions (client/src/types/types.md)
+│   └── Level 3: Playwright E2E Tests (client/playwright/playwright.md)
+│
+├── Level 2: Backend Architecture (server/server_root.md)
+│   ├── Level 3: Source Root (server/src/src.md)
+│   ├── Level 3: Shared Kernel (server/src/shared/shared.md)
+│   │   ├── Constants (server/src/shared/constants/constants.md)
+│   │   ├── Errors (server/src/shared/errors/errors.md)
+│   │   ├── Middleware (server/src/shared/middleware/middleware.md)
+│   │   └── Validation (server/src/shared/validation/validation.md)
+│   ├── Level 3: Infrastructure (server/src/infrastructure/infrastructure.md)
+│   │   ├── Database (server/src/infrastructure/database/database.md)
+│   │   ├── Logging (server/src/infrastructure/logging/logging.md)
+│   │   ├── Session (server/src/infrastructure/session/session.md)
+│   │   ├── Security & RateLimit (server/src/infrastructure/security/security.md)
+│   │   ├── Email / Resend (server/src/infrastructure/email/email.md)
+│   │   └── Cloudinary Storage (server/src/infrastructure/cloudinary/cloudinary.md)
+│   ├── Level 3: Domain Slices (server/src/modules/modules.md)
+│   │   ├── Authentication (server/src/modules/authentication/authentication.md)
+│   │   ├── Events (server/src/modules/events/events.md)
+│   │   ├── Registrations (server/src/modules/registrations/registrations.md)
+│   │   ├── Notifications (server/src/modules/notifications/notifications.md)
+│   │   ├── Users (server/src/modules/users/users.md)
+│   │   └── Audit (server/src/modules/audit/audit.md)
+│   └── Level 3: Backend Tests (server/tests/tests.md)
+│
+└── Technical Specifications & Audits (Docs/)
+    ├── REST API Reference (Docs/04-api-documentation/API.md)
+    ├── OpenAPI 3.0.3 Specification (Docs/04-api-documentation/openapi.yaml)
+    ├── Production Deployment Guide (Docs/07-deployment/deployment-guide.md)
+    ├── Backend Image Upload Audit (Docs/09-production-readiness/backend-image-upload-audit.md)
+    ├── Scope Correction & Email Audit (Docs/09-production-readiness/scope-correction-and-email-audit.md)
+    └── Documentation Coverage Report (Docs/09-production-readiness/documentation-coverage-report.md)
+```
+
+---
+
+## 12. Project Limitations & Future Roadmap
+
+### Current Limitations
+1. **Single-Instance Image Buffering:** Image uploads buffer up to 5MB in process memory before streaming to Cloudinary. For massive concurrent image uploads (thousands per second), an offloaded signed worker architecture would reduce process memory usage.
+2. **Free-Host Cold Starts:** On Render's free tier, backend containers sleep after 15 minutes of inactivity, resulting in a 30–50 second cold-start latency for the initial request.
+3. **Polling Notifications:** In-app notifications are queried every 30 seconds via TanStack Query rather than via WebSockets or Server-Sent Events (SSE).
+
+### Potential Future Improvements
+- **Server-Sent Events (SSE):** Migrate in-app notifications from 30-second polling to real-time SSE streams.
+- **Waitlist Allocation:** Implement automated waitlist promotions when cancellations are approved.
+- **Calendar Integrations:** Add `.ics` and Google Calendar export attachments to Resend booking confirmation emails.
+- **Multi-Region Replica Sets:** Expand MongoDB Atlas across multiple geographical regions for lower latency global read queries.

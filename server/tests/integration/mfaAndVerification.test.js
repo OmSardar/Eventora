@@ -97,7 +97,7 @@ describe('Email Verification, Login Alerts & MFA (Integration Tests)', () => {
     rawVerificationToken = match[1];
   });
 
-  it('2. Unverified attendee is blocked from accessing protected actions (RSVP)', async () => {
+  it('2. Unverified attendee is blocked from accessing protected actions (RSVP & MFA setup)', async () => {
     const dummyEventId = new mongoose.Types.ObjectId();
 
     const res = await attendeeAgent
@@ -107,6 +107,24 @@ describe('Email Verification, Login Alerts & MFA (Integration Tests)', () => {
 
     assert.equal(res.status, 403, 'Should reject with 403 Forbidden');
     assert.ok(res.body.error.message.includes('Email verification required'));
+
+    // Check TOTP setup blocked for unverified user
+    const resTotp = await attendeeAgent
+      .post('/api/v1/auth/security/totp/setup')
+      .set('X-CSRF-Token', csrfAtt)
+      .send({ password: attendeePassword });
+
+    assert.equal(resTotp.status, 403, 'Should reject TOTP setup for unverified user');
+    assert.ok(resTotp.body.error.message.includes('Email verification required'));
+
+    // Check Email OTP setup blocked for unverified user
+    const resEmailOtp = await attendeeAgent
+      .post('/api/v1/auth/security/email-otp/initiate')
+      .set('X-CSRF-Token', csrfAtt)
+      .send({ password: attendeePassword });
+
+    assert.equal(resEmailOtp.status, 403, 'Should reject Email OTP setup for unverified user');
+    assert.ok(resEmailOtp.body.error.message.includes('Email verification required'));
   });
 
   it('3. Rejects invalid or expired email verification tokens', async () => {

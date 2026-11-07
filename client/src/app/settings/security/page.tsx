@@ -444,10 +444,11 @@ export default function SecuritySettingsPage() {
               <Button
                 variant="outline"
                 size="sm"
+                disabled={!isEmailVerified}
                 onClick={() => setActiveModal("TOTP_SETUP")}
                 className="w-full text-xs font-semibold"
               >
-                Enable Authenticator App
+                {isEmailVerified ? "Enable Authenticator App" : "Requires Verified Email"}
               </Button>
             )}
           </CardFooter>
@@ -542,11 +543,11 @@ export default function SecuritySettingsPage() {
             <Button
               variant="outline"
               size="sm"
-              disabled={!isTotpActive && !isEmailOtpActive}
+              disabled={!isEmailVerified || (!isTotpActive && !isEmailOtpActive)}
               onClick={() => setActiveModal("REGEN_RECOVERY")}
               className="w-full text-xs font-semibold"
             >
-              Regenerate Recovery Codes
+              {!isEmailVerified ? "Requires Verified Email" : "Regenerate Recovery Codes"}
             </Button>
           </CardFooter>
         </Card>

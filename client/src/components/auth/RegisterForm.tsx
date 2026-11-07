@@ -67,12 +67,8 @@ export function RegisterForm() {
     setIsLoading(true);
     setServerError(null);
     try {
-      const user = await registerAuth(data);
-      if (user.role === "ORGANIZER") {
-        router.push("/organizer/dashboard");
-      } else {
-        router.push("/events");
-      }
+      await registerAuth(data);
+      router.push("/verify-email");
     } catch (err: unknown) {
       const error = err as Error;
       setServerError(

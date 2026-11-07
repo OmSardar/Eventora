@@ -50,3 +50,38 @@ export const NOTIFICATION_CHANNEL = Object.freeze({
   EMAIL: 'EMAIL'
 });
 
+export const SEATING_TYPE = Object.freeze({
+  GENERAL_ADMISSION: 'GENERAL_ADMISSION',
+  ASSIGNED_SEATING: 'ASSIGNED_SEATING'
+});
+
+export const SEAT_STATUS = Object.freeze({
+  AVAILABLE: 'AVAILABLE',
+  HELD: 'HELD',
+  BOOKED: 'BOOKED',
+  BLOCKED: 'BLOCKED'
+});
+
+export const SEAT_HOLD_STATUS = Object.freeze({
+  ACTIVE: 'ACTIVE',
+  CONSUMED: 'CONSUMED',
+  EXPIRED: 'EXPIRED',
+  RELEASED: 'RELEASED'
+});
+
+export const BOOKING_STATUS = Object.freeze({
+  PENDING_PAYMENT: 'PENDING_PAYMENT',
+  CONFIRMED: 'CONFIRMED',
+  CANCELLED: 'CANCELLED',
+  EXPIRED: 'EXPIRED',
+  REFUND_PENDING: 'REFUND_PENDING',
+  REFUNDED: 'REFUNDED'
+});
+
+export const SEAT_CATEGORY = Object.freeze({
+  VIP: 'VIP',
+  PREMIUM: 'PREMIUM',
+  STANDARD: 'STANDARD'
+});
+
+

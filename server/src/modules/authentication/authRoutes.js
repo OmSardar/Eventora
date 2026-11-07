@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import * as authController from './authController.js';
-import { authenticate } from '../../shared/middleware/authMiddleware.js';
+import { authenticate, requireVerifiedEmail } from '../../shared/middleware/authMiddleware.js';
 import { validateBody } from '../../shared/middleware/validate.js';
 import {
   registerSchema,
@@ -120,6 +120,7 @@ router.get(
 router.post(
   '/security/email-otp/initiate',
   authenticate,
+  requireVerifiedEmail,
   csrfProtection,
   validateBody(reauthPasswordSchema),
   authController.initiateEmailOtp
@@ -128,6 +129,7 @@ router.post(
 router.post(
   '/security/email-otp/confirm',
   authenticate,
+  requireVerifiedEmail,
   csrfProtection,
   validateBody(confirmEmailOtpSetupSchema),
   authController.confirmEmailOtp
@@ -136,6 +138,7 @@ router.post(
 router.post(
   '/security/totp/setup',
   authenticate,
+  requireVerifiedEmail,
   csrfProtection,
   validateBody(reauthPasswordSchema),
   authController.setupTotp
@@ -144,6 +147,7 @@ router.post(
 router.post(
   '/security/totp/confirm',
   authenticate,
+  requireVerifiedEmail,
   csrfProtection,
   validateBody(confirmTotpSetupSchema),
   authController.confirmTotp
@@ -160,6 +164,7 @@ router.post(
 router.post(
   '/security/recovery-codes/regenerate',
   authenticate,
+  requireVerifiedEmail,
   csrfProtection,
   validateBody(reauthPasswordSchema),
   authController.regenerateRecoveryCodes

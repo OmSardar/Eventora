@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { EVENT_STATUS } from '../../shared/constants/status.js';
+import { EVENT_STATUS, SEATING_TYPE } from '../../shared/constants/status.js';
 
 const eventSchema = new mongoose.Schema(
   {
@@ -70,6 +70,45 @@ const eventSchema = new mongoose.Schema(
       default: 'INR',
       trim: true,
       uppercase: true
+    },
+    seatingType: {
+      type: String,
+      enum: Object.values(SEATING_TYPE),
+      default: SEATING_TYPE.GENERAL_ADMISSION,
+      index: true
+    },
+    maxTicketsPerBooking: {
+      type: Number,
+      default: 6,
+      min: [1, 'Maximum tickets per booking must be at least 1'],
+      max: [10, 'Maximum tickets per booking cannot exceed 10']
+    },
+    seatCategories: [
+      {
+        id: { type: String, required: true },
+        name: { type: String, required: true },
+        price: { type: Number, required: true, min: 0 },
+        color: { type: String, default: '#6366f1' },
+        description: { type: String, default: '' }
+      }
+    ],
+    venueLayout: {
+      name: { type: String, default: 'Standard Auditorium' },
+      description: { type: String, default: '' },
+      sections: [
+        {
+          sectionId: { type: String, required: true },
+          name: { type: String, required: true },
+          category: { type: String, default: 'STANDARD' },
+          price: { type: Number, default: 0 },
+          rows: [
+            {
+              rowLabel: { type: String, required: true },
+              seatCount: { type: Number, required: true, min: 1 }
+            }
+          ]
+        }
+      ]
     },
     image: {
       source: {

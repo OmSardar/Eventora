@@ -15,6 +15,9 @@ export function getResendClient() {
   const apiKey = process.env.RESEND_API_KEY;
 
   if (process.env.NODE_ENV === 'test' || !apiKey || apiKey.startsWith('re_mock') || apiKey.includes('placeholder')) {
+    if (process.env.NODE_ENV === 'production' && !apiKey) {
+      logger.error('CRITICAL: RESEND_API_KEY is missing on Render. Transactional emails cannot be delivered.');
+    }
     return null;
   }
 
@@ -51,7 +54,7 @@ export function getAppBaseUrl() {
  * Dispatches an email via Resend or logs in simulation/mock mode.
  */
 async function sendEmail({ to, subject, html, text }) {
-  const fromEmail = process.env.EMAIL_FROM || 'Eventora <onboarding@resend.dev>';
+  const fromEmail = process.env.EMAIL_FROM || 'Eventora <notifications@mail.omslabs.tech>';
   const client = getResendClient();
 
   if (!client) {

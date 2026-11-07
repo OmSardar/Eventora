@@ -93,14 +93,19 @@ export async function register({ name, email, password, role, ipAddress, userAge
     userAgent
   });
 
-  // Asynchronously dispatch verification email via Resend
-  sendEmailVerificationEmail({
-    email: user.email,
-    name: user.name,
-    token: rawToken
-  }).catch((err) => {
-    logger.error({ err: err?.message, userId: user._id }, 'Failed to dispatch verification email');
-  });
+  // Dispatch verification email via Resend
+  try {
+    const emailResult = await sendEmailVerificationEmail({
+      email: user.email,
+      name: user.name,
+      token: rawToken
+    });
+    if (!emailResult?.success) {
+      logger.error({ err: emailResult?.error, email: user.email }, 'Resend failed to deliver verification email');
+    }
+  } catch (err) {
+    logger.error({ err: err?.message, userId: user._id }, 'Exception dispatching verification email');
+  }
 
   await logAuditEvent({
     action: 'USER_REGISTERED',
@@ -226,13 +231,19 @@ export async function resendVerificationEmail({ email, ipAddress, userAgent }) {
     userAgent
   });
 
-  sendEmailVerificationEmail({
-    email: user.email,
-    name: user.name,
-    token: rawToken
-  }).catch((err) => {
-    logger.error({ err: err?.message, userId: user._id }, 'Failed to resend verification email');
-  });
+  // Dispatch verification email via Resend
+  try {
+    const emailResult = await sendEmailVerificationEmail({
+      email: user.email,
+      name: user.name,
+      token: rawToken
+    });
+    if (!emailResult?.success) {
+      logger.error({ err: emailResult?.error, email: user.email }, 'Resend failed to resend verification email');
+    }
+  } catch (err) {
+    logger.error({ err: err?.message, userId: user._id }, 'Exception resending verification email');
+  }
 
   await logAuditEvent({
     action: 'EMAIL_VERIFICATION_RESENT',
@@ -782,6 +793,10 @@ export async function confirmEmailOtpEnrollment({ userId, otp, req }) {
   const user = await User.findById(userId).select('+mfa.recoveryCodes');
   if (!user) throw new NotFoundError('User not found.');
 
+  if (!user.emailVerified) {
+    throw new BadRequestError('Please verify your email address before enabling Email OTP two-factor authentication.');
+  }
+
   const expectedHash = hashOtp(otp, user._id.toString());
   if (!timingSafeStringEqual(pending.otpHash, expectedHash)) {
     throw new BadRequestError('Invalid verification code.');
@@ -835,6 +850,10 @@ export async function setupTotpEnrollment({ userId, password, req }) {
     throw new UnauthorizedError('Incorrect password. Reauthentication required.');
   }
 
+  if (!user.emailVerified) {
+    throw new BadRequestError('Please verify your email address before enabling Authenticator App (TOTP) two-factor authentication.');
+  }
+
   const secretBase32 = generateTotpSecret();
   const otpauthUri = generateTotpUri({ secretBase32, email: user.email });
   const qrCodeDataUrl = await generateTotpQrCode(otpauthUri);
@@ -875,6 +894,10 @@ export async function confirmTotpEnrollment({ userId, code, req }) {
 
   const user = await User.findById(userId).select('+mfa.recoveryCodes +mfa.totpSecretEncrypted');
   if (!user) throw new NotFoundError('User not found.');
+
+  if (!user.emailVerified) {
+    throw new BadRequestError('Please verify your email address before enabling Authenticator App (TOTP) two-factor authentication.');
+  }
 
   delete req.session.pendingTotpSetup;
 
@@ -964,6 +987,10 @@ export async function regenerateRecoveryCodes({ userId, password, req }) {
   const isPasswordValid = await verifyPassword(password, user.passwordHash);
   if (!isPasswordValid) {
     throw new UnauthorizedError('Incorrect password. Reauthentication required.');
+  }
+
+  if (!user.emailVerified) {
+    throw new BadRequestError('Please verify your email address before managing MFA recovery codes.');
   }
 
   if (!user.mfa?.emailOtpEnabled && !user.mfa?.totpEnabled) {

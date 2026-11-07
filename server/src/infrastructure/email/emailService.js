@@ -93,14 +93,18 @@ async function sendEmail({ to, subject, html, text }) {
     }
   }
 
+  const replyTo = process.env.EMAIL_REPLY_TO || 'omsardar12@gmail.com';
+
   try {
-    const response = await client.emails.send({
+    const payload = {
       from: fromEmail,
       to: Array.isArray(to) ? to : [to],
       subject,
       html,
-      text
-    });
+      text,
+      ...(replyTo ? { reply_to: replyTo } : {})
+    };
+    const response = await client.emails.send(payload);
 
     if (response.error) {
       logger.error({ err: response.error.message || response.error, to, subject }, 'Resend API rejected email delivery');

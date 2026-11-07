@@ -392,3 +392,4 @@ export async function reconcileExpiredReservations() {
   logger.info({ modifiedCount: result.modifiedCount }, 'Reconciled expired seat reservations');
   return { expiredCount: result.modifiedCount };
 }
+

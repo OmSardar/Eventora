@@ -44,3 +44,4 @@ const webhookEventSchema = new mongoose.Schema(
 );
 
 export const WebhookEvent = mongoose.model('WebhookEvent', webhookEventSchema);
+

@@ -1,14 +1,14 @@
 import { ApiResponse } from "@/types";
+import { getApiBaseUrl } from "./env";
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api/v1";
+export { getApiBaseUrl };
 
 let cachedCsrfToken: string | null = null;
 
 export async function getCsrfToken(): Promise<string> {
   if (cachedCsrfToken) return cachedCsrfToken;
   try {
-    const res = await fetch(`${API_BASE_URL}/auth/csrf`, {
+    const res = await fetch(`${getApiBaseUrl()}/auth/csrf`, {
       method: "GET",
       credentials: "include",
     });
@@ -70,7 +70,7 @@ export async function apiClient<T>(
 
   const url = endpoint.startsWith("http")
     ? endpoint
-    : `${API_BASE_URL}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
+    : `${getApiBaseUrl()}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
 
   const response = await fetch(url, config);
 

@@ -1,15 +1,10 @@
 /**
  * Global Site & SEO Configuration for Eventora
  */
-
-const rawSiteUrl =
-  process.env.NEXT_PUBLIC_SITE_URL ||
-  (process.env.NODE_ENV === "production"
-    ? "https://eventora.example.com"
-    : "http://localhost:3000");
+import { getSiteUrl } from "./env";
 
 // Ensure URL does not contain trailing slash
-export const siteUrl = rawSiteUrl.replace(/\/+$/, "");
+export const siteUrl = getSiteUrl().replace(/\/+$/, "");
 
 export const siteConfig = {
   name: "Eventora",
@@ -31,8 +26,8 @@ export const siteConfig = {
     "live events",
   ],
   links: {
-    twitter: "https://twitter.com/eventora",
-    github: "https://github.com/eventora",
+    twitter: process.env.NEXT_PUBLIC_TWITTER_URL || "https://x.com/eventora",
+    github: process.env.NEXT_PUBLIC_GITHUB_URL || "https://github.com",
   },
 };
 

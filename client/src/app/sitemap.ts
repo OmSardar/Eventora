@@ -1,11 +1,9 @@
 import { MetadataRoute } from "next";
 import { siteUrl } from "@/lib/siteConfig";
+import { getInternalApiUrl } from "@/lib/env";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const apiUrl =
-    process.env.INTERNAL_API_URL ||
-    process.env.NEXT_PUBLIC_API_URL ||
-    "http://localhost:5000/api/v1";
+  const apiUrl = getInternalApiUrl();
 
   const staticEntries: MetadataRoute.Sitemap = [
     {

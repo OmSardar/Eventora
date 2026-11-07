@@ -284,7 +284,13 @@ export async function sendRegistrationConfirmationEmail({ registrationId, attend
   }
 
   const fromEmail = process.env.EMAIL_FROM || 'Eventora <onboarding@resend.dev>';
-  const appBaseUrl = process.env.APP_BASE_URL || 'http://localhost:3000';
+  const rawBaseUrl =
+    process.env.APP_BASE_URL ||
+    process.env.CLIENT_URL ||
+    process.env.FRONTEND_URL ||
+    (process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',')[0].trim() : '') ||
+    'http://localhost:3000';
+  const appBaseUrl = rawBaseUrl.replace(/\/+$/, '');
 
   const html = buildConfirmationEmailHtml({
     attendeeName: attendee.name,

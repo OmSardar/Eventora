@@ -11,7 +11,7 @@ import notificationRoutes from './modules/notifications/notificationRoutes.js';
 import { handleRazorpayWebhook } from './modules/payments/webhook/razorpayWebhookController.js';
 import { createSessionMiddleware } from './infrastructure/session/sessionConfig.js';
 import { sessionExpiryMiddleware } from './shared/middleware/sessionExpiryMiddleware.js';
-import { originCheckMiddleware, getAllowedOrigins } from './shared/middleware/securityMiddleware.js';
+import { originCheckMiddleware, getAllowedOrigins, isOriginAllowed } from './shared/middleware/securityMiddleware.js';
 import { globalRateLimiter } from './shared/middleware/rateLimiter.js';
 import { requestCorrelation } from './shared/middleware/requestCorrelation.js';
 import { errorHandler } from './shared/middleware/errorHandler.js';
@@ -33,8 +33,8 @@ app.use(
         defaultSrc: ["'self'"],
         scriptSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
-        imgSrc: ["'self'", 'data:', 'https://images.unsplash.com', 'https://*.unsplash.com'],
-        connectSrc: ["'self'", ...getAllowedOrigins()],
+        imgSrc: ["'self'", 'data:', 'https:', 'blob:'],
+        connectSrc: ["'self'", ...getAllowedOrigins(), 'https://*.vercel.app', 'https://*.onrender.com'],
         fontSrc: ["'self'"],
         objectSrc: ["'none'"],
         mediaSrc: ["'self'"],
@@ -46,23 +46,41 @@ app.use(
   })
 );
 
-// Strict CORS with exact origin matching and credentials support
-const allowedOrigins = getAllowedOrigins();
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      // Allow requests with no origin (e.g. mobile apps, curl, server-to-server) in development
-      if (!origin || allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
-      // Do not reflect unallowed origin
-      return callback(null, false);
-    },
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token', 'csrf-token', 'X-Request-Id']
-  })
-);
+// Dynamic CORS configuration supporting preflight and credentials
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Allow non-browser requests (e.g. mobile apps, curl, server-to-server webhooks) with no origin
+    if (!origin) {
+      return callback(null, true);
+    }
+    if (isOriginAllowed(origin)) {
+      return callback(null, true);
+    }
+    // Do not reflect unallowed origin
+    return callback(null, false);
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-CSRF-Token',
+    'csrf-token',
+    'X-Request-Id',
+    'x-razorpay-signature',
+    'x-razorpay-event-id',
+    'Accept',
+    'Origin',
+    'Cache-Control',
+    'X-Requested-With'
+  ],
+  exposedHeaders: ['X-Request-Id'],
+  maxAge: 86400
+};
+
+const corsMiddleware = cors(corsOptions);
+app.use(corsMiddleware);
+app.options('*', corsMiddleware);
 
 // Limit JSON request body size and preserve raw buffer for webhook signature validation
 app.use(

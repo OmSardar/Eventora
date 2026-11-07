@@ -2,18 +2,102 @@ import crypto from 'crypto';
 import { ForbiddenError } from '../errors/AppError.js';
 import { logger } from '../../infrastructure/logging/logger.js';
 
-// Get list of allowed origins from environment
+// Normalizes an origin string (trims, removes trailing slash, lowercases)
+export function normalizeOrigin(origin) {
+  if (!origin || typeof origin !== 'string') return '';
+  return origin.trim().replace(/\/+$/, '').toLowerCase();
+}
+
+// Get list of allowed origins dynamically from environment
 export function getAllowedOrigins() {
+  const origins = new Set();
+
+  // 1. Collect from ALLOWED_ORIGINS env var (comma-separated)
   const envOrigins = process.env.ALLOWED_ORIGINS;
   if (envOrigins) {
-    return envOrigins.split(',').map((o) => o.trim());
+    envOrigins
+      .split(',')
+      .map(normalizeOrigin)
+      .filter(Boolean)
+      .forEach((o) => origins.add(o));
   }
-  return [
-    'http://localhost:3000',
-    'http://127.0.0.1:3000',
-    'http://localhost:5000',
-    'http://127.0.0.1:5000'
+
+  // 2. Collect from known app/client base URL variables
+  const urlVars = [
+    process.env.APP_BASE_URL,
+    process.env.CLIENT_URL,
+    process.env.FRONTEND_URL
   ];
+
+  for (const url of urlVars) {
+    if (url) {
+      try {
+        const parsed = new URL(url).origin;
+        origins.add(normalizeOrigin(parsed));
+      } catch {
+        const norm = normalizeOrigin(url);
+        if (norm) origins.add(norm);
+      }
+    }
+  }
+
+  // 3. In non-production or test environments, add local loopback origins
+  if (process.env.NODE_ENV !== 'production') {
+    origins.add('http://localhost:3000');
+    origins.add('http://127.0.0.1:3000');
+    origins.add('http://localhost:5000');
+    origins.add('http://127.0.0.1:5000');
+    origins.add('http://localhost:5173');
+  }
+
+  return Array.from(origins);
+}
+
+// Checks whether an incoming origin is permitted
+export function isOriginAllowed(origin) {
+  if (!origin) return false;
+
+  const normalized = normalizeOrigin(origin);
+  if (!normalized) return false;
+
+  const allowedList = getAllowedOrigins();
+
+  // Wildcard catch-all if explicitly configured
+  if (allowedList.includes('*')) {
+    return true;
+  }
+
+  // Exact normalized match
+  if (allowedList.includes(normalized)) {
+    return true;
+  }
+
+  // Check wildcard patterns in allowed list (e.g., https://*.vercel.app, *.onrender.com)
+  for (const pattern of allowedList) {
+    if (pattern.includes('*')) {
+      const regexStr = '^' + pattern
+        .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
+        .replace(/\*/g, '[a-zA-Z0-9._-]+') + '$';
+      const regex = new RegExp(regexStr, 'i');
+      if (regex.test(normalized)) {
+        return true;
+      }
+    }
+  }
+
+  // Automatically permit all Vercel deployments (production domain & preview branches)
+  const isVercel = /^https:\/\/[a-z0-9._-]+\.vercel\.app$/i.test(normalized);
+  if (isVercel) {
+    return true;
+  }
+
+  // Automatically permit Render deployments
+  const isRender = /^https:\/\/[a-z0-9._-]+\.onrender\.com$/i.test(normalized);
+  if (isRender) {
+    return true;
+  }
+
+  return false;
 }
 
 // Generate or retrieve CSRF token for the session
@@ -46,11 +130,10 @@ export function originCheckMiddleware(req, _res, next) {
 
   const origin = req.headers['origin'];
   const referer = req.headers['referer'];
-  const allowedOrigins = getAllowedOrigins();
 
   if (origin) {
-    if (!allowedOrigins.includes(origin)) {
-      logger.warn({ origin, allowedOrigins }, 'Rejected request due to disallowed Origin header');
+    if (!isOriginAllowed(origin)) {
+      logger.warn({ origin }, 'Rejected request due to disallowed Origin header');
       return next(new ForbiddenError('Invalid Origin header'));
     }
     return next();
@@ -59,8 +142,8 @@ export function originCheckMiddleware(req, _res, next) {
   if (referer) {
     try {
       const refererOrigin = new URL(referer).origin;
-      if (!allowedOrigins.includes(refererOrigin)) {
-        logger.warn({ refererOrigin, allowedOrigins }, 'Rejected request due to disallowed Referer header');
+      if (!isOriginAllowed(refererOrigin)) {
+        logger.warn({ refererOrigin }, 'Rejected request due to disallowed Referer header');
         return next(new ForbiddenError('Invalid Referer header'));
       }
       return next();

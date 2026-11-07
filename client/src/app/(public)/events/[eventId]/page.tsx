@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { EventDetailView } from "@/components/events/EventDetailView";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { siteConfig, siteUrl } from "@/lib/siteConfig";
+import { getInternalApiUrl } from "@/lib/env";
 import { EventItem } from "@/types";
 
 interface PageProps {
@@ -12,10 +13,7 @@ interface PageProps {
 }
 
 async function getEvent(eventId: string): Promise<EventItem | null> {
-  const apiUrl =
-    process.env.INTERNAL_API_URL ||
-    process.env.NEXT_PUBLIC_API_URL ||
-    "http://localhost:5000/api/v1";
+  const apiUrl = getInternalApiUrl();
 
   try {
     const res = await fetch(`${apiUrl}/events/${eventId}`, {

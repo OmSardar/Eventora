@@ -23,3 +23,4 @@ export const verifyPaymentSchema = z.object({
     .trim()
     .min(1, 'Signature cannot be empty')
 });
+

@@ -16,9 +16,7 @@ import {
   CheckCircle2,
   RefreshCw,
 } from "lucide-react";
-
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api/v1";
+import { getApiBaseUrl } from "@/lib/env";
 
 interface ImageUploadFieldProps {
   value?: EventImage | string;
@@ -97,9 +95,10 @@ export function ImageUploadField({
       const formData = new FormData();
       formData.append("banner", file);
 
+      const baseUrl = getApiBaseUrl();
       const endpoint = eventId
-        ? `${API_BASE_URL}/events/${eventId}/banner`
-        : `${API_BASE_URL}/events/banner`;
+        ? `${baseUrl}/events/${eventId}/banner`
+        : `${baseUrl}/events/banner`;
 
       const xhr = new XMLHttpRequest();
 

@@ -8,6 +8,7 @@ import eventRoutes from './modules/events/eventRoutes.js';
 import registrationRoutes from './modules/registrations/registrationRoutes.js';
 import paymentRoutes from './modules/payments/paymentRoutes.js';
 import notificationRoutes from './modules/notifications/notificationRoutes.js';
+import seatingRoutes from './modules/seating/seatingRoutes.js';
 import { handleRazorpayWebhook } from './modules/payments/webhook/razorpayWebhookController.js';
 import { createSessionMiddleware } from './infrastructure/session/sessionConfig.js';
 import { sessionExpiryMiddleware } from './shared/middleware/sessionExpiryMiddleware.js';
@@ -123,6 +124,8 @@ app.post('/api/v1/webhooks/razorpay', handleRazorpayWebhook);
 // API Routes
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/events', eventRoutes);
+app.use('/api/v1/events', seatingRoutes);
+app.use('/api/v1', seatingRoutes);
 app.use('/api/v1/payments', paymentRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
 app.use('/api/v1', registrationRoutes);

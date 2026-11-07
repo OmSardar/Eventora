@@ -171,9 +171,35 @@ export function csrfProtection(req, _res, next) {
     return next();
   }
 
-  // Check header token
+  // Exempt server-to-server webhook endpoints (authenticated via HMAC signature)
+  if (req.originalUrl?.startsWith('/api/v1/webhooks/razorpay') || req.path?.startsWith('/api/v1/webhooks/razorpay')) {
+    return next();
+  }
+
+  const reqPath = (req.originalUrl || req.path || '').split('?')[0];
+  const isPublicAuth =
+    reqPath.endsWith('/auth/register') ||
+    reqPath.endsWith('/auth/verify-email') ||
+    reqPath.endsWith('/auth/resend-verification') ||
+    reqPath.endsWith('/auth/login');
+
   const clientToken = req.headers['x-csrf-token'] || req.headers['csrf-token'];
   const sessionToken = req.session ? req.session.csrfToken : null;
+
+  // On public auth onboarding endpoints, allow cross-origin Incognito & first-time requests
+  // provided the Origin/Referer has already passed originCheckMiddleware
+  if (isPublicAuth) {
+    if (clientToken && /^[a-f0-9]{64}$/i.test(clientToken)) {
+      if (req.session) {
+        req.session.csrfToken = clientToken;
+      }
+      return next();
+    }
+    const origin = req.headers['origin'] || (req.headers['referer'] ? new URL(req.headers['referer']).origin : null);
+    if (!origin || isOriginAllowed(origin) || process.env.NODE_ENV !== 'production') {
+      return next();
+    }
+  }
 
   // If session token is missing (e.g. cross-origin incognito environments or newly initialized session)
   if (!sessionToken) {

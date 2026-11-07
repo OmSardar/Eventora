@@ -4,6 +4,7 @@ dotenv.config();
 import app from './app.js';
 import { connectDatabase, disconnectDatabase } from './infrastructure/database/connection.js';
 import { logger } from './infrastructure/logging/logger.js';
+import { startHoldExpirationWorker, stopHoldExpirationWorker } from './modules/seating/holdExpirationWorker.js';
 
 const PORT = parseInt(process.env.PORT, 10) || 5000;
 
@@ -17,9 +18,13 @@ async function bootstrap() {
       logger.info(`Health check available at http://localhost:${PORT}/api/v1/health`);
     });
 
+    // Start background worker to automatically sweep expired seat holds (every 30s)
+    startHoldExpirationWorker(30000);
+
     // Graceful shutdown handling
     const shutdown = async (signal) => {
       logger.info(`Received ${signal}. Shutting down gracefully...`);
+      stopHoldExpirationWorker();
       server.close(async () => {
         logger.info('HTTP server closed');
         await disconnectDatabase();

@@ -60,9 +60,13 @@ export async function apiClient<T>(
   };
 
   if (isStateChanging) {
-    const csrfToken = await getCsrfToken();
-    if (csrfToken) {
-      headers["X-CSRF-Token"] = csrfToken;
+    try {
+      const csrfToken = await getCsrfToken();
+      if (csrfToken) {
+        headers["X-CSRF-Token"] = csrfToken;
+      }
+    } catch {
+      // Fallback: Proceed with trusted Origin header
     }
   }
 

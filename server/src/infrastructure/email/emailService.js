@@ -12,12 +12,11 @@ export function getResendClient() {
     return resendInstance;
   }
 
-  const apiKey = process.env.RESEND_API_KEY;
+  const apiKey =
+    process.env.RESEND_API_KEY ||
+    (process.env.NODE_ENV !== 'test' ? '***REMOVED***' : null);
 
   if (process.env.NODE_ENV === 'test' || !apiKey || apiKey.startsWith('re_mock') || apiKey.includes('placeholder')) {
-    if (process.env.NODE_ENV === 'production' && !apiKey) {
-      logger.error('CRITICAL: RESEND_API_KEY is missing on Render. Transactional emails cannot be delivered.');
-    }
     return null;
   }
 
@@ -46,7 +45,7 @@ export function getAppBaseUrl() {
     process.env.CLIENT_URL ||
     process.env.FRONTEND_URL ||
     (process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',')[0].trim() : '') ||
-    'http://localhost:3000';
+    (process.env.NODE_ENV === 'production' ? 'https://eventora-black.vercel.app' : 'http://localhost:3000');
   return raw.replace(/\/+$/, '');
 }
 
@@ -54,7 +53,10 @@ export function getAppBaseUrl() {
  * Dispatches an email via Resend or logs in simulation/mock mode.
  */
 async function sendEmail({ to, subject, html, text }) {
-  const fromEmail = process.env.EMAIL_FROM || 'Eventora <notifications@mail.omslabs.tech>';
+  let fromEmail = process.env.EMAIL_FROM || 'Eventora <notifications@mail.omslabs.tech>';
+  if (!fromEmail || fromEmail.includes('resend.dev')) {
+    fromEmail = 'Eventora <notifications@mail.omslabs.tech>';
+  }
   const client = getResendClient();
 
   if (!client) {

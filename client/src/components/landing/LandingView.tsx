@@ -45,59 +45,77 @@ export function LandingView() {
       return;
     }
 
+    const container = pageContainerRef.current;
+    if (!container) return;
+
     const ctx = gsap.context(() => {
       // Hero element subtle staggered entrance
-      gsap.from(".hero-element", {
-        opacity: 0,
-        y: 20,
-        duration: 0.8,
-        stagger: 0.12,
-        ease: "power2.out",
-      });
+      const heroEls = container.querySelectorAll(".hero-element");
+      if (heroEls.length > 0) {
+        gsap.from(heroEls, {
+          opacity: 0,
+          y: 20,
+          duration: 0.8,
+          stagger: 0.12,
+          ease: "power2.out",
+        });
+      }
 
       // Platform pillars entrance triggered on scroll
-      gsap.from(".feature-card", {
-        scrollTrigger: {
-          trigger: ".features-grid",
-          start: "top 80%",
-          toggleActions: "play none none none",
-        },
-        opacity: 0,
-        y: 25,
-        duration: 0.6,
-        stagger: 0.15,
-        ease: "power2.out",
-      });
+      const featuresGrid = container.querySelector(".features-grid");
+      const featureCards = container.querySelectorAll(".feature-card");
+      if (featuresGrid && featureCards.length > 0) {
+        gsap.from(featureCards, {
+          scrollTrigger: {
+            trigger: featuresGrid,
+            start: "top 80%",
+            toggleActions: "play none none none",
+          },
+          opacity: 0,
+          y: 25,
+          duration: 0.6,
+          stagger: 0.15,
+          ease: "power2.out",
+        });
+      }
 
-      // Staggered featured event cards entrance with subtle reveal
-      gsap.from(".featured-card-wrapper", {
-        scrollTrigger: {
-          trigger: ".featured-events-grid",
-          start: "top 80%",
-          toggleActions: "play none none none",
-        },
-        opacity: 0,
-        y: 30,
-        scale: 0.98,
-        duration: 0.7,
-        stagger: 0.15,
-        ease: "power2.out",
-      });
+      // Staggered featured event cards entrance with subtle reveal (only when events exist)
+      const featuredGrid = container.querySelector(".featured-events-grid");
+      const featuredCards = container.querySelectorAll(".featured-card-wrapper");
+      if (featuredGrid && featuredCards.length > 0) {
+        gsap.from(featuredCards, {
+          scrollTrigger: {
+            trigger: featuredGrid,
+            start: "top 80%",
+            toggleActions: "play none none none",
+          },
+          opacity: 0,
+          y: 30,
+          scale: 0.98,
+          duration: 0.7,
+          stagger: 0.15,
+          ease: "power2.out",
+        });
+      }
 
       // How it works steps entrance triggered on scroll
-      gsap.from(".step-card", {
-        scrollTrigger: {
-          trigger: ".steps-grid",
-          start: "top 80%",
-          toggleActions: "play none none none",
-        },
-        opacity: 0,
-        y: 20,
-        duration: 0.6,
-        stagger: 0.15,
-        ease: "power2.out",
-      });
-    }, pageContainerRef);
+      const stepsGrid = container.querySelector(".steps-grid");
+      const stepCards = container.querySelectorAll(".step-card");
+      if (stepsGrid && stepCards.length > 0) {
+        gsap.from(stepCards, {
+          scrollTrigger: {
+            trigger: stepsGrid,
+            start: "top 80%",
+            toggleActions: "play none none none",
+          },
+          opacity: 0,
+          y: 20,
+          duration: 0.6,
+          stagger: 0.15,
+          ease: "power2.out",
+        });
+      }
+    }, container);
 
     return () => ctx.revert();
   }, [data]);

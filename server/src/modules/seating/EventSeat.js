@@ -105,3 +105,4 @@ eventSeatSchema.index({ eventId: 1, sectionId: 1, rowLabel: 1 });
 eventSeatSchema.index({ holdId: 1, status: 1 });
 
 export const EventSeat = mongoose.model('EventSeat', eventSeatSchema);
+

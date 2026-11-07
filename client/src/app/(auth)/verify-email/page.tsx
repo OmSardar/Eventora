@@ -34,12 +34,25 @@ function VerifyEmailContent() {
   const token = searchParams.get("token");
   const { user, refetchUser } = useAuth();
 
+  const emailParam = searchParams.get("email") || "";
+  const isJustRegistered = searchParams.get("registered") === "true";
+
   const [status, setStatus] = useState<VerificationStatus>(token ? "VERIFYING" : "IDLE");
   const [errorMessage, setErrorMessage] = useState<string>("");
-  const [resendEmail, setResendEmail] = useState<string>(user?.email || "");
-  const [resendCooldown, setResendCooldown] = useState<number>(0);
+  const [resendEmail, setResendEmail] = useState<string>(emailParam || user?.email || "");
+  const [resendCooldown, setResendCooldown] = useState<number>(isJustRegistered ? 60 : 0);
   const [isResending, setIsResending] = useState<boolean>(false);
-  const [resendFeedback, setResendFeedback] = useState<string | null>(null);
+  const [resendFeedback, setResendFeedback] = useState<string | null>(
+    isJustRegistered
+      ? "A verification link has just been sent to your email. Please check your inbox (and spam folder)."
+      : null
+  );
+
+  useEffect(() => {
+    if (emailParam && !resendEmail) {
+      setResendEmail(emailParam);
+    }
+  }, [emailParam, resendEmail]);
 
   useEffect(() => {
     if (resendCooldown <= 0) return;

@@ -80,13 +80,17 @@ export function SmoothScrollProvider({ children }: { children: React.ReactNode }
 
       const href = anchor.getAttribute("href");
       if (href && href.startsWith("#") && href.length > 1) {
-        const targetElement = document.querySelector(href);
-        if (targetElement) {
-          e.preventDefault();
-          lenis.scrollTo(targetElement as HTMLElement, {
-            offset: -80, // Offset for sticky navbar
-            duration: 1.2,
-          });
+        try {
+          const targetElement = document.querySelector(href);
+          if (targetElement) {
+            e.preventDefault();
+            lenis.scrollTo(targetElement as HTMLElement, {
+              offset: -80, // Offset for sticky navbar
+              duration: 1.2,
+            });
+          }
+        } catch {
+          // Ignore invalid selector in anchor href
         }
       }
     };

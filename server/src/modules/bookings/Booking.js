@@ -114,3 +114,4 @@ bookingSchema.index({ eventId: 1, attendeeId: 1, status: 1 });
 bookingSchema.index({ attendeeId: 1, createdAt: -1 });
 
 export const Booking = mongoose.model('Booking', bookingSchema);
+

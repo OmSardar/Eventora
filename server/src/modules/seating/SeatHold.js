@@ -71,3 +71,4 @@ seatHoldSchema.index({ eventId: 1, attendeeId: 1, status: 1 });
 seatHoldSchema.index({ status: 1, expiresAt: 1 });
 
 export const SeatHold = mongoose.model('SeatHold', seatHoldSchema);
+

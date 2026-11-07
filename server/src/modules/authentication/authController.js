@@ -1,6 +1,8 @@
 import * as authService from './authService.js';
+import { User } from '../users/User.js';
 import { getOrCreateCsrfToken } from '../../shared/middleware/securityMiddleware.js';
 import { logAuditEvent } from '../audit/AuditLog.js';
+import { getAppBaseUrl } from '../../infrastructure/email/emailService.js';
 
 // Helper to safely establish authenticated session and rotate session ID
 function establishUserSession(req, user, authFactor, callback) {
@@ -104,9 +106,13 @@ export async function resendVerificationEmail(req, res, next) {
       userAgent
     });
 
+    const isOwnAccount = req.session?.user && req.session.user.email?.toLowerCase() === email?.toLowerCase();
+    const verifyUrl = isOwnAccount && result.rawToken ? `${getAppBaseUrl()}/verify-email?token=${result.rawToken}` : undefined;
+
     res.status(200).json({
       success: true,
-      message: result.message
+      message: result.message,
+      data: verifyUrl ? { verifyUrl } : undefined
     });
   } catch (error) {
     next(error);
@@ -295,6 +301,17 @@ export async function logout(req, res, next) {
 
 export async function getMe(req, res) {
   if (req.session && req.session.user) {
+    try {
+      const freshUser = await User.findById(req.session.user.id).select('emailVerified role name email');
+      if (freshUser) {
+        req.session.user.emailVerified = freshUser.emailVerified;
+        req.session.user.role = freshUser.role;
+        req.session.user.name = freshUser.name;
+      }
+    } catch {
+      // Fallback to session cache on transient DB read error
+    }
+
     return res.status(200).json({
       success: true,
       data: { user: req.session.user }

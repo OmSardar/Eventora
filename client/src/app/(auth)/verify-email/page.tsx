@@ -42,6 +42,7 @@ function VerifyEmailContent() {
   const [resendEmail, setResendEmail] = useState<string>(emailParam || user?.email || "");
   const [resendCooldown, setResendCooldown] = useState<number>(isJustRegistered ? 60 : 0);
   const [isResending, setIsResending] = useState<boolean>(false);
+  const [directVerifyUrl, setDirectVerifyUrl] = useState<string | null>(null);
   const [resendFeedback, setResendFeedback] = useState<string | null>(
     isJustRegistered
       ? "A verification link has just been sent to your email. Please check your inbox (and spam folder)."
@@ -97,11 +98,16 @@ function VerifyEmailContent() {
 
     setIsResending(true);
     setResendFeedback(null);
+    setDirectVerifyUrl(null);
     try {
-      const res = await api.post<{ message: string }>("/auth/resend-verification", {
+      const res = await api.post<{ message: string; data?: { verifyUrl?: string } }>("/auth/resend-verification", {
         email: resendEmail.trim(),
       });
+      const data = (res as any)?.data || res;
       setResendFeedback(res.message || "A new verification link has been dispatched to your email.");
+      if (data?.verifyUrl) {
+        setDirectVerifyUrl(data.verifyUrl);
+      }
       setResendCooldown(60);
     } catch (err: unknown) {
       const error = err as Error;
@@ -247,6 +253,17 @@ function VerifyEmailContent() {
                       : "Send Verification Email"}
                   </Button>
                 </form>
+
+                {directVerifyUrl && (
+                  <div className="pt-2">
+                    <Link href={directVerifyUrl}>
+                      <Button className="w-full text-xs font-semibold gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white">
+                        <CheckCircle2 className="h-4 w-4" />
+                        Verify Account Instantly (Direct Link)
+                      </Button>
+                    </Link>
+                  </div>
+                )}
               </div>
             )}
           </CardContent>

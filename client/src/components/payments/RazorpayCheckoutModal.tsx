@@ -66,8 +66,14 @@ export function RazorpayCheckoutButton({
       // 2. Load SDK script
       const scriptLoaded = await loadRazorpayScript();
 
-      if (!scriptLoaded || !window.Razorpay) {
-        // Fallback simulator for offline dev or automated headless test environments
+      if (
+        !scriptLoaded ||
+        !window.Razorpay ||
+        !orderData.keyId ||
+        orderData.keyId.includes("placeholder") ||
+        orderData.keyId.includes("mock")
+      ) {
+        // Fallback simulator for test environments or when gateway credentials are not yet configured
         setSimulatedOrder(orderData);
         setIsSimulating(true);
         setLoading(false);

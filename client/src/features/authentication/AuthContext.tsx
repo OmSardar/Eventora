@@ -64,6 +64,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     if (res.user) {
       setUser(res.user);
+      resetCsrfToken();
       return { user: res.user };
     }
     throw new Error("Unexpected login response");
@@ -72,18 +73,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const verifyMfaOtp = async (params: { challengeId: string; otp: string }): Promise<User> => {
     const res = await api.post<{ user: User }>("/auth/mfa/verify-otp", params);
     setUser(res.user);
+    resetCsrfToken();
     return res.user;
   };
 
   const verifyMfaTotp = async (params: { challengeId: string; code: string }): Promise<User> => {
     const res = await api.post<{ user: User }>("/auth/mfa/verify-totp", params);
     setUser(res.user);
+    resetCsrfToken();
     return res.user;
   };
 
   const verifyMfaRecovery = async (params: { challengeId: string; recoveryCode: string }): Promise<User> => {
     const res = await api.post<{ user: User }>("/auth/mfa/verify-recovery", params);
     setUser(res.user);
+    resetCsrfToken();
     return res.user;
   };
 
@@ -103,6 +107,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }): Promise<User> => {
     const res = await api.post<{ user: User }>("/auth/register", payload);
     setUser(res.user);
+    resetCsrfToken();
     return res.user;
   };
 

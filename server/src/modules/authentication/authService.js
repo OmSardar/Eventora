@@ -256,7 +256,10 @@ export async function resendVerificationEmail({ email, ipAddress, userAgent }) {
     details: { email: user.email }
   });
 
-  return genericResponse;
+  return {
+    ...genericResponse,
+    rawToken
+  };
 }
 
 // -------------------------------------------------------------

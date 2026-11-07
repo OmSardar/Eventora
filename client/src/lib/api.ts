@@ -4,31 +4,42 @@ import { getApiBaseUrl } from "./env";
 export { getApiBaseUrl };
 
 let cachedCsrfToken: string | null = null;
+let fetchingCsrfPromise: Promise<string> | null = null;
 
 export async function getCsrfToken(): Promise<string> {
   if (cachedCsrfToken) return cachedCsrfToken;
-  try {
-    const res = await fetch(`${getApiBaseUrl()}/auth/csrf`, {
-      method: "GET",
-      credentials: "include",
-    });
-    const json: ApiResponse<{ csrfToken: string }> = await res.json();
-    if (json.data?.csrfToken) {
-      cachedCsrfToken = json.data.csrfToken;
-      return cachedCsrfToken;
+  if (fetchingCsrfPromise) return fetchingCsrfPromise;
+
+  fetchingCsrfPromise = (async () => {
+    try {
+      const res = await fetch(`${getApiBaseUrl()}/auth/csrf`, {
+        method: "GET",
+        credentials: "include",
+      });
+      const json: ApiResponse<{ csrfToken: string }> = await res.json();
+      if (json.data?.csrfToken) {
+        cachedCsrfToken = json.data.csrfToken;
+        return cachedCsrfToken;
+      }
+    } catch (err) {
+      console.error("Failed to retrieve CSRF token:", err);
+    } finally {
+      fetchingCsrfPromise = null;
     }
-  } catch (err) {
-    console.error("Failed to retrieve CSRF token:", err);
-  }
-  return "";
+    return "";
+  })();
+
+  return fetchingCsrfPromise;
 }
 
 export function resetCsrfToken() {
   cachedCsrfToken = null;
+  fetchingCsrfPromise = null;
 }
 
 interface RequestOptions extends RequestInit {
   data?: unknown;
+  _retriedCsrf?: boolean;
 }
 
 export async function apiClient<T>(
@@ -93,6 +104,25 @@ export async function apiClient<T>(
     };
     err.statusCode = response.status;
     err.details = json.error?.details;
+
+    // Auto-recovery: If CSRF token expired or mismatched, refresh token and retry request once
+    if (
+      response.status === 403 &&
+      errorMessage.toLowerCase().includes("csrf") &&
+      !options._retriedCsrf
+    ) {
+      resetCsrfToken();
+      const freshToken = await getCsrfToken();
+      const retryHeaders = {
+        ...((customHeaders as Record<string, string>) || {}),
+        ...(freshToken ? { "X-CSRF-Token": freshToken } : {}),
+      };
+      return apiClient<T>(endpoint, {
+        ...options,
+        headers: retryHeaders,
+        _retriedCsrf: true,
+      });
+    }
 
     // Invalidate cached token if CSRF failure
     if (response.status === 403 && errorMessage.toLowerCase().includes("csrf")) {

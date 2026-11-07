@@ -1,6 +1,8 @@
 import mongoose from 'mongoose';
 import { Payment } from './Payment.js';
 import { SeatReservation } from './SeatReservation.js';
+import { SeatHold } from '../seating/SeatHold.js';
+import { EventSeat } from '../seating/EventSeat.js';
 import { RefundOperation } from './RefundOperation.js';
 import { Event } from '../events/Event.js';
 import { Registration } from '../registrations/Registration.js';
@@ -11,7 +13,9 @@ import {
   RESERVATION_STATUS,
   REGISTRATION_STATUS,
   EVENT_STATUS,
-  NOTIFICATION_TYPE
+  NOTIFICATION_TYPE,
+  SEAT_STATUS,
+  SEAT_HOLD_STATUS
 } from '../../shared/constants/status.js';
 import {
   BadRequestError,
@@ -100,6 +104,22 @@ export async function createOrderWithSeatHold({
     throw new ConflictError('You already have an active checkout in progress. Please complete payment or wait for the hold to expire.');
   }
 
+  // Check if attendee has an active SeatHold (from interactive seat map)
+  const activeSeatHold = await SeatHold.findOne({
+    eventId: new mongoose.Types.ObjectId(eventId),
+    attendeeId: new mongoose.Types.ObjectId(attendeeId),
+    status: SEAT_HOLD_STATUS.ACTIVE,
+    expiresAt: { $gt: new Date() }
+  });
+
+  let amountInPaise = Math.round(event.ticketPrice * 100);
+  let seatCount = 1;
+
+  if (activeSeatHold && activeSeatHold.totalAmount > 0) {
+    amountInPaise = Math.round(activeSeatHold.totalAmount * 100);
+    seatCount = activeSeatHold.seatIds.length;
+  }
+
   // 6. Check capacity: seatsBooked + active holds < seatLimit
   const activeHolds = await SeatReservation.countDocuments({
     eventId: new mongoose.Types.ObjectId(eventId),
@@ -111,8 +131,6 @@ export async function createOrderWithSeatHold({
     throw new BadRequestError('Event is sold out. No seats remaining.');
   }
 
-  // 7. Calculate authoritative amount in paise
-  const amountInPaise = Math.round(event.ticketPrice * 100);
   const idempotencyKey = `ord_${eventId}_${attendeeId}_${Date.now()}`;
 
   // 8. Create Razorpay order via SDK
@@ -127,12 +145,12 @@ export async function createOrderWithSeatHold({
   });
 
   // 9. Persist 10-minute temporary seat reservation
-  const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+  const expiresAt = activeSeatHold ? activeSeatHold.expiresAt : new Date(Date.now() + 10 * 60 * 1000);
   const reservation = await SeatReservation.create({
     eventId: new mongoose.Types.ObjectId(eventId),
     attendeeId: new mongoose.Types.ObjectId(attendeeId),
     orderId: razorpayOrder.id,
-    reservedSeats: 1,
+    reservedSeats: seatCount,
     status: RESERVATION_STATUS.PENDING,
     expiresAt
   });
@@ -322,6 +340,35 @@ export async function verifyAndConfirmPayment({
 
   payment.registrationId = registration._id;
   await payment.save();
+
+  // Update SeatHold and EventSeat to BOOKED if assigned seating hold was active
+  try {
+    const activeSeatHold = await SeatHold.findOne({
+      eventId: payment.eventId,
+      attendeeId: payment.attendeeId,
+      status: SEAT_HOLD_STATUS.ACTIVE
+    });
+
+    if (activeSeatHold) {
+      await EventSeat.updateMany(
+        {
+          _id: { $in: activeSeatHold.seatIds },
+          eventId: payment.eventId
+        },
+        {
+          $set: {
+            status: SEAT_STATUS.BOOKED,
+            heldBy: null,
+            heldUntil: null
+          }
+        }
+      );
+      activeSeatHold.status = SEAT_HOLD_STATUS.CONSUMED;
+      await activeSeatHold.save();
+    }
+  } catch (seatErr) {
+    logger.error({ err: seatErr?.message }, 'Failed to confirm physical seat records upon payment capture');
+  }
 
   // 7. Dispatch post-confirmation email & in-app alert (non-blocking)
   try {

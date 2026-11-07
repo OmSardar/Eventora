@@ -44,9 +44,15 @@ export function EventCard({ event }: EventCardProps) {
             <Badge variant="secondary" className="backdrop-blur-md bg-background/80 font-medium text-xs">
               {event.category || "General"}
             </Badge>
-            <Badge variant="outline" className="backdrop-blur-md bg-background/80 text-foreground font-medium text-xs">
-              RSVP
-            </Badge>
+            {event.isPaid && event.ticketPrice ? (
+              <Badge variant="outline" className="backdrop-blur-md bg-background/80 text-indigo-600 dark:text-indigo-400 border-indigo-500/30 font-bold text-xs">
+                ₹{event.ticketPrice}
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="backdrop-blur-md bg-background/80 text-foreground font-medium text-xs">
+                Free
+              </Badge>
+            )}
           </div>
 
           {isCancelled ? (

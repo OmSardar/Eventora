@@ -29,7 +29,19 @@ export async function getEventById(req, res, next) {
 
 export async function createEvent(req, res, next) {
   try {
-    const { title, description, eventDate, venue, seatLimit, category, bannerUrl, image } = req.validatedBody;
+    const {
+      title,
+      description,
+      eventDate,
+      venue,
+      seatLimit,
+      category,
+      bannerUrl,
+      image,
+      isPaid,
+      ticketPrice,
+      currency
+    } = req.validatedBody;
     const organizerId = req.user.id;
     const ipAddress = req.ip;
     const userAgent = req.headers['user-agent'];
@@ -43,6 +55,9 @@ export async function createEvent(req, res, next) {
       category,
       bannerUrl,
       image,
+      isPaid,
+      ticketPrice,
+      currency,
       organizerId,
       ipAddress,
       userAgent

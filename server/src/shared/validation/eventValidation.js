@@ -44,6 +44,13 @@ export const createEventSchema = z.object({
     .min(1, 'Seat limit must be at least 1')
     .max(100000, 'Seat limit cannot exceed 100,000'),
   category: z.string().trim().max(50).optional().default('General'),
+  isPaid: z.boolean().optional().default(false),
+  ticketPrice: z.coerce
+    .number()
+    .min(0, 'Ticket price cannot be negative')
+    .optional()
+    .default(0),
+  currency: z.string().trim().toUpperCase().optional().default('INR'),
   bannerUrl: z
     .string()
     .trim()
@@ -53,6 +60,14 @@ export const createEventSchema = z.object({
     .optional()
     .default(''),
   image: eventImageSchema.optional()
+}).superRefine((data, ctx) => {
+  if (data.isPaid && (!data.ticketPrice || data.ticketPrice <= 0)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Paid events must have a ticket price greater than 0',
+      path: ['ticketPrice']
+    });
+  }
 });
 
 export const updateEventSchema = z.object({
@@ -75,6 +90,9 @@ export const updateEventSchema = z.object({
     .max(100000, 'Seat limit cannot exceed 100,000')
     .optional(),
   category: z.string().trim().max(50).optional(),
+  isPaid: z.boolean().optional(),
+  ticketPrice: z.coerce.number().min(0).optional(),
+  currency: z.string().trim().toUpperCase().optional(),
   bannerUrl: z
     .string()
     .trim()

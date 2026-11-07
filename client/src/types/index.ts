@@ -33,6 +33,9 @@ export interface EventItem {
   isPast?: boolean;
   status: EventStatus;
   category?: string;
+  isPaid?: boolean;
+  ticketPrice?: number;
+  currency?: string;
   bannerUrl?: string;
   image?: EventImage;
   organizerId: {
@@ -58,6 +61,11 @@ export interface RegistrationItem {
   attendeeId: string | User;
   status: RegistrationStatus;
   confirmationEmailSent?: boolean;
+  isPaid?: boolean;
+  ticketPrice?: number;
+  currency?: string;
+  paymentId?: string;
+  refundStatus?: string;
   cancellationReason?: string;
   decisionNote?: string;
   createdAt: string;

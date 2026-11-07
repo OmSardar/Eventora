@@ -23,6 +23,9 @@ export async function createEvent({
   category,
   bannerUrl,
   image,
+  isPaid,
+  ticketPrice,
+  currency,
   organizerId,
   ipAddress,
   userAgent
@@ -45,6 +48,9 @@ export async function createEvent({
     organizerId: new mongoose.Types.ObjectId(organizerId),
     status: EVENT_STATUS.PUBLISHED,
     category: category || 'General',
+    isPaid: Boolean(isPaid),
+    ticketPrice: isPaid ? Number(ticketPrice) || 0 : 0,
+    currency: currency || 'INR',
     image: finalImage,
     bannerUrl: bannerUrl || finalImage.url || ''
   });
@@ -111,6 +117,21 @@ export async function updateEvent({
   if (updateData.description !== undefined) event.description = updateData.description;
   if (updateData.venue !== undefined) event.venue = updateData.venue;
   if (updateData.category !== undefined) event.category = updateData.category;
+
+  // Protect pricing changes if bookings exist
+  if (updateData.isPaid !== undefined || updateData.ticketPrice !== undefined) {
+    if (event.seatsBooked > 0) {
+      if (updateData.ticketPrice !== undefined && updateData.ticketPrice !== event.ticketPrice) {
+        throw new BadRequestError('Cannot change ticket price after tickets/reservations have been booked.');
+      }
+      if (updateData.isPaid !== undefined && updateData.isPaid !== event.isPaid) {
+        throw new BadRequestError('Cannot switch event payment model after bookings have occurred.');
+      }
+    }
+    if (updateData.isPaid !== undefined) event.isPaid = Boolean(updateData.isPaid);
+    if (updateData.ticketPrice !== undefined) event.ticketPrice = event.isPaid ? Number(updateData.ticketPrice) : 0;
+    if (updateData.currency !== undefined) event.currency = updateData.currency;
+  }
 
   if (updateData.image !== undefined) {
     event.image = updateData.image;

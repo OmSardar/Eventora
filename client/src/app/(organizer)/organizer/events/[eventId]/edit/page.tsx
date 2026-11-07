@@ -31,6 +31,8 @@ const updateEventSchema = z.object({
   venue: z.string().min(3).max(300).optional(),
   seatLimit: z.coerce.number().int().min(1).optional(),
   category: z.string().optional(),
+  isPaid: z.boolean().optional(),
+  ticketPrice: z.coerce.number().min(0).optional(),
   bannerUrl: z.string().optional(),
   image: z
     .object({
@@ -85,6 +87,8 @@ export default function EditEventPage() {
         venue: event.venue,
         seatLimit: event.seatLimit,
         category: event.category || "General",
+        isPaid: Boolean(event.isPaid),
+        ticketPrice: event.ticketPrice || 0,
         bannerUrl: event.bannerUrl || "",
         image: existingImage,
         eventDate: new Date(event.eventDate).toISOString().slice(0, 16),
@@ -215,6 +219,61 @@ export default function EditEventPage() {
                   <p className="text-[11px] text-destructive">{errors.seatLimit.message}</p>
                 )}
               </div>
+            </div>
+
+            {/* Ticket Pricing (Locked if bookings exist) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 rounded-xl border border-border/60 bg-muted/30 p-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-foreground">Admission Model</label>
+                {event.seatsBooked > 0 ? (
+                  <p className="text-xs text-muted-foreground pt-1">
+                    {event.isPaid ? `Paid Event (₹${event.ticketPrice})` : "Free RSVP (Locked due to existing bookings)"}
+                  </p>
+                ) : (
+                  <div className="flex items-center gap-4 pt-1">
+                    <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
+                      <input
+                        type="radio"
+                        checked={!watch("isPaid")}
+                        onChange={() => {
+                          setValue("isPaid", false);
+                          setValue("ticketPrice", 0);
+                        }}
+                        className="accent-primary"
+                      />
+                      Free RSVP
+                    </label>
+                    <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
+                      <input
+                        type="radio"
+                        checked={watch("isPaid") === true}
+                        onChange={() => setValue("isPaid", true)}
+                        className="accent-primary"
+                      />
+                      Paid Ticket (Razorpay)
+                    </label>
+                  </div>
+                )}
+              </div>
+
+              {watch("isPaid") && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-foreground">
+                    Ticket Price (INR ₹) *
+                  </label>
+                  <Input
+                    type="number"
+                    min="1"
+                    disabled={event.seatsBooked > 0}
+                    placeholder="e.g. 499"
+                    className="text-xs"
+                    {...register("ticketPrice")}
+                  />
+                  {errors.ticketPrice && (
+                    <p className="text-[11px] text-destructive">{errors.ticketPrice.message}</p>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="space-y-1.5">

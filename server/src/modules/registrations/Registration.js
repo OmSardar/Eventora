@@ -41,6 +41,30 @@ const registrationSchema = new mongoose.Schema(
     confirmationEmailSent: {
       type: Boolean,
       default: false
+    },
+    paymentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Payment',
+      default: null,
+      index: true
+    },
+    isPaid: {
+      type: Boolean,
+      default: false,
+      index: true
+    },
+    ticketPrice: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+    currency: {
+      type: String,
+      default: 'INR'
+    },
+    refundStatus: {
+      type: String,
+      default: 'NONE'
     }
   },
   {

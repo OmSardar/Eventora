@@ -145,9 +145,15 @@ export default function MyRegistrationsPage() {
                       <Badge variant="outline" className="text-[10px]">
                         {event.category || "General"}
                       </Badge>
-                      <Badge variant="outline" className="text-[10px]">
-                        Free RSVP
-                      </Badge>
+                      {reg.isPaid ? (
+                        <Badge variant="outline" className="text-[10px] text-indigo-600 dark:text-indigo-400 border-indigo-500/30 font-semibold">
+                          Paid ₹{reg.ticketPrice || event.ticketPrice}
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-[10px]">
+                          Free RSVP
+                        </Badge>
+                      )}
                       {reg.confirmationEmailSent && (
                         <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
                           <Mail className="h-3 w-3" /> Email Sent

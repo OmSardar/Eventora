@@ -49,11 +49,11 @@ Eventora enforces strict, immutable Role-Based Access Control (RBAC):
 | **Backend-Only Banner Upload**| `events` | Multer in-memory buffering, cryptographic magic-bytes inspection (JPEG, PNG, WebP only; rejects SVGs, HTML, and EXEs), server-side Cloudinary SDK streaming with unique server IDs. |
 | **Cancellation Workflow** | `registrations` | Two-phase cancellation: Attendee submits request -> Organizer approves (releasing seat) or rejects. |
 | **In-App Notifications** | `notifications` | Real-time notification bell and alert feed for event cancellations, booking confirmations, and cancellation decisions. |
+| **Payments & Ticketing** | `payments` | Razorpay Test Mode integration supporting paid event ticketing, 10-minute temporary seat reservations, timing-safe HMAC verification, and server-to-server webhook ingestion. |
 | **Smooth Scrolling** | `components/layout` | Inertial smooth scrolling via Lenis synchronized with GSAP ScrollTrigger, honoring `prefers-reduced-motion`. |
 | **Technical SEO & Brand Icons**| `app/seo` | Dynamic JSON-LD structured schemas (`Event`, `WebSite`, `Organization`), dynamic `/robots.txt` and `/sitemap.xml`, theme-adaptive SVG and multi-resolution ICO icons. |
 
 ### Planned / Out-of-Scope Capabilities
-- Paid ticketing and payment gateways (intentionally omitted to maintain focused Free RSVP scope).
 - SMS notifications (MSG91 integration intentionally removed to prioritize Resend email confirmations).
 
 ---
@@ -123,6 +123,7 @@ For comprehensive deep-dive architecture documentation, refer to:
 | **express-session** | 1.18.1 | Stateful HTTP session management | Server |
 | **connect-mongo** | 5.1.0 | MongoDB-backed session persistence with native TTL | Server |
 | **Argon2id (`argon2`)** | 0.41.1 | OWASP-compliant password hashing algorithm | Server |
+| **Razorpay (`razorpay`)** | 2.9.5 | Official SDK for order creation, payments, and refunds | Server |
 | **Resend (`resend`)** | 6.37.0 | Official SDK for transactional email confirmation delivery | Server |
 | **Cloudinary (`cloudinary`)**| 2.11.0 | Official server-side SDK for media asset storage | Server |
 | **Multer (`multer`)** | 2.5.0 | In-memory multipart/form-data upload parsing | Server |
@@ -281,6 +282,10 @@ Visit `http://localhost:3000` to interact with the platform.
 | `CLOUDINARY_CLOUD_NAME` | Cloudinary account name | **Required** | Server | No |
 | `CLOUDINARY_API_KEY` | Cloudinary server API key | **Required** | Server | **Yes** |
 | `CLOUDINARY_API_SECRET` | Cloudinary server API secret | **Required** | Server | **Yes** |
+| `RAZORPAY_KEY_ID` | Razorpay public test key (`rzp_test_...`) for order creation and checkout initialization | **Required (Paid)** | Server | No |
+| `RAZORPAY_KEY_SECRET` | Razorpay private API secret for SDK and checkout HMAC verification | **Required (Paid)** | Server | **Yes** |
+| `RAZORPAY_WEBHOOK_SECRET` | Distinct secret chosen when registering webhook in Razorpay Dashboard | **Required (Paid)** | Server | **Yes** |
+| `RAZORPAY_MODE` | Gateway mode (`test`) — guards against accidental live mode operations | **Required (Paid)** | Server | No |
 
 ### 7.2 Frontend Environment Variables (`client/.env.local`)
 
@@ -294,29 +299,29 @@ Visit `http://localhost:3000` to interact with the platform.
 
 ## 8. Automated Testing
 
-Eventora is verified by **85 automated tests** passing at 100% across the backend and frontend suites:
+Eventora is verified by **102 automated tests** passing at 100% across the backend and frontend suites:
 
 ```text
 ======================================================================
   EVENTORA AUTOMATED TEST SUITE SUMMARY
 ======================================================================
-  Server Unit Tests:          11 / 11 Passed (100%)
-  Server Integration Tests:   13 / 13 Passed (100%)
+  Server Unit Tests:          23 / 23 Passed (100%)
+  Server Integration Tests:   18 / 18 Passed (100%)
   Server Security Tests:      44 / 44 Passed (100%)
   Playwright E2E Tests:       17 / 17 Passed (100%)
 ----------------------------------------------------------------------
-  Total Automated Tests:      85 / 85 Passed (100%)
+  Total Automated Tests:     102 / 102 Passed (100%)
 ======================================================================
 ```
 
 ### Run Test Commands
 ```bash
-# 1. Run all backend tests (68 tests across Unit, Integration, Security)
+# 1. Run all backend tests (85 tests across Unit, Integration, Security)
 npm test --prefix server
 
 # 2. Run backend sub-suites
-npm run test:unit --prefix server        # Argon2id hashing, Zod schemas, email template rendering
-npm run test:integration --prefix server # Atomic booking, race conditions, capacity floor, notifications
+npm run test:unit --prefix server        # Argon2id hashing, Zod schemas, email template rendering, Razorpay HMAC
+npm run test:integration --prefix server # Atomic booking, race conditions, capacity floor, notifications, payments & webhooks
 npm run test:security --prefix server    # CSRF, Origin checks, RBAC guards, rate limits, Cloudinary upload security
 
 # 3. Run frontend lint and production build

@@ -55,6 +55,22 @@ const eventSchema = new mongoose.Schema(
       trim: true,
       default: 'General'
     },
+    isPaid: {
+      type: Boolean,
+      default: false,
+      index: true
+    },
+    ticketPrice: {
+      type: Number,
+      default: 0,
+      min: [0, 'Ticket price cannot be negative']
+    },
+    currency: {
+      type: String,
+      default: 'INR',
+      trim: true,
+      uppercase: true
+    },
     image: {
       source: {
         type: String,

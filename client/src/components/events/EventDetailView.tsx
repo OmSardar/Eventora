@@ -10,6 +10,7 @@ import { formatDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { RazorpayCheckoutButton } from "@/components/payments/RazorpayCheckoutModal";
 import {
   AlertCircle,
   Calendar,
@@ -144,9 +145,15 @@ export function EventDetailView({ eventId, initialEvent }: EventDetailViewProps)
           <Badge variant="secondary" className="backdrop-blur-md bg-background/80 text-xs font-semibold">
             {event.category || "General"}
           </Badge>
-          <Badge variant="outline" className="backdrop-blur-md bg-background/80 text-xs font-bold">
-            Free Admission
-          </Badge>
+          {event.isPaid && event.ticketPrice ? (
+            <Badge variant="outline" className="backdrop-blur-md bg-background/80 text-xs font-bold text-indigo-500 border-indigo-500/30">
+              ₹{event.ticketPrice} Ticket
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="backdrop-blur-md bg-background/80 text-xs font-bold">
+              Free Admission
+            </Badge>
+          )}
           {isCancelled && (
             <Badge variant="destructive" className="text-xs font-bold shadow-md">
               Event Cancelled
@@ -214,7 +221,9 @@ export function EventDetailView({ eventId, initialEvent }: EventDetailViewProps)
                 <div>
                   <CardTitle className="text-lg">RSVP &amp; Tickets</CardTitle>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Free admission (Limited Seats)
+                    {event.isPaid && event.ticketPrice
+                      ? `₹${event.ticketPrice} per ticket`
+                      : "Free admission (Limited Seats)"}
                   </p>
                 </div>
                 {isSoldOut ? (
@@ -330,6 +339,18 @@ export function EventDetailView({ eventId, initialEvent }: EventDetailViewProps)
                       <Button disabled className="w-full h-11 text-xs font-semibold">
                         Sold Out
                       </Button>
+                    ) : event.isPaid && event.ticketPrice ? (
+                      <RazorpayCheckoutButton
+                        event={event}
+                        user={user}
+                        onSuccess={() => {
+                          setRegistrationSuccess(true);
+                          setErrorMessage(null);
+                          queryClient.invalidateQueries({ queryKey: ["event", eventId] });
+                          queryClient.invalidateQueries({ queryKey: ["my-registrations"] });
+                        }}
+                        onError={(err) => setErrorMessage(err)}
+                      />
                     ) : (
                       <Button
                         onClick={() => bookingMutation.mutate()}

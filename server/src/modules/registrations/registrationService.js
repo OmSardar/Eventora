@@ -2,7 +2,15 @@ import mongoose from 'mongoose';
 import { Registration } from './Registration.js';
 import { Event } from '../events/Event.js';
 import { User } from '../users/User.js';
-import { EVENT_STATUS, REGISTRATION_STATUS, NOTIFICATION_TYPE } from '../../shared/constants/status.js';
+import { Payment } from '../payments/Payment.js';
+import {
+  EVENT_STATUS,
+  REGISTRATION_STATUS,
+  NOTIFICATION_TYPE,
+  PAYMENT_STATUS,
+  REFUND_STATUS
+} from '../../shared/constants/status.js';
+import { initiateRazorpayRefund } from '../payments/razorpayService.js';
 import {
   BadRequestError,
   ConflictError,
@@ -49,7 +57,12 @@ export async function registerForEvent({
     throw new BadRequestError('Cannot register for a past event.');
   }
 
-  // 4. Check if attendee is already registered
+  // 4. Business rule: Event must be free for direct RSVP endpoint
+  if (event.isPaid && event.ticketPrice > 0) {
+    throw new BadRequestError('This is a paid event. Please complete booking through Razorpay checkout.');
+  }
+
+  // 5. Check if attendee is already registered
   const existingRegistration = await Registration.findOne({
     eventId: new mongoose.Types.ObjectId(eventId),
     attendeeId: new mongoose.Types.ObjectId(attendeeId)
@@ -339,6 +352,29 @@ export async function processCancellationDecision({
     registration.decisionNote = note || 'Cancellation approved by organizer';
     registration.decidedBy = new mongoose.Types.ObjectId(organizerId);
     registration.decidedAt = new Date();
+
+    // If paid registration, trigger Razorpay refund
+    if (registration.isPaid && registration.paymentId) {
+      try {
+        const payment = await Payment.findById(registration.paymentId);
+        if (payment && payment.status === PAYMENT_STATUS.CAPTURED && payment.refundStatus !== REFUND_STATUS.PROCESSED) {
+          const refundResult = await initiateRazorpayRefund({
+            paymentId: payment.paymentId,
+            amountInPaise: payment.amount,
+            notes: { registrationId: registration._id.toString(), reason: note || 'Organizer approved cancellation' }
+          });
+          payment.status = PAYMENT_STATUS.REFUNDED;
+          payment.refundStatus = REFUND_STATUS.PROCESSED;
+          payment.refundId = refundResult?.id || `rfnd_${Date.now()}`;
+          await payment.save();
+          registration.refundStatus = REFUND_STATUS.PROCESSED;
+        }
+      } catch (refundErr) {
+        logger.error({ err: refundErr?.message, registrationId: registration._id }, 'Automated refund trigger failed on cancellation approval');
+        registration.refundStatus = REFUND_STATUS.PENDING;
+      }
+    }
+
     await registration.save();
 
     // Release seat atomically back to the event

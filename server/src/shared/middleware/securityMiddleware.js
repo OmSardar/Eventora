@@ -34,6 +34,11 @@ export function originCheckMiddleware(req, _res, next) {
     return next();
   }
 
+  // Exempt server-to-server webhook endpoints (authenticated via cryptographic HMAC signature)
+  if (req.originalUrl?.startsWith('/api/v1/webhooks/razorpay') || req.path?.startsWith('/api/v1/webhooks/razorpay')) {
+    return next();
+  }
+
   // Skip origin check in isolated unit tests if configured
   if (process.env.SKIP_SECURITY_CHECKS === 'true') {
     return next();

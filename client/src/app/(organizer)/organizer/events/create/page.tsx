@@ -36,6 +36,8 @@ const createEventSchema = z.object({
   venue: z.string().min(3, "Venue must be at least 3 characters").max(300),
   seatLimit: z.coerce.number().int().min(1, "Seat limit must be at least 1"),
   category: z.string().optional().default("Technology"),
+  isPaid: z.boolean().optional().default(false),
+  ticketPrice: z.coerce.number().min(0).optional().default(0),
   bannerUrl: z.string().optional().default(""),
   image: z
     .object({
@@ -44,6 +46,14 @@ const createEventSchema = z.object({
       publicId: z.string().nullable().optional().default(null),
     })
     .optional(),
+}).superRefine((data, ctx) => {
+  if (data.isPaid && (!data.ticketPrice || data.ticketPrice <= 0)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Paid events must have a ticket price greater than 0",
+      path: ["ticketPrice"],
+    });
+  }
 });
 
 type CreateEventFormData = z.infer<typeof createEventSchema>;
@@ -65,6 +75,8 @@ export default function CreateEventPage() {
     defaultValues: {
       category: "Technology",
       seatLimit: 50,
+      isPaid: false,
+      ticketPrice: 0,
       bannerUrl:
         "https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&w=1200&q=80",
       image: {
@@ -210,6 +222,54 @@ export default function CreateEventPage() {
                   <p className="text-[11px] text-destructive">{errors.seatLimit.message}</p>
                 )}
               </div>
+            </div>
+
+            {/* Ticket Pricing & Admission */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 rounded-xl border border-border/60 bg-muted/30 p-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-foreground">Admission Model</label>
+                <div className="flex items-center gap-4 pt-1">
+                  <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
+                    <input
+                      type="radio"
+                      checked={!watch("isPaid")}
+                      onChange={() => {
+                        setValue("isPaid", false);
+                        setValue("ticketPrice", 0);
+                      }}
+                      className="accent-primary"
+                    />
+                    Free RSVP
+                  </label>
+                  <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
+                    <input
+                      type="radio"
+                      checked={watch("isPaid") === true}
+                      onChange={() => setValue("isPaid", true)}
+                      className="accent-primary"
+                    />
+                    Paid Ticket (Razorpay)
+                  </label>
+                </div>
+              </div>
+
+              {watch("isPaid") && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-foreground">
+                    Ticket Price (INR ₹) *
+                  </label>
+                  <Input
+                    type="number"
+                    min="1"
+                    placeholder="e.g. 499"
+                    className="text-xs"
+                    {...register("ticketPrice")}
+                  />
+                  {errors.ticketPrice && (
+                    <p className="text-[11px] text-destructive">{errors.ticketPrice.message}</p>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Date and Time */}

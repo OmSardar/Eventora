@@ -30,3 +30,4 @@ router.post(
 router.post('/logout', csrfProtection, authController.logout);
 
 export default router;
+

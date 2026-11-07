@@ -37,6 +37,28 @@ const registrationSchema = new mongoose.Schema(
     },
     decidedAt: {
       type: Date
+    },
+    paymentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Payment',
+      default: null,
+      index: true
+    },
+    isPaid: {
+      type: Boolean,
+      default: false
+    },
+    ticketPrice: {
+      type: Number,
+      default: 0
+    },
+    currency: {
+      type: String,
+      default: 'INR'
+    },
+    refundStatus: {
+      type: String,
+      default: 'NONE'
     }
   },
   {
@@ -58,3 +80,4 @@ registrationSchema.index({ attendeeId: 1, createdAt: -1 });
 registrationSchema.index({ eventId: 1, status: 1 });
 
 export const Registration = mongoose.model('Registration', registrationSchema);
+

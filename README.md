@@ -93,11 +93,18 @@ MONGODB_URI=mongodb://127.0.0.1:27017/eventora
 SESSION_SECRET=eventora-super-secret-development-key-minimum-32-chars-long!
 ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
 LOG_LEVEL=info
+
+# Optional Cloudinary direct signed upload keys (falls back to mock/demo keys in development)
+CLOUDINARY_CLOUD_NAME=your_cloudinary_cloud_name
+CLOUDINARY_API_KEY=your_cloudinary_api_key
+CLOUDINARY_API_SECRET=your_cloudinary_api_secret
 ```
 
 Create `client/.env.local`:
 ```env
+NEXT_PUBLIC_SITE_URL=https://eventora.example.com
 NEXT_PUBLIC_API_URL=http://localhost:5000/api/v1
+INTERNAL_API_URL=http://localhost:5000/api/v1
 ```
 
 ### 3. Seed Database
@@ -120,20 +127,42 @@ Visit `http://localhost:3000` to access the application.
 
 ## 5. Automated Testing
 
-Eventora includes 26+ automated backend tests (unit, integration, security) and Playwright E2E suites:
+Eventora includes **58 automated tests** passing at 100% across the backend and frontend suites:
 
 ```bash
-# Run all backend tests
+# Run all backend tests (46/46 passing across Unit, Integration, and Security)
 npm test --prefix server
 
-# Run individual test suites
-npm run test:unit --prefix server        # Password hashing & Zod schema validation
-npm run test:integration --prefix server # Atomic booking, capacity reduction, duplicate rejection
-npm run test:security --prefix server    # CSRF, origin check, unauthenticated & role restrictions
+# Run individual backend test suites
+npm run test:unit --prefix server        # 11 tests: Password hashing & Zod schema validation
+npm run test:integration --prefix server # 11 tests: Atomic booking, race conditions, full event, capacity floor
+npm run test:security --prefix server    # 24 tests: CSRF, origin check, role guards, privacy isolation, rate limiting, Cloudinary signed uploads
 
-# Run Playwright E2E tests
-npm run test:e2e --prefix client
+# Run Playwright E2E & SEO tests (12/12 passing)
+npm run test:e2e --prefix client         # 12 tests: Auth journeys, role authorization, events discovery, metadata, canonicals, OG tags, JSON-LD schemas, robots.txt & sitemap.xml
 ```
+
+---
+
+## 6. Technical SEO & Brand Identity System
+
+Eventora is engineered with enterprise-grade technical SEO using native Next.js App Router metadata conventions:
+
+- **Canonical URL & Metadata Base:** Governed by `NEXT_PUBLIC_SITE_URL` via `siteConfig.ts` with strict root `metadataBase`.
+- **Social Graph Sharing:** Pre-rendered 1200x630 Open Graph and Twitter summary cards (`/og-image.png`).
+- **Dynamic Event Metadata (`generateMetadata`):** Server-side fetched event titles, descriptions, canonical links, and social images, with graceful fallback on missing or cancelled events.
+- **Strict Noindex Controls:** Private and sensitive application routes (`/login`, `/register`, `/attendee/*`, `/organizer/*`) enforce `noindex, nofollow` directives to prevent indexing.
+- **Attendee Privacy:** Attendee rosters, email addresses, and booking records are strictly omitted from public metadata and search crawler schemas.
+- **Structured Data (Schema.org):** Safe anti-XSS JSON-LD rendering for `WebSite`, `Organization`, and `Event` (reflecting actual start dates, venues, organizers, and dynamic `InStock` / `SoldOut` capacity states).
+- **Dynamic Metadata Routes:** Native `/robots.txt` and `/sitemap.xml` dynamically querying live published events.
+- **Brand Icon System:** Minimal monochrome geometric ticket beacon monogram rendered in:
+  - `client/public/favicon.svg` (adaptive to `@media (prefers-color-scheme: dark)`)
+  - `client/public/favicon.ico` (multi-resolution 16/32/48 binary ICO)
+  - `client/public/icon.png` (512x512 high-resolution icon)
+  - `client/public/apple-icon.png` (180x180 iOS touch icon)
+  - `client/public/site.webmanifest` (PWA application manifest)
+
+Full documentation available in [`Docs/08-seo/seo-implementation.md`](file:///D:/THE%20OMS%20DEVS/WEB%20DEVS/MERN%20PROJECTS/PERSONAL/EVENTORA/Docs/08-seo/seo-implementation.md).
 
 ---
 
@@ -176,3 +205,4 @@ EVENTORA/
 - **Frontend:** Deployed on Vercel with environment variable `NEXT_PUBLIC_API_URL`.
 - **Backend:** Deployed on Render with environment variables `MONGODB_URI`, `SESSION_SECRET`, `ALLOWED_ORIGINS`.
 - **Database:** Hosted on MongoDB Atlas Replica Set (supporting multi-document transactions and conditional atomic updates).
+

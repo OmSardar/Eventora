@@ -21,3 +21,4 @@
 | **SEC-02** | Origin / Referer Enforce | `originCheckMiddleware` | Browser default header | `tests/security/accessControlAndSecurity.test.js` |
 | **SEC-03** | Distributed Rate Limiting | `MongoRateLimitStore.js` | HTTP 429 handler | `tests/security/accessControlAndSecurity.test.js` |
 | **SEC-04** | Redacted Structured Logging | `logger.js` (Pino) | - | Verified log outputs |
+

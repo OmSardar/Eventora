@@ -9,6 +9,9 @@ import {
   NotFoundError
 } from '../../shared/errors/AppError.js';
 import { logAuditEvent } from '../audit/AuditLog.js';
+import { processRefundForCancellation } from '../payments/paymentService.js';
+import { dispatchNotification } from '../notifications/notificationService.js';
+import { NOTIFICATION_TYPE } from '../../shared/constants/status.js';
 
 function canUseReplicaSetTransactions() {
   const topologyType = mongoose.connection?.client?.topology?.description?.type;
@@ -41,6 +44,11 @@ export async function registerForEvent({
     throw new BadRequestError('Cannot register for a past event.');
   }
 
+  // 3b. Free event endpoint only accepts free events
+  if (event.isPaid) {
+    throw new BadRequestError('This is a paid event. Please complete checkout to register.');
+  }
+
   // 4. Check if attendee is already registered
   const existingRegistration = await Registration.findOne({
     eventId: new mongoose.Types.ObjectId(eventId),
@@ -54,6 +62,8 @@ export async function registerForEvent({
   // 5. Atomic seat reservation
   const useReplicaSet = canUseReplicaSetTransactions();
   let session = null;
+  let seatAllocated = false;
+  let registration = null;
 
   if (useReplicaSet) {
     session = await mongoose.startSession();
@@ -76,9 +86,9 @@ export async function registerForEvent({
     if (!updatedEvent) {
       throw new BadRequestError('Event is sold out. No seats remaining.');
     }
+    seatAllocated = true;
 
     // Insert registration
-    let registration;
     if (useReplicaSet) {
       const [newReg] = await Registration.create(
         [
@@ -93,20 +103,11 @@ export async function registerForEvent({
       registration = newReg;
       await session.commitTransaction();
     } else {
-      try {
-        registration = await Registration.create({
-          eventId: new mongoose.Types.ObjectId(eventId),
-          attendeeId: new mongoose.Types.ObjectId(attendeeId),
-          status: REGISTRATION_STATUS.CONFIRMED
-        });
-      } catch (insertErr) {
-        // Roll back the atomic seat increment on standalone instance
-        await Event.findByIdAndUpdate(eventId, { $inc: { seatsBooked: -1 } });
-        if (insertErr.code === 11000) {
-          throw new ConflictError('You are already registered for this event.');
-        }
-        throw insertErr;
-      }
+      registration = await Registration.create({
+        eventId: new mongoose.Types.ObjectId(eventId),
+        attendeeId: new mongoose.Types.ObjectId(attendeeId),
+        status: REGISTRATION_STATUS.CONFIRMED
+      });
     }
 
     await logAuditEvent({
@@ -126,8 +127,16 @@ export async function registerForEvent({
     };
   } catch (error) {
     if (useReplicaSet && session) {
-      await session.abortTransaction();
+      try {
+        await session.abortTransaction();
+      } catch (_) {}
+    } else if (seatAllocated && !registration) {
+      // Roll back seat allocation on standalone or non-transactional instance
+      try {
+        await Event.findByIdAndUpdate(eventId, { $inc: { seatsBooked: -1 } });
+      } catch (_) {}
     }
+
     if (error.code === 11000) {
       throw new ConflictError('You are already registered for this event.');
     }
@@ -229,6 +238,18 @@ export async function requestCancellation({
   registration.cancellationReason = reason || 'Attendee requested cancellation';
   await registration.save();
 
+  const event = await Event.findById(registration.eventId);
+  if (event && event.organizerId) {
+    dispatchNotification({
+      userId: event.organizerId,
+      type: NOTIFICATION_TYPE.CANCELLATION_REQUESTED,
+      title: 'Cancellation Request Received',
+      message: `An attendee has requested cancellation for "${event.title}".`,
+      eventId: event._id,
+      registrationId: registration._id
+    });
+  }
+
   await logAuditEvent({
     action: 'CANCELLATION_REQUESTED',
     actorId: attendeeId,
@@ -274,15 +295,36 @@ export async function processCancellationDecision({
   }
 
   if (decision === 'APPROVE') {
+    if (registration.isPaid && registration.paymentId) {
+      // Process authoritative gateway refund for paid event
+      await processRefundForCancellation({
+        registrationId,
+        organizerId,
+        ipAddress,
+        userAgent
+      });
+      const updatedReg = await Registration.findById(registrationId);
+      return updatedReg;
+    }
+
     registration.status = REGISTRATION_STATUS.CANCELLED;
     registration.decisionNote = note || 'Cancellation approved by organizer';
     registration.decidedBy = new mongoose.Types.ObjectId(organizerId);
     registration.decidedAt = new Date();
     await registration.save();
 
-    // Release seat atomically
+    // Release seat atomically for free events
     await Event.findByIdAndUpdate(registration.eventId._id, {
       $inc: { seatsBooked: -1 }
+    });
+
+    dispatchNotification({
+      userId: registration.attendeeId,
+      type: NOTIFICATION_TYPE.CANCELLATION_APPROVED,
+      title: 'Cancellation Approved',
+      message: `Your cancellation request for "${registration.eventId.title || 'Event'}" has been approved.`,
+      eventId: registration.eventId._id,
+      registrationId: registration._id
     });
 
     await logAuditEvent({
@@ -301,6 +343,15 @@ export async function processCancellationDecision({
     registration.decidedBy = new mongoose.Types.ObjectId(organizerId);
     registration.decidedAt = new Date();
     await registration.save();
+
+    dispatchNotification({
+      userId: registration.attendeeId,
+      type: NOTIFICATION_TYPE.CANCELLATION_REJECTED,
+      title: 'Cancellation Declined',
+      message: `Your cancellation request for "${registration.eventId.title || 'Event'}" was not approved. Note: ${note || 'No reason specified.'}`,
+      eventId: registration.eventId._id,
+      registrationId: registration._id
+    });
 
     await logAuditEvent({
       action: 'CANCELLATION_REJECTED',

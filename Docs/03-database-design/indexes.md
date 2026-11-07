@@ -12,3 +12,4 @@
 | `rate_limits` | `{ _id: 1, expiresAt: 1 }` | Compound / TTL | Automatic key expiration and clean up of rate limiting store |
 | `audit_logs` | `{ timestamp: -1 }` | Single | Auditing compliance and incident forensics |
 | `audit_logs` | `{ actorId: 1 }`, `{ resourceId: 1 }` | Single | Actor and resource tracking |
+

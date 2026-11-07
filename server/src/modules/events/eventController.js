@@ -1,5 +1,6 @@
 import * as eventService from './eventService.js';
 import * as registrationService from '../registrations/registrationService.js';
+import { generateUploadSignature } from '../../infrastructure/cloudinary/cloudinaryService.js';
 
 export async function getEvents(req, res, next) {
   try {
@@ -29,7 +30,7 @@ export async function getEventById(req, res, next) {
 
 export async function createEvent(req, res, next) {
   try {
-    const { title, description, eventDate, venue, seatLimit, category, bannerUrl } = req.validatedBody;
+    const { title, description, eventDate, venue, seatLimit, category, bannerUrl, image } = req.validatedBody;
     const organizerId = req.user.id;
     const ipAddress = req.ip;
     const userAgent = req.headers['user-agent'];
@@ -42,6 +43,7 @@ export async function createEvent(req, res, next) {
       seatLimit,
       category,
       bannerUrl,
+      image,
       organizerId,
       ipAddress,
       userAgent
@@ -51,6 +53,23 @@ export async function createEvent(req, res, next) {
       success: true,
       message: 'Event created successfully',
       data: { event }
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getUploadSignature(req, res, next) {
+  try {
+    const organizerId = req.user.id;
+    const signatureData = generateUploadSignature({
+      organizerId,
+      timestamp: Math.round(Date.now() / 1000)
+    });
+
+    res.status(200).json({
+      success: true,
+      data: signatureData
     });
   } catch (error) {
     next(error);
@@ -133,3 +152,4 @@ export async function getEventAttendees(req, res, next) {
     next(error);
   }
 }
+

@@ -112,3 +112,4 @@ Approve attendee cancellation request and release seat.
 ### `POST /cancellation-requests/:requestId/reject`
 Reject attendee cancellation request.
 - **Access:** Authenticated (Event Owner only)
+

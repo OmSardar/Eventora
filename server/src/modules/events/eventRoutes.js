@@ -5,6 +5,7 @@ import { validateBody } from '../../shared/middleware/validate.js';
 import { createEventSchema, updateEventSchema } from '../../shared/validation/eventValidation.js';
 import { ROLES } from '../../shared/constants/roles.js';
 import { csrfProtection } from '../../shared/middleware/securityMiddleware.js';
+import { eventMutationRateLimiter, uploadSignatureRateLimiter } from '../../shared/middleware/rateLimiter.js';
 
 const router = Router();
 
@@ -19,6 +20,16 @@ router.get(
   eventController.getMyEvents
 );
 
+// Cloudinary signed upload authorization endpoint (strictly for authenticated organizers)
+router.post(
+  '/image-signature',
+  authenticate,
+  requireRole(ROLES.ORGANIZER),
+  uploadSignatureRateLimiter,
+  csrfProtection,
+  eventController.getUploadSignature
+);
+
 router.get('/:eventId', eventController.getEventById);
 
 // Organizer protected routes
@@ -26,6 +37,7 @@ router.post(
   '/',
   authenticate,
   requireRole(ROLES.ORGANIZER),
+  eventMutationRateLimiter,
   csrfProtection,
   validateBody(createEventSchema),
   eventController.createEvent
@@ -35,6 +47,7 @@ router.patch(
   '/:eventId',
   authenticate,
   requireRole(ROLES.ORGANIZER),
+  eventMutationRateLimiter,
   csrfProtection,
   validateBody(updateEventSchema),
   eventController.updateEvent
@@ -44,6 +57,7 @@ router.post(
   '/:eventId/cancel',
   authenticate,
   requireRole(ROLES.ORGANIZER),
+  eventMutationRateLimiter,
   csrfProtection,
   eventController.cancelEvent
 );
@@ -56,3 +70,4 @@ router.get(
 );
 
 export default router;
+

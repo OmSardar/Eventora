@@ -140,3 +140,4 @@ export async function getCsrfToken(req, res) {
     data: { csrfToken: token }
   });
 }
+

@@ -50,10 +50,44 @@ const eventSchema = new mongoose.Schema(
       default: EVENT_STATUS.PUBLISHED,
       index: true
     },
+    isPaid: {
+      type: Boolean,
+      default: false,
+      index: true
+    },
+    ticketPrice: {
+      type: Number,
+      default: 0,
+      min: [0, 'Ticket price cannot be negative']
+    },
+    currency: {
+      type: String,
+      default: 'INR',
+      uppercase: true,
+      trim: true,
+      enum: ['INR']
+    },
     category: {
       type: String,
       trim: true,
       default: 'General'
+    },
+    image: {
+      source: {
+        type: String,
+        enum: ['URL', 'CLOUDINARY'],
+        default: 'URL'
+      },
+      url: {
+        type: String,
+        trim: true,
+        default: ''
+      },
+      publicId: {
+        type: String,
+        trim: true,
+        default: null
+      }
     },
     bannerUrl: {
       type: String,
@@ -67,11 +101,35 @@ const eventSchema = new mongoose.Schema(
       virtuals: true,
       transform(_doc, ret) {
         delete ret.__v;
+        if (!ret.image || !ret.image.url) {
+          ret.image = {
+            source: 'URL',
+            url: ret.bannerUrl || '',
+            publicId: null
+          };
+        }
+        if (!ret.bannerUrl && ret.image?.url) {
+          ret.bannerUrl = ret.image.url;
+        }
         return ret;
       }
     }
   }
 );
+
+// Pre-save synchronization hook between image object and legacy bannerUrl
+eventSchema.pre('save', function (next) {
+  if (this.image && this.image.url) {
+    this.bannerUrl = this.image.url;
+  } else if (this.bannerUrl && (!this.image || !this.image.url)) {
+    this.image = {
+      source: 'URL',
+      url: this.bannerUrl,
+      publicId: null
+    };
+  }
+  next();
+});
 
 // Virtual for remaining seats
 eventSchema.virtual('remainingSeats').get(function () {

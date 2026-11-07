@@ -70,3 +70,4 @@ erDiagram
 2. `Event.seatsBooked` can never be decremented below 0.
 3. Compound uniqueness on `Registration`: `{ eventId: 1, attendeeId: 1 }` prevents double booking.
 4. `User.role` is immutable.
+

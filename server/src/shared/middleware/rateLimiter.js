@@ -1,12 +1,17 @@
 import rateLimit from 'express-rate-limit';
 import { MongoRateLimitStore } from '../../infrastructure/security/mongoRateLimitStore.js';
 import { TooManyRequestsError } from '../errors/AppError.js';
+import { logger } from '../../infrastructure/logging/logger.js';
 
+/**
+ * Factory for creating distributed MongoDB-backed rate limiters.
+ */
 export function createRateLimiter({
   windowMs = 15 * 60 * 1000,
   max = 100,
   message = 'Too many requests, please try again later.',
-  prefix = 'rl:'
+  prefix = 'rl:',
+  keyType = 'auto' // 'auto', 'ip', 'user'
 }) {
   const store = new MongoRateLimitStore(windowMs);
 
@@ -17,17 +22,49 @@ export function createRateLimiter({
     legacyHeaders: false,
     store,
     keyGenerator: (req) => {
-      const ip = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
-      return `${prefix}${ip}`;
+      const forwarded = req.headers['x-forwarded-for'];
+      const ip =
+        (typeof forwarded === 'string' ? forwarded.split(',')[0].trim() : null) ||
+        req.ip ||
+        req.socket?.remoteAddress ||
+        '127.0.0.1';
+
+      const userId = req.session?.user?.id || req.session?.user?._id;
+
+      if (keyType === 'user' && userId) {
+        return `${prefix}u:${userId}`;
+      }
+
+      if (keyType === 'auto' && userId) {
+        // Compound user account + IP isolation for authenticated requests
+        return `${prefix}u:${userId}:${ip}`;
+      }
+
+      return `${prefix}ip:${ip}`;
     },
-    handler: (_req, _res, next) => {
+    handler: (req, res, next, options) => {
+      const retryAfterSec = Math.ceil(options.windowMs / 1000);
+      res.setHeader('Retry-After', retryAfterSec);
+
+      logger.warn(
+        {
+          ip: req.ip,
+          userId: req.session?.user?.id,
+          path: req.originalUrl,
+          method: req.method,
+          prefix,
+          retryAfterSec
+        },
+        'Rate limit exceeded'
+      );
+
       next(new TooManyRequestsError(message));
     },
     skip: () => process.env.NODE_ENV === 'test' && process.env.ENABLE_RATE_LIMIT !== 'true'
   });
 }
 
-// Global API rate limiter: 300 requests per 15 minutes
+// 1. Global API rate limiter: 300 requests per 15 minutes per IP
 export const globalRateLimiter = createRateLimiter({
   windowMs: 15 * 60 * 1000,
   max: 300,
@@ -35,7 +72,7 @@ export const globalRateLimiter = createRateLimiter({
   prefix: 'api:'
 });
 
-// Sensitive Auth limiter: 15 requests per 15 minutes (protects register & login)
+// 2. Sensitive Authentication limiter: 15 requests per 15 minutes per IP (login & register)
 export const authRateLimiter = createRateLimiter({
   windowMs: 15 * 60 * 1000,
   max: 15,
@@ -43,10 +80,34 @@ export const authRateLimiter = createRateLimiter({
   prefix: 'auth:'
 });
 
-// Event booking limiter: 30 registrations per minute per user/IP
+// 3. Event Mutation limiter: 30 requests per 15 minutes per organizer account/IP (create, update, cancel)
+export const eventMutationRateLimiter = createRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  message: 'Too many event management operations. Please slow down.',
+  prefix: 'event_mutate:'
+});
+
+// 4. Event RSVP / booking limiter: 30 registrations per minute per attendee/IP
 export const bookingRateLimiter = createRateLimiter({
   windowMs: 60 * 1000,
   max: 30,
-  message: 'Too many booking requests. Please wait a moment.',
+  message: 'Too many booking requests. Please wait a moment before trying again.',
   prefix: 'booking:'
+});
+
+// 5. Cancellation Workflow limiter: 30 requests per 15 minutes per user/IP (request, approve, reject)
+export const cancellationRateLimiter = createRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  message: 'Too many cancellation requests processed. Please try again later.',
+  prefix: 'cancellation:'
+});
+
+// 6. Cloudinary Upload Signature limiter: 20 requests per 15 minutes per organizer account/IP
+export const uploadSignatureRateLimiter = createRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  message: 'Too many image upload authorization requests. Please wait a few minutes.',
+  prefix: 'upload_sig:'
 });

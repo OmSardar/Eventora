@@ -14,6 +14,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { ImageUploadField } from "@/components/shared/ImageUploadField";
 import { AlertCircle, ArrowLeft, ShieldAlert } from "lucide-react";
 
 const updateEventSchema = z.object({
@@ -24,6 +32,13 @@ const updateEventSchema = z.object({
   seatLimit: z.coerce.number().int().min(1).optional(),
   category: z.string().optional(),
   bannerUrl: z.string().optional(),
+  image: z
+    .object({
+      source: z.enum(["URL", "CLOUDINARY"]).default("URL"),
+      url: z.string().default(""),
+      publicId: z.string().nullable().optional().default(null),
+    })
+    .optional(),
 });
 
 type UpdateEventFormData = z.infer<typeof updateEventSchema>;
@@ -49,6 +64,8 @@ export default function EditEventPage() {
     register,
     handleSubmit,
     reset,
+    setValue,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<UpdateEventFormData>({
     resolver: zodResolver(updateEventSchema),
@@ -56,6 +73,12 @@ export default function EditEventPage() {
 
   useEffect(() => {
     if (event) {
+      const existingImage = event.image || {
+        source: "URL" as const,
+        url: event.bannerUrl || "",
+        publicId: null,
+      };
+
       reset({
         title: event.title,
         description: event.description,
@@ -63,6 +86,7 @@ export default function EditEventPage() {
         seatLimit: event.seatLimit,
         category: event.category || "General",
         bannerUrl: event.bannerUrl || "",
+        image: existingImage,
         eventDate: new Date(event.eventDate).toISOString().slice(0, 16),
       });
     }
@@ -87,11 +111,19 @@ export default function EditEventPage() {
   };
 
   if (isLoading) {
-    return <div className="p-16 text-center text-xs text-muted-foreground">Loading event data...</div>;
+    return (
+      <div className="p-16 text-center text-xs text-muted-foreground">
+        Loading event data...
+      </div>
+    );
   }
 
   if (!event) {
-    return <div className="p-16 text-center text-xs text-muted-foreground">Event not found.</div>;
+    return (
+      <div className="p-16 text-center text-xs text-muted-foreground">
+        Event not found.
+      </div>
+    );
   }
 
   // Check ownership
@@ -127,7 +159,8 @@ export default function EditEventPage() {
         <CardHeader>
           <CardTitle className="text-2xl font-bold">Edit Event Details</CardTitle>
           <CardDescription className="text-xs">
-            Modify event properties. Note: Seat capacity cannot be reduced below current bookings ({event.seatsBooked} seats booked).
+            Modify event properties. Note: Seat capacity cannot be reduced below current bookings (
+            {event.seatsBooked} seats booked).
           </CardDescription>
         </CardHeader>
 
@@ -149,17 +182,22 @@ export default function EditEventPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-foreground">Category</label>
-                <select
-                  className="flex h-10 w-full rounded-lg border border-input bg-background/50 px-3 py-2 text-xs"
-                  {...register("category")}
+                <Select
+                  value={watch("category") || "Technology"}
+                  onValueChange={(val) => setValue("category", val)}
                 >
-                  <option value="Technology">Technology</option>
-                  <option value="Design">Design</option>
-                  <option value="Workshop">Workshop</option>
-                  <option value="Sustainability">Sustainability</option>
-                  <option value="Business">Business</option>
-                  <option value="General">General</option>
-                </select>
+                  <SelectTrigger className="text-xs">
+                    <SelectValue placeholder="Select a category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Technology">Technology</SelectItem>
+                    <SelectItem value="Design">Design</SelectItem>
+                    <SelectItem value="Workshop">Workshop</SelectItem>
+                    <SelectItem value="Sustainability">Sustainability</SelectItem>
+                    <SelectItem value="Business">Business</SelectItem>
+                    <SelectItem value="General">General</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="space-y-1.5">
@@ -189,10 +227,19 @@ export default function EditEventPage() {
               {errors.venue && <p className="text-[11px] text-destructive">{errors.venue.message}</p>}
             </div>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-foreground">Banner Image URL</label>
-              <Input className="text-xs" {...register("bannerUrl")} />
-            </div>
+            {/* Dual-Option Banner Image Component (Upload vs URL) */}
+            <ImageUploadField
+              value={watch("image") || watch("bannerUrl")}
+              onChange={(img) => {
+                setValue("image", {
+                  source: img.source,
+                  url: img.url,
+                  publicId: img.publicId ?? null,
+                });
+                setValue("bannerUrl", img.url);
+              }}
+              error={errors.bannerUrl?.message}
+            />
 
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-foreground">Description</label>

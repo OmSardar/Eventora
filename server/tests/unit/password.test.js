@@ -37,3 +37,4 @@ describe('Password Security (Argon2id)', () => {
     assert.equal(isNullValid, false);
   });
 });
+

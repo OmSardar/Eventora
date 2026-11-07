@@ -121,3 +121,4 @@ export function EventCard({ event }: EventCardProps) {
     </div>
   );
 }
+

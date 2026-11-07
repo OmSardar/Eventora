@@ -1,5 +1,6 @@
 import React from "react";
 import Link from "next/link";
+import { BrandLogo } from "@/components/brand/BrandLogo";
 
 export function Footer() {
   return (
@@ -7,14 +8,9 @@ export function Footer() {
       <div className="container mx-auto max-w-7xl px-4 sm:px-6">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-12">
           <div className="space-y-3 md:col-span-1">
-            <div className="flex items-center gap-2">
-              <div className="flex h-7 w-7 items-center justify-center rounded bg-foreground text-background font-bold text-sm">
-                E
-              </div>
-              <span className="font-bold text-foreground text-base tracking-tight">
-                EVENTORA
-              </span>
-            </div>
+            <Link href="/" className="inline-block group" aria-label="Eventora Home">
+              <BrandLogo size="sm" />
+            </Link>
             <p className="text-xs leading-relaxed text-muted-foreground">
               Production-grade event management, RSVP, and attendee platform built with Next.js, Express, and MongoDB.
             </p>
@@ -78,3 +74,4 @@ export function Footer() {
     </footer>
   );
 }
+

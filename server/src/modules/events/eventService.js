@@ -7,6 +7,8 @@ import {
   NotFoundError
 } from '../../shared/errors/AppError.js';
 import { logAuditEvent } from '../audit/AuditLog.js';
+import { deleteCloudinaryAsset } from '../../infrastructure/cloudinary/cloudinaryService.js';
+import { logger } from '../../infrastructure/logging/logger.js';
 
 export async function createEvent({
   title,
@@ -14,8 +16,12 @@ export async function createEvent({
   eventDate,
   venue,
   seatLimit,
+  isPaid,
+  ticketPrice,
+  currency,
   category,
   bannerUrl,
+  image,
   organizerId,
   ipAddress,
   userAgent
@@ -25,6 +31,9 @@ export async function createEvent({
     throw new BadRequestError('Event date must be in the future.');
   }
 
+  const finalImage =
+    image || (bannerUrl ? { source: 'URL', url: bannerUrl, publicId: null } : { source: 'URL', url: '', publicId: null });
+
   const event = await Event.create({
     title,
     description,
@@ -32,10 +41,14 @@ export async function createEvent({
     venue,
     seatLimit: Number(seatLimit),
     seatsBooked: 0,
+    isPaid: Boolean(isPaid),
+    ticketPrice: isPaid ? Number(ticketPrice) : 0,
+    currency: currency || 'INR',
     organizerId: new mongoose.Types.ObjectId(organizerId),
     status: EVENT_STATUS.PUBLISHED,
     category: category || 'General',
-    bannerUrl: bannerUrl || ''
+    image: finalImage,
+    bannerUrl: bannerUrl || finalImage.url || ''
   });
 
   await logAuditEvent({
@@ -93,13 +106,54 @@ export async function updateEvent({
     event.seatLimit = newLimit;
   }
 
+  // Prevent price changes from affecting existing paid registrations
+  if (
+    (updateData.ticketPrice !== undefined && updateData.ticketPrice !== event.ticketPrice) ||
+    (updateData.isPaid !== undefined && updateData.isPaid !== event.isPaid)
+  ) {
+    if (event.seatsBooked > 0) {
+      throw new BadRequestError(
+        'Cannot modify pricing for an event that already has confirmed bookings.'
+      );
+    }
+    if (updateData.isPaid !== undefined) {
+      event.isPaid = Boolean(updateData.isPaid);
+    }
+    if (updateData.ticketPrice !== undefined) {
+      event.ticketPrice = event.isPaid ? Number(updateData.ticketPrice) : 0;
+    }
+  }
+
+  const oldPublicId = event.image?.publicId;
+  let newPublicId = undefined;
+
   if (updateData.title !== undefined) event.title = updateData.title;
   if (updateData.description !== undefined) event.description = updateData.description;
   if (updateData.venue !== undefined) event.venue = updateData.venue;
   if (updateData.category !== undefined) event.category = updateData.category;
-  if (updateData.bannerUrl !== undefined) event.bannerUrl = updateData.bannerUrl;
+
+  if (updateData.image !== undefined) {
+    event.image = updateData.image;
+    event.bannerUrl = updateData.image?.url || '';
+    newPublicId = updateData.image?.publicId;
+  } else if (updateData.bannerUrl !== undefined) {
+    event.bannerUrl = updateData.bannerUrl;
+    event.image = {
+      source: 'URL',
+      url: updateData.bannerUrl,
+      publicId: null
+    };
+    newPublicId = null;
+  }
 
   await event.save();
+
+  // Safely delete replaced Cloudinary asset only after database update succeeds
+  if (oldPublicId && newPublicId !== undefined && oldPublicId !== newPublicId) {
+    deleteCloudinaryAsset(oldPublicId).catch((err) => {
+      logger.error({ err: err?.message, oldPublicId }, 'Failed to delete replaced Cloudinary asset');
+    });
+  }
 
   await logAuditEvent({
     action: 'EVENT_UPDATED',
@@ -225,3 +279,4 @@ export async function getOrganizerEvents(organizerId) {
     .sort({ createdAt: -1 })
     .lean({ virtuals: true });
 }
+

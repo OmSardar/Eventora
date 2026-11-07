@@ -17,3 +17,4 @@
 - **Password Storage:** Argon2id with OWASP parameters (19 MiB memory, 2 iterations, 1 parallelism thread).
 - **CSRF Defense:** Synchronizer token pattern storing cryptographically secure random bytes (`crypto.randomBytes(32)`) in the server session, validated via timing-safe comparison (`crypto.timingSafeEqual`).
 - **Session ID:** Cryptographically random, signed, delivered via HttpOnly, SameSite cookies.
+

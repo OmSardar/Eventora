@@ -79,3 +79,4 @@ export async function logAuditEvent({
     console.error('Failed to write audit log:', err.message);
   }
 }
+

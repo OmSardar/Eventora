@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/features/authentication/AuthContext";
 import { ThemeToggle } from "./ThemeToggle";
+import { BrandLogo } from "@/components/brand/BrandLogo";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -35,13 +36,8 @@ export function Navbar() {
     <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-md">
       <div className="container mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
         {/* Brand Logo */}
-        <Link href="/" className="flex items-center gap-2 group">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-foreground text-background font-bold tracking-tighter group-hover:scale-105 transition-transform">
-            E
-          </div>
-          <span className="font-bold tracking-tight text-xl text-foreground">
-            EVENTORA
-          </span>
+        <Link href="/" className="flex items-center group" aria-label="Eventora Home">
+          <BrandLogo size="md" />
         </Link>
 
         {/* Desktop Navigation */}
@@ -53,6 +49,20 @@ export function Navbar() {
             }`}
           >
             Browse Events
+          </Link>
+
+          <Link
+            href="/#features"
+            className="transition-colors hover:text-foreground text-muted-foreground"
+          >
+            Features
+          </Link>
+
+          <Link
+            href="/#how-it-works"
+            className="transition-colors hover:text-foreground text-muted-foreground"
+          >
+            How It Works
           </Link>
 
           {isOrganizer && (
@@ -170,6 +180,20 @@ export function Navbar() {
             className="block text-sm font-medium py-1.5 text-foreground"
           >
             Browse Events
+          </Link>
+          <Link
+            href="/#features"
+            onClick={() => setMobileMenuOpen(false)}
+            className="block text-sm font-medium py-1.5 text-muted-foreground"
+          >
+            Features
+          </Link>
+          <Link
+            href="/#how-it-works"
+            onClick={() => setMobileMenuOpen(false)}
+            className="block text-sm font-medium py-1.5 text-muted-foreground"
+          >
+            How It Works
           </Link>
           {isOrganizer && (
             <>

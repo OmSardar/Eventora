@@ -34,6 +34,11 @@ export function originCheckMiddleware(req, _res, next) {
     return next();
   }
 
+  // Exempt external webhooks authenticated via HMAC signature
+  if (req.originalUrl?.includes('/webhooks/')) {
+    return next();
+  }
+
   // Skip origin check in isolated unit tests if configured
   if (process.env.SKIP_SECURITY_CHECKS === 'true') {
     return next();
@@ -105,3 +110,4 @@ export function csrfProtection(req, _res, next) {
 
   next();
 }
+

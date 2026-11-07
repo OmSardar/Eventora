@@ -6,6 +6,9 @@ import dotenv from 'dotenv';
 import authRoutes from './modules/authentication/authRoutes.js';
 import eventRoutes from './modules/events/eventRoutes.js';
 import registrationRoutes from './modules/registrations/registrationRoutes.js';
+import paymentRoutes from './modules/payments/paymentRoutes.js';
+import notificationRoutes from './modules/notifications/notificationRoutes.js';
+import { handleRazorpayWebhook } from './modules/payments/webhook/razorpayWebhookController.js';
 import { createSessionMiddleware } from './infrastructure/session/sessionConfig.js';
 import { sessionExpiryMiddleware } from './shared/middleware/sessionExpiryMiddleware.js';
 import { originCheckMiddleware, getAllowedOrigins } from './shared/middleware/securityMiddleware.js';
@@ -61,8 +64,15 @@ app.use(
   })
 );
 
-// Limit JSON request body size to prevent memory exhaustion / DoS
-app.use(express.json({ limit: '50kb' }));
+// Limit JSON request body size and preserve raw buffer for webhook signature validation
+app.use(
+  express.json({
+    limit: '50kb',
+    verify: (req, _res, buf) => {
+      req.rawBody = buf.toString('utf8');
+    }
+  })
+);
 app.use(express.urlencoded({ extended: true, limit: '50kb' }));
 app.use(cookieParser());
 
@@ -96,10 +106,4 @@ app.use('/api/v1', registrationRoutes);
 
 // Handle 404 for undefined routes
 app.use('*', (req, _res, next) => {
-  next(new NotFoundError(`Route ${req.method} ${req.originalUrl} not found`));
-});
-
-// Centralized error handler
-app.use(errorHandler);
-
-export default app;
+  next(new NotFoundError(`Route ${req.meth

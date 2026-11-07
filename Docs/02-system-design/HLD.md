@@ -63,3 +63,4 @@ flowchart TD
 - Document collections: `users`, `events`, `registrations`, `sessions`, `audit_logs`, `rate_limits`.
 - Compound unique indexing guarantees zero duplicate bookings per attendee.
 - Atomic conditional expressions (`$lt: ['$seatsBooked', '$seatLimit']`) guarantee invariant adherence under concurrency.
+

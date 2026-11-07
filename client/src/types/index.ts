@@ -10,6 +10,12 @@ export interface User {
 
 export type EventStatus = "DRAFT" | "PUBLISHED" | "CANCELLED";
 
+export interface EventImage {
+  source: "URL" | "CLOUDINARY";
+  url: string;
+  publicId?: string | null;
+}
+
 export interface EventItem {
   _id: string;
   id?: string;
@@ -24,6 +30,7 @@ export interface EventItem {
   status: EventStatus;
   category?: string;
   bannerUrl?: string;
+  image?: EventImage;
   organizerId: {
     _id: string;
     id?: string;
@@ -74,3 +81,4 @@ export interface ApiResponse<T = unknown> {
     details?: Array<{ field: string; message: string }>;
   };
 }
+

@@ -96,3 +96,4 @@ paths:
           description: Event sold out or past
         '409':
           description: Already registered
+

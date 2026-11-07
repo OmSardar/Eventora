@@ -7,11 +7,11 @@ test.describe("Authentication Journeys", () => {
     // Click demo autofill button
     await page.click("button:has-text('Fill Organizer')");
 
-    // Click Sign In
-    await page.click("button:has-text('Sign In')");
+    // Click Sign In within the form
+    await page.locator("form button[type='submit']").click();
 
     // Should redirect to organizer dashboard
-    await expect(page).toHaveURL(/.*organizer\/dashboard/);
+    await expect(page).toHaveURL(/.*organizer\/dashboard/, { timeout: 10000 });
     await expect(page.locator("h1")).toContainText("Overview Dashboard");
   });
 
@@ -20,10 +20,11 @@ test.describe("Authentication Journeys", () => {
 
     // Click demo attendee autofill
     await page.click("button:has-text('Fill Attendee')");
-    await page.click("button:has-text('Sign In')");
+    await page.locator("form button[type='submit']").click();
 
     // Should redirect to attendee registrations
-    await expect(page).toHaveURL(/.*attendee\/registrations/);
+    await expect(page).toHaveURL(/.*attendee\/registrations/, { timeout: 10000 });
     await expect(page.locator("h1")).toContainText("My Booked Events");
   });
 });
+

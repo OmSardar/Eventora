@@ -111,3 +111,4 @@ export const api = {
   delete: <T>(endpoint: string, options?: RequestOptions) =>
     apiClient<T>(endpoint, { ...options, method: "DELETE" }),
 };
+

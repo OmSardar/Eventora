@@ -38,6 +38,20 @@ const userSchema = new mongoose.Schema(
       },
       required: [true, 'Role is required'],
       immutable: true // Role cannot be modified after registration
+    },
+    phone: {
+      type: String,
+      trim: true,
+      default: ''
+    },
+    smsConsent: {
+      type: Boolean,
+      default: false
+    },
+    notificationPreferences: {
+      sms: { type: Boolean, default: true },
+      inApp: { type: Boolean, default: true },
+      email: { type: Boolean, default: false }
     }
   },
   {
@@ -61,3 +75,4 @@ userSchema.pre('validate', function (next) {
 });
 
 export const User = mongoose.model('User', userSchema);
+

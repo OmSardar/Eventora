@@ -20,9 +20,11 @@ describe('Event & Registration Business Rules (Integration)', () => {
     await connectDatabase(process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/eventora');
 
     // Clean test state
-    await User.deleteMany({ email: { $regex: '@testflow.com$' } });
+    const existingEvents = await Event.find({ title: { $regex: 'Test Suite Event' } }).select('_id');
+    const existingEventIds = existingEvents.map((e) => e._id);
+    await Registration.deleteMany({ eventId: { $in: existingEventIds } });
     await Event.deleteMany({ title: { $regex: 'Test Suite Event' } });
-    await Registration.deleteMany({});
+    await User.deleteMany({ email: { $regex: '@testflow.com$' } });
 
     organizerAgent = request.agent(app);
     attendeeAgent = request.agent(app);
@@ -60,9 +62,11 @@ describe('Event & Registration Business Rules (Integration)', () => {
   });
 
   after(async () => {
-    await User.deleteMany({ email: { $regex: '@testflow.com$' } });
+    const testEvents = await Event.find({ title: { $regex: 'Test Suite Event' } }).select('_id');
+    const testEventIds = testEvents.map((e) => e._id);
+    await Registration.deleteMany({ eventId: { $in: testEventIds } });
     await Event.deleteMany({ title: { $regex: 'Test Suite Event' } });
-    await Registration.deleteMany({});
+    await User.deleteMany({ email: { $regex: '@testflow.com$' } });
     await disconnectDatabase();
   });
 
@@ -159,3 +163,4 @@ describe('Event & Registration Business Rules (Integration)', () => {
     assert.equal(res.body.data.registrations[0].eventId.title, 'Test Suite Event 2026');
   });
 });
+

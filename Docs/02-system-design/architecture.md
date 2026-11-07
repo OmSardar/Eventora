@@ -20,3 +20,4 @@ Apart from the external MongoDB instance and session collection, the Express bac
 - No in-memory user sessions (stored in MongoDB `sessions`).
 - No in-memory rate limiting (stored in MongoDB `rate_limits`).
 - Allows seamless horizontal scaling across multi-instance server deployments (Render, AWS, ECS) without sticky sessions.
+

@@ -12,20 +12,38 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { ImageUploadField } from "@/components/shared/ImageUploadField";
 import { AlertCircle, ArrowLeft, Sparkles } from "lucide-react";
 
 const createEventSchema = z.object({
   title: z.string().min(3, "Title must be at least 3 characters").max(200),
   description: z.string().min(10, "Description must be at least 10 characters").max(5000),
-  eventDate: z.string().refine((val) => !isNaN(Date.parse(val)), {
-    message: "Valid date format required",
-  }).refine((val) => new Date(val).getTime() > Date.now(), {
-    message: "Event date must be in the future",
-  }),
+  eventDate: z
+    .string()
+    .refine((val) => !isNaN(Date.parse(val)), {
+      message: "Valid date format required",
+    })
+    .refine((val) => new Date(val).getTime() > Date.now(), {
+      message: "Event date must be in the future",
+    }),
   venue: z.string().min(3, "Venue must be at least 3 characters").max(300),
   seatLimit: z.coerce.number().int().min(1, "Seat limit must be at least 1"),
-  category: z.string().optional().default("General"),
+  category: z.string().optional().default("Technology"),
   bannerUrl: z.string().optional().default(""),
+  image: z
+    .object({
+      source: z.enum(["URL", "CLOUDINARY"]).default("URL"),
+      url: z.string().default(""),
+      publicId: z.string().nullable().optional().default(null),
+    })
+    .optional(),
 });
 
 type CreateEventFormData = z.infer<typeof createEventSchema>;
@@ -40,13 +58,20 @@ export default function CreateEventPage() {
     register,
     handleSubmit,
     setValue,
+    watch,
     formState: { errors },
   } = useForm<CreateEventFormData>({
     resolver: zodResolver(createEventSchema),
     defaultValues: {
       category: "Technology",
       seatLimit: 50,
-      bannerUrl: "https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&w=1200&q=80",
+      bannerUrl:
+        "https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&w=1200&q=80",
+      image: {
+        source: "URL",
+        url: "https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&w=1200&q=80",
+        publicId: null,
+      },
     },
   });
 
@@ -67,6 +92,9 @@ export default function CreateEventPage() {
 
   const populateSampleTemplate = () => {
     const futureDate = new Date(Date.now() + 14 * 86400000);
+    const sampleBanner =
+      "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&w=1200&q=80";
+
     setValue("title", "Distributed Systems & Cloud Architecture 2026");
     setValue(
       "description",
@@ -76,10 +104,12 @@ export default function CreateEventPage() {
     setValue("seatLimit", 75);
     setValue("category", "Technology");
     setValue("eventDate", futureDate.toISOString().slice(0, 16));
-    setValue(
-      "bannerUrl",
-      "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&w=1200&q=80"
-    );
+    setValue("bannerUrl", sampleBanner);
+    setValue("image", {
+      source: "URL",
+      url: sampleBanner,
+      publicId: null,
+    });
   };
 
   if (authLoading) return <div className="p-12 text-center text-xs">Checking authorization...</div>;
@@ -146,17 +176,22 @@ export default function CreateEventPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-foreground">Category</label>
-                <select
-                  className="flex h-10 w-full rounded-lg border border-input bg-background/50 px-3 py-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  {...register("category")}
+                <Select
+                  value={watch("category") || "Technology"}
+                  onValueChange={(val) => setValue("category", val)}
                 >
-                  <option value="Technology">Technology</option>
-                  <option value="Design">Design</option>
-                  <option value="Workshop">Workshop</option>
-                  <option value="Sustainability">Sustainability</option>
-                  <option value="Business">Business</option>
-                  <option value="General">General</option>
-                </select>
+                  <SelectTrigger className="text-xs">
+                    <SelectValue placeholder="Select a category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Technology">Technology</SelectItem>
+                    <SelectItem value="Design">Design</SelectItem>
+                    <SelectItem value="Workshop">Workshop</SelectItem>
+                    <SelectItem value="Sustainability">Sustainability</SelectItem>
+                    <SelectItem value="Business">Business</SelectItem>
+                    <SelectItem value="General">General</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="space-y-1.5">
@@ -205,17 +240,19 @@ export default function CreateEventPage() {
               )}
             </div>
 
-            {/* Banner Image URL */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-foreground">
-                Banner Photography URL (Optional)
-              </label>
-              <Input
-                placeholder="https://images.unsplash.com/..."
-                className="text-xs"
-                {...register("bannerUrl")}
-              />
-            </div>
+            {/* Dual-Option Banner Image Component (Upload vs URL) */}
+            <ImageUploadField
+              value={watch("image") || watch("bannerUrl")}
+              onChange={(img) => {
+                setValue("image", {
+                  source: img.source,
+                  url: img.url,
+                  publicId: img.publicId ?? null,
+                });
+                setValue("bannerUrl", img.url);
+              }}
+              error={errors.bannerUrl?.message}
+            />
 
             {/* Description */}
             <div className="space-y-1.5">

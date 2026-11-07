@@ -22,6 +22,16 @@ export async function connectDatabase(uri = process.env.MONGODB_URI || 'mongodb:
     isConnected = true;
     logger.info({ host: conn.connection.host, name: conn.connection.name }, 'Connected to MongoDB database');
 
+    // Ensure TTL index for distributed rate limit store
+    try {
+      await mongoose.connection.collection('rate_limits').createIndex(
+        { expiresAt: 1 },
+        { expireAfterSeconds: 0, background: true }
+      );
+    } catch (_) {
+      // Ignore in case collection is created lazily
+    }
+
     mongoose.connection.on('error', (err) => {
       logger.error({ err }, 'MongoDB connection error');
     });
@@ -48,3 +58,4 @@ export async function disconnectDatabase() {
     logger.error({ error: error.message }, 'Error disconnecting from MongoDB');
   }
 }
+

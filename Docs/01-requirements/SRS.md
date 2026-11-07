@@ -63,3 +63,4 @@ Eventora provides an end-to-end event experience for two distinct roles:
 - **SEC-02:** Origin and Referer validation enforcing allowed domains.
 - **SEC-03:** Rate limiting backed by shared distributed MongoDB storage.
 - **SEC-04:** Structured JSON logging with automatic credential and cookie redaction via Pino.
+

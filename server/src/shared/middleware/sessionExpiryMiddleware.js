@@ -32,3 +32,4 @@ export function sessionExpiryMiddleware(req, res, next) {
   req.session.lastActivityAt = now;
   next();
 }
+

@@ -4,7 +4,7 @@ import { authenticate, requireRole } from '../../shared/middleware/authMiddlewar
 import { validateBody } from '../../shared/middleware/validate.js';
 import { cancellationRequestSchema } from '../../shared/validation/eventValidation.js';
 import { ROLES } from '../../shared/constants/roles.js';
-import { bookingRateLimiter } from '../../shared/middleware/rateLimiter.js';
+import { bookingRateLimiter, cancellationRateLimiter } from '../../shared/middleware/rateLimiter.js';
 import { csrfProtection } from '../../shared/middleware/securityMiddleware.js';
 
 const router = Router();
@@ -30,6 +30,7 @@ router.post(
   '/registrations/:registrationId/cancellation-request',
   authenticate,
   requireRole(ROLES.ATTENDEE),
+  cancellationRateLimiter,
   csrfProtection,
   validateBody(cancellationRequestSchema),
   registrationController.requestCancellation
@@ -47,6 +48,7 @@ router.post(
   '/cancellation-requests/:requestId/approve',
   authenticate,
   requireRole(ROLES.ORGANIZER),
+  cancellationRateLimiter,
   csrfProtection,
   registrationController.approveCancellation
 );
@@ -55,8 +57,10 @@ router.post(
   '/cancellation-requests/:requestId/reject',
   authenticate,
   requireRole(ROLES.ORGANIZER),
+  cancellationRateLimiter,
   csrfProtection,
   registrationController.rejectCancellation
 );
 
 export default router;
+

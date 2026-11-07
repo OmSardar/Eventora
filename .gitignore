@@ -4,10 +4,10 @@ node_modules/
 .pnp.js
 
 # Testing and Coverage
-/coverage
-/playwright-report
-/test-results
-/.nyc_output
+coverage/
+playwright-report/
+test-results/
+.nyc_output/
 
 # Next.js build output
 .next/
@@ -41,3 +41,4 @@ Thumbs.db
 *.njsproj
 *.sln
 *.sw?
+

@@ -92,3 +92,4 @@ export async function login({ email, password, ipAddress, userAgent }) {
     createdAt: user.createdAt
   };
 }
+

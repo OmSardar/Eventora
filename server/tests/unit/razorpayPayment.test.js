@@ -5,6 +5,9 @@ import {
   verifyRazorpaySignature,
   verifyRazorpayWebhookSignature,
   createRazorpayOrder,
+  initiateRazorpayRefund,
+  fetchRazorpayRefund,
+  fetchRazorpayPaymentRefunds,
   getRazorpayClient
 } from '../../src/modules/payments/razorpayService.js';
 import { createEventSchema } from '../../src/shared/validation/eventValidation.js';
@@ -152,6 +155,32 @@ describe('Razorpay Service Unit Tests', () => {
       ticketPrice: 0
     });
     assert.equal(invalidPaid.success, false);
+  });
+
+  it('initiates refund in paise using mock gateway in test mode', async () => {
+    const refund = await initiateRazorpayRefund({
+      paymentId: 'pay_test_refund_123',
+      amountInPaise: 49900,
+      notes: { reason: 'Attendee requested cancellation' }
+    });
+
+    assert.ok(refund);
+    assert.ok(refund.id.startsWith('rfnd_mock_'));
+    assert.equal(refund.amount, 49900);
+    assert.equal(refund.currency, 'INR');
+    assert.equal(refund.status, 'processed');
+    assert.equal(refund.payment_id, 'pay_test_refund_123');
+  });
+
+  it('fetches refund details and collection via mock gateway', async () => {
+    const refund = await fetchRazorpayRefund('rfnd_test_fetch_1');
+    assert.ok(refund);
+    assert.equal(refund.id, 'rfnd_test_fetch_1');
+    assert.equal(refund.status, 'processed');
+
+    const refunds = await fetchRazorpayPaymentRefunds('pay_test_123');
+    assert.ok(refunds);
+    assert.equal(refunds.entity, 'collection');
   });
 });
 

@@ -1,6 +1,7 @@
 import { WebhookEvent } from '../WebhookEvent.js';
 import { Payment } from '../Payment.js';
 import { SeatReservation } from '../SeatReservation.js';
+import { RefundOperation } from '../RefundOperation.js';
 import { Event } from '../../events/Event.js';
 import { Registration } from '../../registrations/Registration.js';
 import { User } from '../../users/User.js';
@@ -47,7 +48,12 @@ export async function processRazorpayWebhookEvent({ eventId, eventType, payload 
         const paymentId = paymentEntity.id;
         const payment = await Payment.findOne({ orderId });
 
-        if (payment && payment.status !== PAYMENT_STATUS.CAPTURED) {
+        if (
+          payment &&
+          payment.status !== PAYMENT_STATUS.CAPTURED &&
+          payment.status !== PAYMENT_STATUS.REFUND_PENDING &&
+          payment.status !== PAYMENT_STATUS.REFUNDED
+        ) {
           payment.status = PAYMENT_STATUS.CAPTURED;
           payment.paymentId = paymentId;
           payment.method = paymentEntity.method || payment.method;
@@ -108,7 +114,12 @@ export async function processRazorpayWebhookEvent({ eventId, eventType, payload 
         const orderId = paymentEntity.order_id;
         const payment = await Payment.findOne({ orderId });
 
-        if (payment && payment.status !== PAYMENT_STATUS.CAPTURED) {
+        if (
+          payment &&
+          payment.status !== PAYMENT_STATUS.CAPTURED &&
+          payment.status !== PAYMENT_STATUS.REFUND_PENDING &&
+          payment.status !== PAYMENT_STATUS.REFUNDED
+        ) {
           payment.status = PAYMENT_STATUS.FAILED;
           payment.failureDetails = {
             code: paymentEntity.error_code || 'PAYMENT_FAILED',
@@ -140,23 +151,62 @@ export async function processRazorpayWebhookEvent({ eventId, eventType, payload 
         if (!refundEntity) break;
 
         const paymentId = refundEntity.payment_id;
+        const refundId = refundEntity.id;
+        const refundAmount = refundEntity.amount;
+
         const payment = await Payment.findOne({ paymentId });
 
         if (payment && payment.refundStatus !== REFUND_STATUS.PROCESSED) {
           payment.status = PAYMENT_STATUS.REFUNDED;
           payment.refundStatus = REFUND_STATUS.PROCESSED;
-          payment.refundId = refundEntity.id;
+          payment.refundId = refundId;
+          payment.refundAmount = refundAmount || payment.amount;
           await payment.save();
+
+          // Locate and update matching RefundOperation
+          const refundOp = await RefundOperation.findOne({
+            $or: [
+              { gatewayRefundId: refundId },
+              { gatewayPaymentId: paymentId }
+            ]
+          });
+          if (refundOp) {
+            refundOp.status = 'PROCESSED';
+            refundOp.gatewayRefundId = refundId;
+            await refundOp.save();
+          }
 
           if (payment.registrationId) {
             const registration = await Registration.findById(payment.registrationId);
-            if (registration && registration.status !== REGISTRATION_STATUS.CANCELLED) {
-              registration.status = REGISTRATION_STATUS.CANCELLED;
+            if (registration) {
               registration.refundStatus = REFUND_STATUS.PROCESSED;
-              await registration.save();
+              if (registration.status !== REGISTRATION_STATUS.CANCELLED) {
+                registration.status = REGISTRATION_STATUS.CANCELLED;
+              }
 
-              // Release seat
-              await Event.findByIdAndUpdate(registration.eventId, { $inc: { seatsBooked: -1 } });
+              // Concurrency-safe atomic seat release: executed ONLY if not previously released
+              const seatClaimed = await Registration.findOneAndUpdate(
+                {
+                  _id: registration._id,
+                  seatReleased: { $ne: true }
+                },
+                {
+                  $set: {
+                    seatReleased: true,
+                    seatReleasedAt: new Date()
+                  }
+                },
+                { new: true }
+              );
+
+              if (seatClaimed) {
+                await Event.findOneAndUpdate(
+                  { _id: registration.eventId, seatsBooked: { $gt: 0 } },
+                  { $inc: { seatsBooked: -1 } }
+                );
+              }
+
+              await registration.save();
             }
           }
 
@@ -176,15 +226,41 @@ export async function processRazorpayWebhookEvent({ eventId, eventType, payload 
         if (!refundEntity) break;
 
         const paymentId = refundEntity.payment_id;
+        const refundId = refundEntity.id;
         const payment = await Payment.findOne({ paymentId });
 
         if (payment) {
           payment.refundStatus = REFUND_STATUS.FAILED;
           payment.failureDetails = {
-            code: 'REFUND_FAILED',
-            description: 'Gateway reported refund failure'
+            code: refundEntity.error_code || 'REFUND_FAILED',
+            description: refundEntity.error_description || 'Gateway reported refund failure',
+            source: refundEntity.error_source || 'gateway',
+            reason: refundEntity.error_reason || 'unknown'
           };
           await payment.save();
+
+          // Synchronize Registration refund status
+          if (payment.registrationId) {
+            await Registration.findByIdAndUpdate(payment.registrationId, {
+              refundStatus: REFUND_STATUS.FAILED
+            });
+          }
+
+          // Locate and update matching RefundOperation
+          const refundOp = await RefundOperation.findOne({
+            $or: [
+              { gatewayRefundId: refundId },
+              { gatewayPaymentId: paymentId }
+            ]
+          });
+          if (refundOp) {
+            refundOp.status = 'FAILED';
+            refundOp.failureDetails = {
+              code: refundEntity.error_code || 'REFUND_FAILED',
+              description: refundEntity.error_description || 'Gateway reported refund failure'
+            };
+            await refundOp.save();
+          }
 
           dispatchNotification({
             userId: payment.attendeeId,

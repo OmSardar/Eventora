@@ -1,11 +1,13 @@
 import mongoose from 'mongoose';
 import { Payment } from './Payment.js';
 import { SeatReservation } from './SeatReservation.js';
+import { RefundOperation } from './RefundOperation.js';
 import { Event } from '../events/Event.js';
 import { Registration } from '../registrations/Registration.js';
 import { User } from '../users/User.js';
 import {
   PAYMENT_STATUS,
+  REFUND_STATUS,
   RESERVATION_STATUS,
   REGISTRATION_STATUS,
   EVENT_STATUS,
@@ -275,15 +277,20 @@ export async function verifyAndConfirmPayment({
       // Event sold out while hold expired! Initiate automated refund
       logger.warn({ orderId, paymentId }, 'Payment succeeded after reservation expired and event sold out. Triggering refund.');
       try {
-        await initiateRazorpayRefund({
+        const refundResult = await initiateRazorpayRefund({
           paymentId,
           amountInPaise: payment.amount,
           notes: { reason: 'Capacity exceeded after hold expired' }
         });
-        payment.status = PAYMENT_STATUS.REFUNDED;
-        payment.refundStatus = 'PROCESSED';
+        payment.status = PAYMENT_STATUS.REFUND_PENDING;
+        payment.refundStatus = REFUND_STATUS.PENDING;
+        payment.refundId = refundResult?.id || `rfnd_${Date.now()}`;
+        payment.refundAmount = payment.amount;
+        payment.refundReason = 'Capacity exceeded after hold expired';
       } catch (refundErr) {
         logger.error({ err: refundErr?.message }, 'Auto-refund for late expired payment failed');
+        payment.refundStatus = REFUND_STATUS.PENDING;
+        payment.failureDetails = { code: 'REFUND_DISPATCH_FAILED', description: refundErr?.message };
       }
       await payment.save();
       throw new BadRequestError('Reservation expired and event is now sold out. A full refund has been initiated.');
@@ -392,4 +399,109 @@ export async function reconcileExpiredReservations() {
   logger.info({ modifiedCount: result.modifiedCount }, 'Reconciled expired seat reservations');
   return { expiredCount: result.modifiedCount };
 }
+
+let isRefundReconciliationRunning = false;
+
+/**
+ * Reconciles pending refund operations across the platform.
+ * Concurrency-safe: skips sweep if an active reconciliation is in flight.
+ * Checks authoritative state on Razorpay before initiating any retry.
+ */
+export async function reconcilePendingRefunds() {
+  if (isRefundReconciliationRunning) {
+    logger.info('Refund reconciliation sweep already in progress. Skipping overlapping execution.');
+    return { status: 'in_progress', reconciledCount: 0 };
+  }
+
+  isRefundReconciliationRunning = true;
+  let reconciledCount = 0;
+  let failedCount = 0;
+
+  try {
+    const pendingOps = await RefundOperation.find({
+      status: { $in: ['INITIATED', 'PENDING'] },
+      $or: [
+        { nextRetryAt: null },
+        { nextRetryAt: { $lte: new Date() } }
+      ]
+    }).limit(20);
+
+    for (const op of pendingOps) {
+      try {
+        // Enforce maximum retry limit to avoid infinite loops
+        if (op.retryCount >= op.maxRetries) {
+          op.status = 'MANUAL_RECONCILIATION_REQUIRED';
+          op.lastError = 'Maximum retry limit exceeded. Flagged for manual review.';
+          await op.save();
+          continue;
+        }
+
+        // Authoritative query against Razorpay to see if payment was already refunded
+        const rzpPayment = await fetchRazorpayPayment(op.gatewayPaymentId);
+
+        // If Razorpay already reports payment as refunded:
+        if (rzpPayment && (rzpPayment.amount_refunded >= op.amount || rzpPayment.refund_status === 'full')) {
+          op.status = 'PROCESSED';
+          await op.save();
+
+          await Payment.findByIdAndUpdate(op.paymentId, {
+            status: PAYMENT_STATUS.REFUNDED,
+            refundStatus: REFUND_STATUS.PROCESSED,
+            refundAmount: rzpPayment.amount_refunded || op.amount
+          });
+
+          await Registration.findByIdAndUpdate(op.registrationId, {
+            refundStatus: REFUND_STATUS.PROCESSED
+          });
+
+          reconciledCount++;
+          continue;
+        }
+
+        // If payment was not refunded and operation is INITIATED or PENDING, attempt safe dispatch
+        const refundResult = await initiateRazorpayRefund({
+          paymentId: op.gatewayPaymentId,
+          amountInPaise: op.amount,
+          notes: {
+            refundOpId: op.refundOpId,
+            registrationId: op.registrationId.toString(),
+            reconciled: 'true'
+          }
+        });
+
+        op.status = 'PENDING';
+        op.gatewayRefundId = refundResult?.id || op.gatewayRefundId;
+        op.lastAttemptAt = new Date();
+        await op.save();
+
+        if (refundResult?.id) {
+          await Payment.findByIdAndUpdate(op.paymentId, {
+            refundId: refundResult.id,
+            status: PAYMENT_STATUS.REFUND_PENDING,
+            refundStatus: REFUND_STATUS.PENDING
+          });
+        }
+
+        reconciledCount++;
+      } catch (opErr) {
+        logger.error(
+          { err: opErr?.message, refundOpId: op.refundOpId },
+          'Error during refund operation reconciliation attempt'
+        );
+        op.retryCount += 1;
+        op.lastError = opErr?.message || 'Reconciliation failed';
+        // Exponential backoff
+        op.nextRetryAt = new Date(Date.now() + Math.pow(2, op.retryCount) * 60000);
+        await op.save();
+        failedCount++;
+      }
+    }
+  } finally {
+    isRefundReconciliationRunning = false;
+  }
+
+  logger.info({ reconciledCount, failedCount }, 'Completed refund reconciliation sweep');
+  return { reconciledCount, failedCount };
+}
+
 

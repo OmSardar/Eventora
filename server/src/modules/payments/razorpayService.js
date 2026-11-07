@@ -24,7 +24,9 @@ const mockRazorpayClient = {
       currency: 'INR',
       status: 'captured',
       method: 'upi',
-      captured: true
+      captured: true,
+      amount_refunded: 0,
+      refund_status: null
     }),
     refund: async (paymentId, params) => ({
       id: `rfnd_mock_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
@@ -32,6 +34,22 @@ const mockRazorpayClient = {
       amount: params.amount,
       currency: 'INR',
       payment_id: paymentId,
+      status: 'processed',
+      speed_processed: 'optimum',
+      created_at: Math.floor(Date.now() / 1000)
+    }),
+    fetchRefunds: async (paymentId) => ({
+      entity: 'collection',
+      count: 0,
+      items: []
+    })
+  },
+  refunds: {
+    fetch: async (refundId) => ({
+      id: refundId,
+      entity: 'refund',
+      amount: 50000,
+      currency: 'INR',
       status: 'processed',
       speed_processed: 'optimum',
       created_at: Math.floor(Date.now() / 1000)
@@ -170,4 +188,21 @@ export async function initiateRazorpayRefund({ paymentId, amountInPaise, notes =
 
   return refund;
 }
+
+/**
+ * Fetches refund entity details from Razorpay API.
+ */
+export async function fetchRazorpayRefund(refundId) {
+  const client = getRazorpayClient();
+  return client.refunds.fetch(refundId);
+}
+
+/**
+ * Fetches all refund attempts associated with a payment ID from Razorpay API.
+ */
+export async function fetchRazorpayPaymentRefunds(paymentId) {
+  const client = getRazorpayClient();
+  return client.payments.fetchRefunds(paymentId);
+}
+
 

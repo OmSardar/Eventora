@@ -1,7 +1,7 @@
 # Eventora — Razorpay Test Mode Payment & Webhook Architecture
 
 **Date:** November 7, 2026  
-**Status:** IMPLEMENTED & VERIFIED (85/85 Server Tests Passing, Client Next.js Build Verified)  
+**Status:** IMPLEMENTED & VERIFIED (103/103 Server Tests Passing, Client Next.js Build Verified)  
 **Environment:** Razorpay Test Mode  
 **Architecture:** Modular Monolith Vertical Slices (`server/src/modules/payments/`)  
 
@@ -107,17 +107,25 @@ A critical architectural challenge identified during the audit was the global pr
 
 ---
 
-## 5. Payment State Machine
+## 5. Payment & Refund State Machine
 
 ```mermaid
 stateDiagram-v2
     [*] --> CREATED: createOrderWithSeatHold()
     CREATED --> CAPTURED: /verify or webhook payment.captured
     CREATED --> FAILED: Invalid signature / payment.failed
-    CAPTURED --> REFUND_PENDING: Cancellation approved by organizer
-    REFUND_PENDING --> REFUNDED: initiateRazorpayRefund() / webhook refund.processed
-    REFUND_PENDING --> CAPTURED: Refund rejected or failed
+    CAPTURED --> REFUND_PENDING: Cancellation approved / RefundOperation created
+    REFUND_PENDING --> REFUNDED: Authoritative webhook refund.processed / reconcilePendingRefunds()
+    REFUND_PENDING --> CAPTURED: Webhook refund.failed (refundStatus = FAILED)
+    REFUNDED --> [*]
+    FAILED --> [*]
 ```
+
+### Refund State & Accounting Invariants:
+1. **Durable Refund Operations:** Every refund attempt creates a [`RefundOperation`](file:///d:/THE%20OMS%20DEVS/WEB%20DEVS/MERN%20PROJECTS/PERSONAL/EVENTORA/server/src/modules/payments/RefundOperation.js) with unique idempotency key `refund_reg_${registrationId}` before contacting Razorpay.
+2. **Never Prematurely Mark Completed:** Synchronous API acceptance stages `Payment.status = REFUND_PENDING` and `refundStatus = PENDING`. Only the authoritative `refund.processed` webhook marks `REFUNDED` and `PROCESSED`.
+3. **Exactly-Once Seat Release:** `Registration.seatReleased` is atomically set to `true` via `{ seatReleased: { $ne: true } }`. The subsequent `refund.processed` webhook safely observes `seatReleased === true` and never decrements `seatsBooked` twice. Counter is protected with `{ seatsBooked: { $gt: 0 } }`.
+4. **Reconciliation Worker:** [`reconcilePendingRefunds()`](file:///d:/THE%20OMS%20DEVS/WEB%20DEVS/MERN%20PROJECTS/PERSONAL/EVENTORA/server/src/modules/payments/paymentService.js) scans unconfirmed refunds, verifies provider state before retrying, and applies exponential backoff up to 3 retries.
 
 ---
 

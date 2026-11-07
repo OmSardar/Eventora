@@ -1,8 +1,10 @@
+import crypto from 'crypto';
 import mongoose from 'mongoose';
 import { Registration } from './Registration.js';
 import { Event } from '../events/Event.js';
 import { User } from '../users/User.js';
 import { Payment } from '../payments/Payment.js';
+import { RefundOperation } from '../payments/RefundOperation.js';
 import {
   EVENT_STATUS,
   REGISTRATION_STATUS,
@@ -353,34 +355,119 @@ export async function processCancellationDecision({
     registration.decidedBy = new mongoose.Types.ObjectId(organizerId);
     registration.decidedAt = new Date();
 
-    // If paid registration, trigger Razorpay refund
-    if (registration.isPaid && registration.paymentId) {
-      try {
-        const payment = await Payment.findById(registration.paymentId);
-        if (payment && payment.status === PAYMENT_STATUS.CAPTURED && payment.refundStatus !== REFUND_STATUS.PROCESSED) {
-          const refundResult = await initiateRazorpayRefund({
-            paymentId: payment.paymentId,
-            amountInPaise: payment.amount,
-            notes: { registrationId: registration._id.toString(), reason: note || 'Organizer approved cancellation' }
-          });
-          payment.status = PAYMENT_STATUS.REFUNDED;
-          payment.refundStatus = REFUND_STATUS.PROCESSED;
-          payment.refundId = refundResult?.id || `rfnd_${Date.now()}`;
-          await payment.save();
-          registration.refundStatus = REFUND_STATUS.PROCESSED;
+    // 1. Atomic seat release guarantee: exactly once across cancellation & webhooks
+    const seatClaimed = await Registration.findOneAndUpdate(
+      {
+        _id: registration._id,
+        seatReleased: { $ne: true }
+      },
+      {
+        $set: {
+          seatReleased: true,
+          seatReleasedAt: new Date()
         }
-      } catch (refundErr) {
-        logger.error({ err: refundErr?.message, registrationId: registration._id }, 'Automated refund trigger failed on cancellation approval');
+      },
+      { new: true }
+    );
+
+    if (seatClaimed) {
+      await Event.findOneAndUpdate(
+        { _id: registration.eventId._id, seatsBooked: { $gt: 0 } },
+        { $inc: { seatsBooked: -1 } }
+      );
+    }
+
+    // 2. If paid registration, create durable refund operation and initiate Razorpay refund
+    if (registration.isPaid && registration.paymentId) {
+      const payment = await Payment.findById(registration.paymentId);
+      if (payment && payment.status === PAYMENT_STATUS.CAPTURED && payment.refundStatus !== REFUND_STATUS.PROCESSED) {
+        const idempotencyKey = `refund_reg_${registration._id}`;
+        let refundOp = await RefundOperation.findOne({ idempotencyKey });
+
+        if (!refundOp) {
+          try {
+            refundOp = await RefundOperation.create({
+              refundOpId: `rfop_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`,
+              paymentId: payment._id,
+              registrationId: registration._id,
+              eventId: registration.eventId._id,
+              attendeeId: registration.attendeeId,
+              organizerId: new mongoose.Types.ObjectId(organizerId),
+              orderId: payment.orderId,
+              gatewayPaymentId: payment.paymentId,
+              amount: payment.amount,
+              currency: payment.currency || 'INR',
+              reason: note || 'Organizer approved cancellation',
+              status: 'INITIATED',
+              idempotencyKey,
+              lastAttemptAt: new Date()
+            });
+          } catch (dupErr) {
+            if (dupErr.code === 11000) {
+              refundOp = await RefundOperation.findOne({ idempotencyKey });
+            } else {
+              throw dupErr;
+            }
+          }
+        }
+
+        // Transition to REFUND_PENDING and PENDING before provider dispatch
+        payment.status = PAYMENT_STATUS.REFUND_PENDING;
+        payment.refundStatus = REFUND_STATUS.PENDING;
+        payment.refundAmount = payment.amount;
+        payment.refundReason = note || 'Organizer approved cancellation';
+        await payment.save();
+
         registration.refundStatus = REFUND_STATUS.PENDING;
+
+        // If not already processed, dispatch refund request to Razorpay API
+        if (refundOp && refundOp.status !== 'PROCESSED') {
+          try {
+            const refundResult = await initiateRazorpayRefund({
+              paymentId: payment.paymentId,
+              amountInPaise: payment.amount,
+              notes: {
+                refundOpId: refundOp.refundOpId,
+                registrationId: registration._id.toString(),
+                reason: note || 'Organizer approved cancellation'
+              }
+            });
+
+            refundOp.status = 'PENDING';
+            refundOp.gatewayRefundId = refundResult?.id || null;
+            refundOp.lastAttemptAt = new Date();
+            await refundOp.save();
+
+            if (refundResult?.id) {
+              payment.refundId = refundResult.id;
+              await payment.save();
+            }
+          } catch (refundErr) {
+            logger.error(
+              { err: refundErr?.message, registrationId: registration._id, refundOpId: refundOp?.refundOpId },
+              'Razorpay refund API call failed on cancellation approval'
+            );
+            refundOp.status = 'FAILED';
+            refundOp.retryCount += 1;
+            refundOp.lastError = refundErr?.message || 'Gateway error';
+            refundOp.nextRetryAt = new Date(Date.now() + 60000);
+            refundOp.failureDetails = {
+              code: 'GATEWAY_ERROR',
+              description: refundErr?.message
+            };
+            await refundOp.save();
+
+            payment.failureDetails = {
+              code: 'REFUND_DISPATCH_FAILED',
+              description: refundErr?.message
+            };
+            await payment.save();
+          }
+        }
       }
     }
 
     await registration.save();
-
-    // Release seat atomically back to the event
-    await Event.findByIdAndUpdate(registration.eventId._id, {
-      $inc: { seatsBooked: -1 }
-    });
 
     dispatchNotification({
       userId: registration.attendeeId,

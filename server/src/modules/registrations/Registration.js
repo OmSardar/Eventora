@@ -65,6 +65,15 @@ const registrationSchema = new mongoose.Schema(
     refundStatus: {
       type: String,
       default: 'NONE'
+    },
+    seatReleased: {
+      type: Boolean,
+      default: false,
+      index: true
+    },
+    seatReleasedAt: {
+      type: Date,
+      default: null
     }
   },
   {

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, Suspense, useCallback } from "react";
+import React, { useState, useEffect, useRef, Suspense, useCallback } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
@@ -76,7 +76,13 @@ function VerifyEmailContent() {
     } catch (err: unknown) {
       const error = err as Error;
       const msg = error.message || "";
-      if (msg.toLowerCase().includes("expired")) {
+      if (msg.toLowerCase().includes("already been used")) {
+        // If the link has already been used, the account is already verified!
+        setStatus("SUCCESS");
+        if (user) {
+          refetchUser();
+        }
+      } else if (msg.toLowerCase().includes("expired")) {
         setStatus("EXPIRED");
         setErrorMessage("This email verification link has expired. Verification links are valid for 30 minutes.");
       } else {
@@ -86,8 +92,11 @@ function VerifyEmailContent() {
     }
   }, [user, refetchUser]);
 
+  const processedTokenRef = useRef<string | null>(null);
+
   useEffect(() => {
-    if (token) {
+    if (token && processedTokenRef.current !== token) {
+      processedTokenRef.current = token;
       verifyToken(token);
     }
   }, [token, verifyToken]);
@@ -100,11 +109,22 @@ function VerifyEmailContent() {
     setResendFeedback(null);
     setDirectVerifyUrl(null);
     try {
-      const res = await api.post<{ message: string; data?: { verifyUrl?: string } }>("/auth/resend-verification", {
+      const res = await api.post<{ message: string; data?: { verifyUrl?: string; alreadyVerified?: boolean } }>("/auth/resend-verification", {
         email: resendEmail.trim(),
       });
       const data = (res as any)?.data || res;
       const verifyUrl = data?.verifyUrl || (res as any)?.verifyUrl;
+      const isAlready = data?.alreadyVerified || (res as any)?.alreadyVerified || (res as any)?.message?.toLowerCase().includes("already verified");
+
+      if (isAlready) {
+        setStatus("SUCCESS");
+        setResendFeedback("This account is already verified! You can log in directly.");
+        if (user) {
+          refetchUser();
+        }
+        return;
+      }
+
       setResendFeedback((res as any)?.message || "A new verification link has been dispatched to your email.");
       if (verifyUrl) {
         setDirectVerifyUrl(verifyUrl);

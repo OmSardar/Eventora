@@ -43,7 +43,7 @@ export function NotificationBell() {
   };
 
   useEffect(() => {
-    if (!user) {
+    if (!user || !user.emailVerified) {
       setUnreadCount(0);
       return;
     }

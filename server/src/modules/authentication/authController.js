@@ -112,7 +112,10 @@ export async function resendVerificationEmail(req, res, next) {
     res.status(200).json({
       success: true,
       message: result.message,
-      data: verifyUrl ? { verifyUrl } : undefined
+      data: {
+        ...(result.alreadyVerified ? { alreadyVerified: true } : {}),
+        ...(verifyUrl ? { verifyUrl } : {})
+      }
     });
   } catch (error) {
     next(error);

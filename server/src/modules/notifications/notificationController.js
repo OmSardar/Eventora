@@ -28,6 +28,12 @@ export async function getNotifications(req, res, next) {
 
 export async function getUnreadCount(req, res, next) {
   try {
+    if (!req.session?.userId) {
+      return res.status(200).json({
+        success: true,
+        data: { unreadCount: 0 }
+      });
+    }
     const unreadCount = await getUnreadNotificationCount(req.session.userId);
     res.status(200).json({
       success: true,

@@ -196,9 +196,16 @@ export async function resendVerificationEmail({ email, ipAddress, userAgent }) {
   if (!normalizedEmail) return genericResponse;
 
   const user = await User.findOne({ normalizedEmail });
-  if (!user || user.emailVerified) {
-    // Avoid exposing whether an account exists or is already verified
+  if (!user) {
     return genericResponse;
+  }
+
+  if (user.emailVerified) {
+    return {
+      success: true,
+      alreadyVerified: true,
+      message: 'This email address is already verified. You can log in directly.'
+    };
   }
 
   // Rate-limiting / cooldown check: at least 60 seconds between resends

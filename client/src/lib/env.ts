@@ -9,12 +9,7 @@
  * Resolves from NEXT_PUBLIC_API_URL or dynamically derives from the current host.
  */
 export function getApiBaseUrl(): string {
-  const envUrl = process.env.NEXT_PUBLIC_API_URL;
-  if (envUrl && envUrl.trim()) {
-    return envUrl.trim().replace(/\/+$/, "");
-  }
-
-  // If in browser runtime, check if we're on localhost or custom domain
+  // If in browser runtime:
   if (typeof window !== "undefined" && window.location) {
     if (
       window.location.hostname === "localhost" ||
@@ -22,6 +17,14 @@ export function getApiBaseUrl(): string {
     ) {
       return `${window.location.protocol}//${window.location.hostname}:5000/api/v1`;
     }
+    // On deployed production host (e.g. Vercel), use relative path to route through Next.js rewrites.
+    // This provides 100% first-party cookie and CSRF compatibility even in strict Incognito mode.
+    return "/api/v1";
+  }
+
+  const envUrl = process.env.NEXT_PUBLIC_API_URL;
+  if (envUrl && envUrl.trim()) {
+    return envUrl.trim().replace(/\/+$/, "");
   }
 
   // Default fallback for development

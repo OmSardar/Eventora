@@ -10,10 +10,11 @@ import { csrfProtection } from '../../shared/middleware/securityMiddleware.js';
 
 const router = express.Router();
 
+router.get('/unread-count', getUnreadCount);
+
 router.use(requireAuth);
 
 router.get('/', getNotifications);
-router.get('/unread-count', getUnreadCount);
 router.patch('/:id/read', csrfProtection, markAsRead);
 router.patch('/read-all', csrfProtection, markAllRead);
 router.post('/mark-all-read', csrfProtection, markAllRead);

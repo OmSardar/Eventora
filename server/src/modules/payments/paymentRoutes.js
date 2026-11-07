@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import * as paymentController from './paymentController.js';
-import { authenticate, requireRole } from '../../shared/middleware/authMiddleware.js';
+import { authenticate, requireRole, requireVerifiedEmail } from '../../shared/middleware/authMiddleware.js';
 import { validateBody } from '../../shared/middleware/validate.js';
 import { createOrderSchema, verifyPaymentSchema } from './paymentValidation.js';
 import { ROLES } from '../../shared/constants/roles.js';
@@ -14,6 +14,7 @@ router.post(
   '/create-order',
   authenticate,
   requireRole(ROLES.ATTENDEE),
+  requireVerifiedEmail,
   bookingRateLimiter,
   csrfProtection,
   validateBody(createOrderSchema),
@@ -24,6 +25,7 @@ router.post(
   '/verify',
   authenticate,
   requireRole(ROLES.ATTENDEE),
+  requireVerifiedEmail,
   bookingRateLimiter,
   csrfProtection,
   validateBody(verifyPaymentSchema),
@@ -38,4 +40,3 @@ router.get(
 );
 
 export default router;
-

@@ -24,13 +24,17 @@
     "express": "^4.21.2",
     "express-rate-limit": "^7.5.0",
     "express-session": "^1.18.1",
+    "geoip-lite": "^1.4.10",
     "helmet": "^8.0.0",
     "mongoose": "^8.9.5",
     "multer": "^2.5.0",
+    "otpauth": "^9.6.0",
     "pino": "^9.6.0",
     "pino-http": "^10.4.0",
+    "qrcode": "^1.5.4",
     "razorpay": "^2.9.8",
     "resend": "^6.37.0",
+    "ua-parser-js": "^2.0.10",
     "zod": "3.25.76"
   },
   "devDependencies": {

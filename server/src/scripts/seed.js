@@ -36,7 +36,9 @@ export async function seedDatabase() {
     email: 'organizer@eventora.demo',
     normalizedEmail: 'organizer@eventora.demo',
     passwordHash: organizerPasswordHash,
-    role: ROLES.ORGANIZER
+    role: ROLES.ORGANIZER,
+    emailVerified: true,
+    emailVerifiedAt: new Date()
   });
 
   const demoAttendee = await User.create({
@@ -44,7 +46,9 @@ export async function seedDatabase() {
     email: 'attendee@eventora.demo',
     normalizedEmail: 'attendee@eventora.demo',
     passwordHash: attendeePasswordHash,
-    role: ROLES.ATTENDEE
+    role: ROLES.ATTENDEE,
+    emailVerified: true,
+    emailVerifiedAt: new Date()
   });
 
   const demoAttendee2 = await User.create({
@@ -52,7 +56,9 @@ export async function seedDatabase() {
     email: 'elena@eventora.demo',
     normalizedEmail: 'elena@eventora.demo',
     passwordHash: attendeePasswordHash,
-    role: ROLES.ATTENDEE
+    role: ROLES.ATTENDEE,
+    emailVerified: true,
+    emailVerifiedAt: new Date()
   });
 
   console.log('Creating sample events...');

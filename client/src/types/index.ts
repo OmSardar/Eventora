@@ -5,7 +5,51 @@ export interface User {
   name: string;
   email: string;
   role: UserRole;
+  emailVerified?: boolean;
+  emailVerifiedAt?: string | null;
+  lastLoginAt?: string | null;
   createdAt?: string;
+}
+
+export type MfaFactor = "EMAIL_OTP" | "TOTP" | "RECOVERY_CODE";
+
+export interface MfaLoginChallenge {
+  mfaRequired: true;
+  challengeId: string;
+  factor: MfaFactor;
+  availableFactors: MfaFactor[];
+  maskedEmail: string;
+}
+
+export interface SecurityStatus {
+  emailVerified: boolean;
+  emailVerifiedAt: string | null;
+  lastLoginAt: string | null;
+  mfa: {
+    emailOtpEnabled: boolean;
+    totpEnabled: boolean;
+    hasRecoveryCodes: boolean;
+    recoveryCodesRemaining: number;
+  };
+}
+
+export interface LoginSecurityEventItem {
+  id: string;
+  loginAt: string;
+  ipAddress: string;
+  location: {
+    city: string;
+    region: string;
+    country: string;
+  };
+  device: {
+    browser: string;
+    browserVersion: string;
+    os: string;
+    deviceType: string;
+  };
+  authFactor: string;
+  notificationStatus: string;
 }
 
 export type EventStatus = "DRAFT" | "PUBLISHED" | "CANCELLED";

@@ -1,19 +1,29 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
-import { User } from "@/types";
+import { User, MfaLoginChallenge, MfaFactor } from "@/types";
 import { api, resetCsrfToken } from "@/lib/api";
+
+export interface LoginResult {
+  user?: User;
+  mfa?: MfaLoginChallenge;
+}
 
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
-  login: (credentials: { email: string; password: string }) => Promise<User>;
+  login: (credentials: { email: string; password: string }) => Promise<LoginResult>;
   register: (payload: {
     name: string;
     email: string;
     password: string;
     role: "ATTENDEE" | "ORGANIZER";
   }) => Promise<User>;
+  verifyMfaOtp: (params: { challengeId: string; otp: string }) => Promise<User>;
+  verifyMfaTotp: (params: { challengeId: string; code: string }) => Promise<User>;
+  verifyMfaRecovery: (params: { challengeId: string; recoveryCode: string }) => Promise<User>;
+  resendMfaOtp: (challengeId: string) => Promise<void>;
+  switchMfaFactor: (params: { challengeId: string; factor: MfaFactor }) => Promise<void>;
   logout: () => Promise<void>;
   refetchUser: () => Promise<void>;
 }
@@ -39,10 +49,50 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     fetchCurrentUser();
   }, [fetchCurrentUser]);
 
-  const login = async (credentials: { email: string; password: string }): Promise<User> => {
-    const res = await api.post<{ user: User }>("/auth/login", credentials);
+  const login = async (credentials: { email: string; password: string }): Promise<LoginResult> => {
+    const res = await api.post<{ user?: User; mfaRequired?: boolean; challengeId?: string; factor?: MfaFactor; availableFactors?: MfaFactor[]; maskedEmail?: string }>("/auth/login", credentials);
+    if (res.mfaRequired && res.challengeId && res.factor) {
+      return {
+        mfa: {
+          mfaRequired: true,
+          challengeId: res.challengeId,
+          factor: res.factor,
+          availableFactors: res.availableFactors || [res.factor],
+          maskedEmail: res.maskedEmail || ""
+        }
+      };
+    }
+    if (res.user) {
+      setUser(res.user);
+      return { user: res.user };
+    }
+    throw new Error("Unexpected login response");
+  };
+
+  const verifyMfaOtp = async (params: { challengeId: string; otp: string }): Promise<User> => {
+    const res = await api.post<{ user: User }>("/auth/mfa/verify-otp", params);
     setUser(res.user);
     return res.user;
+  };
+
+  const verifyMfaTotp = async (params: { challengeId: string; code: string }): Promise<User> => {
+    const res = await api.post<{ user: User }>("/auth/mfa/verify-totp", params);
+    setUser(res.user);
+    return res.user;
+  };
+
+  const verifyMfaRecovery = async (params: { challengeId: string; recoveryCode: string }): Promise<User> => {
+    const res = await api.post<{ user: User }>("/auth/mfa/verify-recovery", params);
+    setUser(res.user);
+    return res.user;
+  };
+
+  const resendMfaOtp = async (challengeId: string): Promise<void> => {
+    await api.post("/auth/mfa/resend-otp", { challengeId });
+  };
+
+  const switchMfaFactor = async (params: { challengeId: string; factor: MfaFactor }): Promise<void> => {
+    await api.post("/auth/mfa/switch-factor", params);
   };
 
   const register = async (payload: {
@@ -72,6 +122,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isLoading,
         login,
         register,
+        verifyMfaOtp,
+        verifyMfaTotp,
+        verifyMfaRecovery,
+        resendMfaOtp,
+        switchMfaFactor,
         logout,
         refetchUser: fetchCurrentUser,
       }}
@@ -88,4 +143,3 @@ export function useAuth() {
   }
   return context;
 }
-

@@ -22,13 +22,8 @@ export function createRateLimiter({
     legacyHeaders: false,
     store,
     keyGenerator: (req) => {
-      const forwarded = req.headers['x-forwarded-for'];
-      const ip =
-        (typeof forwarded === 'string' ? forwarded.split(',')[0].trim() : null) ||
-        req.ip ||
-        req.socket?.remoteAddress ||
-        '127.0.0.1';
-
+      // Authoritative IP from Express request context
+      const ip = req.ip || req.socket?.remoteAddress || '127.0.0.1';
       const userId = req.session?.user?.id || req.session?.user?._id;
 
       if (keyType === 'user' && userId) {
@@ -80,7 +75,23 @@ export const authRateLimiter = createRateLimiter({
   prefix: 'auth:'
 });
 
-// 3. Event Mutation limiter: 30 requests per 15 minutes per organizer account/IP (create, update, cancel)
+// 3. MFA Challenge & Verification limiter: 25 requests per 15 minutes per IP
+export const mfaRateLimiter = createRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  max: process.env.NODE_ENV === 'production' ? 25 : 100,
+  message: 'Too many two-factor authentication attempts. Please wait before trying again.',
+  prefix: 'mfa:'
+});
+
+// 4. Verification Resend limiter: 5 requests per 15 minutes per IP
+export const resendVerificationRateLimiter = createRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  max: process.env.NODE_ENV === 'production' ? 5 : 50,
+  message: 'Too many verification email requests. Please wait a few minutes.',
+  prefix: 'resend_verify:'
+});
+
+// 5. Event Mutation limiter: 30 requests per 15 minutes per organizer account/IP (create, update, cancel)
 export const eventMutationRateLimiter = createRateLimiter({
   windowMs: 15 * 60 * 1000,
   max: 30,
@@ -88,7 +99,7 @@ export const eventMutationRateLimiter = createRateLimiter({
   prefix: 'event_mutate:'
 });
 
-// 4. Event RSVP / booking limiter: 30 registrations per minute per attendee/IP
+// 6. Event RSVP / booking limiter: 30 registrations per minute per attendee/IP
 export const bookingRateLimiter = createRateLimiter({
   windowMs: 60 * 1000,
   max: 30,
@@ -96,7 +107,7 @@ export const bookingRateLimiter = createRateLimiter({
   prefix: 'booking:'
 });
 
-// 5. Cancellation Workflow limiter: 30 requests per 15 minutes per user/IP (request, approve, reject)
+// 7. Cancellation Workflow limiter: 30 requests per 15 minutes per user/IP (request, approve, reject)
 export const cancellationRateLimiter = createRateLimiter({
   windowMs: 15 * 60 * 1000,
   max: 30,
@@ -104,7 +115,7 @@ export const cancellationRateLimiter = createRateLimiter({
   prefix: 'cancellation:'
 });
 
-// 6. Cloudinary Upload limiter: 20 image uploads per 15 minutes per organizer account/IP
+// 8. Cloudinary Upload limiter: 20 image uploads per 15 minutes per organizer account/IP
 export const uploadBannerRateLimiter = createRateLimiter({
   windowMs: 15 * 60 * 1000,
   max: 20,

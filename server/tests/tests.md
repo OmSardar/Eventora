@@ -7,21 +7,27 @@ The `server/tests` directory contains the automated test suites for the Eventora
 ```text
 server/tests/
 ├── tests.md             # This documentation file
-├── unit/                # Pure isolated unit tests (hashing, validation, email templates)
+├── unit/                # Pure isolated unit tests (hashing, validation, email templates, TOTP/crypto)
 │   ├── unit.md
+│   ├── authCryptoAndTotp.test.js
 │   ├── emailService.test.js
 │   ├── password.test.js
+│   ├── razorpayService.test.js
 │   └── validation.test.js
-├── integration/         # Database-backed integration tests (concurrency, RSVP, notifications)
+├── integration/         # Database-backed integration tests (concurrency, RSVP, MFA, verification, refunds)
 │   ├── integration.md
 │   ├── concurrencyAndBusinessRules.test.js
 │   ├── eventsAndRegistrations.test.js
+│   ├── mfaAndVerification.test.js
 │   ├── notifications.test.js
+│   ├── razorpayPaymentWorkflow.test.js
+│   ├── razorpayRefundLifecycle.test.js
 │   └── registrationEmail.test.js
-└── security/            # Security penetration tests (CSRF, RBAC, magic bytes, rate limiting)
+└── security/            # Security penetration tests (CSRF, RBAC, magic bytes, rate limiting, origin)
     ├── security.md
     ├── accessControlAndSecurity.test.js
     ├── cloudinaryAndUploads.test.js
+    ├── originValidation.test.js
     ├── rateLimiting.test.js
     └── sessionExpiryAndPrivacy.test.js
 ```
@@ -30,10 +36,10 @@ server/tests/
 
 | Test Layer | Directory | Test Files | Total Tests | Execution Environment |
 |---|---|---|---|---|
-| **Unit** | [`unit/`](unit/unit.md) | 3 | 11 | In-memory, zero IO |
-| **Integration** | [`integration/`](integration/integration.md) | 4 | 13 | Live MongoDB test database |
-| **Security** | [`security/`](security/security.md) | 4 | 44 | Live MongoDB & HTTP Supertest pipeline |
-| **Total Server Tests** | | **11** | **68** | **100% Passing** |
+| **Unit** | [`unit/`](unit/unit.md) | 5 | 29 | In-memory, zero IO |
+| **Integration** | [`integration/`](integration/integration.md) | 7 | 44 | Live MongoDB test database |
+| **Security** | [`security/`](security/security.md) | 5 | 51 | Live MongoDB & HTTP Supertest pipeline |
+| **Total Server Tests** | | **17** | **124** | **100% Passing (20 Suites)** |
 
 ## D. Child Directory Documentation
 

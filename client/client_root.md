@@ -96,8 +96,9 @@ flowchart TD
     PublicGroup --> Events["/events (Event Catalog)"]
     PublicGroup --> EventDetail["/events/[eventId] (Details & RSVP)"]
 
-    AuthGroup --> Login["/login (Sign In)"]
+    AuthGroup --> Login["/login (Sign In & 2FA Challenge)"]
     AuthGroup --> Register["/register (Create Account)"]
+    AuthGroup --> VerifyEmail["/verify-email (Token Verification)"]
 
     AttendeeGroup --> AttDash["/attendee/dashboard (Overview)"]
     AttendeeGroup --> AttRegs["/attendee/registrations (My Tickets & Cancel)"]
@@ -107,6 +108,9 @@ flowchart TD
     OrganizerGroup --> OrgCreate["/organizer/events/create (Host Event)"]
     OrganizerGroup --> OrgEdit["/organizer/events/[eventId]/edit (Edit Event)"]
     OrganizerGroup --> OrgAttendees["/organizer/events/[eventId]/attendees (Roster)"]
+
+    Providers --> SettingsGroup["settings/ Route Group"]
+    SettingsGroup --> SecuritySettings["/settings/security (MFA, TOTP, Email OTP, Logs)"]
 ```
 
 ---

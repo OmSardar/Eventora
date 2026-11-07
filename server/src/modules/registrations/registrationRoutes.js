@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import * as registrationController from './registrationController.js';
-import { authenticate, requireRole } from '../../shared/middleware/authMiddleware.js';
+import { authenticate, requireRole, requireVerifiedEmail } from '../../shared/middleware/authMiddleware.js';
 import { validateBody } from '../../shared/middleware/validate.js';
 import { cancellationRequestSchema } from '../../shared/validation/eventValidation.js';
 import { ROLES } from '../../shared/constants/roles.js';
@@ -14,6 +14,7 @@ router.post(
   '/events/:eventId/registrations',
   authenticate,
   requireRole(ROLES.ATTENDEE),
+  requireVerifiedEmail,
   bookingRateLimiter,
   csrfProtection,
   registrationController.registerForEvent
@@ -30,6 +31,7 @@ router.post(
   '/registrations/:registrationId/cancellation-request',
   authenticate,
   requireRole(ROLES.ATTENDEE),
+  requireVerifiedEmail,
   cancellationRateLimiter,
   csrfProtection,
   validateBody(cancellationRequestSchema),
@@ -48,6 +50,7 @@ router.post(
   '/cancellation-requests/:requestId/approve',
   authenticate,
   requireRole(ROLES.ORGANIZER),
+  requireVerifiedEmail,
   cancellationRateLimiter,
   csrfProtection,
   registrationController.approveCancellation
@@ -57,10 +60,10 @@ router.post(
   '/cancellation-requests/:requestId/reject',
   authenticate,
   requireRole(ROLES.ORGANIZER),
+  requireVerifiedEmail,
   cancellationRateLimiter,
   csrfProtection,
   registrationController.rejectCancellation
 );
 
 export default router;
-

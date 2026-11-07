@@ -1,7 +1,7 @@
 # Eventora — Production Event Booking & RSVP Platform
 
 [![Eventora CI](https://github.com/omsardar/eventora/actions/workflows/ci.yml/badge.svg)](https://github.com/omsardar/eventora/actions/workflows/ci.yml)
-[![Tests Passing](https://img.shields.io/badge/tests-85%2F85%20passing-brightgreen)](server/tests/tests.md)
+[![Tests Passing](https://img.shields.io/badge/tests-124%2F124%20passing-brightgreen)](server/tests/tests.md)
 [![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](LICENSE)
 
 Eventora is a production-quality event booking and RSVP management platform built with **Next.js 14**, **Express.js**, and **MongoDB Atlas**. Engineered as a modular monolith adhering to vertical slice architecture, it guarantees atomic seat reservation consistency under high-concurrency flash crowds, zero-trust backend security boundaries, transactional email receipts via the Resend API, backend-only Cloudinary media management, and a clean monochrome design system.
@@ -40,6 +40,9 @@ Eventora enforces strict, immutable Role-Based Access Control (RBAC):
 | Capability | Module | Engineering Implementation |
 |---|---|---|
 | **Authentication** | `authentication` | Stateful sessions in MongoDB (`connect-mongo`), Argon2id password hashing, session fixation rotation (`session.regenerate()`). |
+| **Email Verification & Gating** | `authentication` | Single-use SHA-256 hashed tokens, 30-min expiry, 60s cooldown, Resend email dispatch, and action gating (`requireVerifiedEmail`). |
+| **Multi-Factor Auth (MFA)** | `authentication` | Dual MFA options: Email OTP (HMAC-SHA256) and Authenticator App TOTP (RFC 6238, AES-256-GCM encrypted secrets at rest), plus 10 hashed single-use recovery codes. |
+| **Login Alerts & Audit Log** | `authentication` | Real-time login notification emails with offline MaxMind GeoIP parsing, User-Agent device/browser detection, and immutable login event history. |
 | **Role-Based Access Control**| `shared/middleware` | Strict role enforcement (`requireAuth`, `requireOrganizer`, `requireAttendee`), role immutability in MongoDB schema. |
 | **Event Discovery & Search** | `events` | Server-rendered catalog, text index keyword search, category pill filtering, pagination, and dynamic OpenGraph metadata. |
 | **Atomic Free RSVP** | `registrations` | Conditional atomic update (`$inc: { seatsBooked: 1 }` with `$expr: { $lt: ['$seatsBooked', '$seatLimit'] }`). Hardware-level document locking prevents overselling. |

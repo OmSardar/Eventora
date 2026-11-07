@@ -17,6 +17,8 @@ import {
   Ticket,
   X,
   LayoutDashboard,
+  ShieldCheck,
+  AlertTriangle,
 } from "lucide-react";
 
 export function Navbar() {
@@ -35,6 +37,24 @@ export function Navbar() {
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-md">
+      {user && user.emailVerified === false && (
+        <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-1.5 text-xs text-amber-800 dark:text-amber-300">
+          <div className="container mx-auto max-w-7xl flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 truncate">
+              <AlertTriangle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+              <span className="truncate">
+                Your email (<span className="font-semibold">{user.email}</span>) is unverified.
+              </span>
+            </div>
+            <Link
+              href="/settings/security"
+              className="shrink-0 font-medium underline underline-offset-4 hover:text-amber-900 dark:hover:text-amber-100 transition-colors"
+            >
+              Verify now &rarr;
+            </Link>
+          </div>
+        </div>
+      )}
       <div className="container mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
         {/* Brand Logo */}
         <Link href="/" className="flex items-center group" aria-label="Eventora Home">
@@ -124,6 +144,19 @@ export function Navbar() {
                   </Button>
                 </Link>
               )}
+
+              <Link
+                href="/settings/security"
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                  pathname.startsWith("/settings/security")
+                    ? "bg-primary/10 text-primary font-semibold"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                }`}
+                title="Security & 2FA Settings"
+              >
+                <ShieldCheck className="h-4 w-4" />
+                <span className="hidden lg:inline">Security</span>
+              </Link>
 
               <div className="flex items-center gap-2 pl-2 border-l border-border">
                 <div className="flex flex-col text-right">
@@ -231,6 +264,16 @@ export function Navbar() {
               className="block text-sm font-medium py-1.5 text-foreground"
             >
               My Registrations
+            </Link>
+          )}
+          {user && (
+            <Link
+              href="/settings/security"
+              onClick={() => setMobileMenuOpen(false)}
+              className="flex items-center gap-2 text-sm font-medium py-1.5 text-foreground"
+            >
+              <ShieldCheck className="h-4 w-4 text-primary" />
+              Security & 2FA Settings
             </Link>
           )}
           <div className="pt-3 border-t border-border flex flex-col gap-2">

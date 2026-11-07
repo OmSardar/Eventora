@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import * as eventController from './eventController.js';
-import { authenticate, requireRole } from '../../shared/middleware/authMiddleware.js';
+import { authenticate, requireRole, requireVerifiedEmail } from '../../shared/middleware/authMiddleware.js';
 import { validateBody } from '../../shared/middleware/validate.js';
 import { createEventSchema, updateEventSchema } from '../../shared/validation/eventValidation.js';
 import { ROLES } from '../../shared/constants/roles.js';
@@ -13,7 +13,7 @@ const router = Router();
 // Public routes
 router.get('/', eventController.getEvents);
 
-// Organizer specific route to fetch their created events (placed before :eventId to avoid route param collision)
+// Organizer specific route to fetch their created events
 router.get(
   '/organizer/my-events',
   authenticate,
@@ -26,6 +26,7 @@ router.post(
   '/banner',
   authenticate,
   requireRole(ROLES.ORGANIZER),
+  requireVerifiedEmail,
   uploadBannerRateLimiter,
   csrfProtection,
   handleBannerUpload,
@@ -39,6 +40,7 @@ router.post(
   '/:eventId/banner',
   authenticate,
   requireRole(ROLES.ORGANIZER),
+  requireVerifiedEmail,
   uploadBannerRateLimiter,
   csrfProtection,
   handleBannerUpload,
@@ -50,6 +52,7 @@ router.post(
   '/',
   authenticate,
   requireRole(ROLES.ORGANIZER),
+  requireVerifiedEmail,
   eventMutationRateLimiter,
   csrfProtection,
   validateBody(createEventSchema),
@@ -60,6 +63,7 @@ router.patch(
   '/:eventId',
   authenticate,
   requireRole(ROLES.ORGANIZER),
+  requireVerifiedEmail,
   eventMutationRateLimiter,
   csrfProtection,
   validateBody(updateEventSchema),
@@ -70,6 +74,7 @@ router.post(
   '/:eventId/cancel',
   authenticate,
   requireRole(ROLES.ORGANIZER),
+  requireVerifiedEmail,
   eventMutationRateLimiter,
   csrfProtection,
   eventController.cancelEvent

@@ -34,6 +34,10 @@ The backend acts as an uncompromising security perimeter: all sessions, roles, f
 | **express-session** | ^1.18.1 | Stateful HTTP session management |
 | **connect-mongo** | ^5.1.0 | MongoDB-backed session store with native TTL cleanup |
 | **Argon2id (`argon2`)** | ^0.41.1 | OWASP-compliant password hashing algorithm |
+| **TOTP (`otpauth`)** | ^9.6.0 | RFC 6238 Time-Based One-Time Password generation and verification |
+| **QR Code (`qrcode`)** | ^1.5.4 | Server-side QR code data URL generation for Authenticator apps |
+| **GeoIP (`geoip-lite`)** | ^2.0.3 | Offline country/region/city geolocation lookup for login alerts |
+| **User-Agent Parser (`ua-parser-js`)** | ^2.0.10 | Device, OS, and browser detection for login alerts |
 | **Resend (`resend`)** | ^6.37.0 | Official SDK for transactional email confirmation delivery |
 | **Cloudinary (`cloudinary`)**| ^2.11.0 | Official server-side SDK for media asset storage |
 | **Multer (`multer`)** | ^2.5.0 | In-memory multipart/form-data upload parsing |

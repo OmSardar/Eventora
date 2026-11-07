@@ -1,6 +1,57 @@
 import mongoose from 'mongoose';
 import { ROLES, ALL_ROLES } from '../../shared/constants/roles.js';
 
+const recoveryCodeSchema = new mongoose.Schema(
+  {
+    codeHash: {
+      type: String,
+      required: true
+    },
+    used: {
+      type: Boolean,
+      default: false
+    },
+    usedAt: {
+      type: Date,
+      default: null
+    }
+  },
+  { _id: false }
+);
+
+const userMfaSchema = new mongoose.Schema(
+  {
+    emailOtpEnabled: {
+      type: Boolean,
+      default: false
+    },
+    totpEnabled: {
+      type: Boolean,
+      default: false
+    },
+    totpSecretEncrypted: {
+      type: String,
+      default: null,
+      select: false
+    },
+    totpConfirmedAt: {
+      type: Date,
+      default: null
+    },
+    recoveryCodes: {
+      type: [recoveryCodeSchema],
+      default: [],
+      select: false
+    },
+    lastUsedFactor: {
+      type: String,
+      enum: ['PASSWORD', 'EMAIL_OTP', 'TOTP', 'RECOVERY_CODE', null],
+      default: null
+    }
+  },
+  { _id: false }
+);
+
 const userSchema = new mongoose.Schema(
   {
     name: {
@@ -38,6 +89,23 @@ const userSchema = new mongoose.Schema(
       },
       required: [true, 'Role is required'],
       immutable: true // Role cannot be modified after registration
+    },
+    emailVerified: {
+      type: Boolean,
+      default: false,
+      index: true
+    },
+    emailVerifiedAt: {
+      type: Date,
+      default: null
+    },
+    lastLoginAt: {
+      type: Date,
+      default: null
+    },
+    mfa: {
+      type: userMfaSchema,
+      default: () => ({})
     }
   },
   {
@@ -45,6 +113,10 @@ const userSchema = new mongoose.Schema(
     toJSON: {
       transform(_doc, ret) {
         delete ret.passwordHash;
+        if (ret.mfa) {
+          delete ret.mfa.totpSecretEncrypted;
+          delete ret.mfa.recoveryCodes;
+        }
         delete ret.__v;
         return ret;
       }
@@ -61,4 +133,3 @@ userSchema.pre('validate', function (next) {
 });
 
 export const User = mongoose.model('User', userSchema);
-

@@ -8,7 +8,8 @@ import {
   initiateRazorpayRefund,
   fetchRazorpayRefund,
   fetchRazorpayPaymentRefunds,
-  getRazorpayClient
+  getRazorpayClient,
+  _resetRazorpayInstance
 } from '../../src/modules/payments/razorpayService.js';
 import { createEventSchema } from '../../src/shared/validation/eventValidation.js';
 
@@ -114,6 +115,7 @@ describe('Razorpay Service Unit Tests', () => {
       process.env.RAZORPAY_MODE = originalMode;
       process.env.NODE_ENV = originalEnv;
       process.env.RAZORPAY_KEY_ID = originalKeyId;
+      _resetRazorpayInstance();
     }
   });
 

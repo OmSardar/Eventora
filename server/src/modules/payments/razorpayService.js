@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import Razorpay from 'razorpay';
 import { logger } from '../../infrastructure/logging/logger.js';
+import { ServiceUnavailableError, BadRequestError } from '../../shared/errors/AppError.js';
 
 let razorpayInstance = null;
 
@@ -57,6 +58,10 @@ const mockRazorpayClient = {
   }
 };
 
+export function _resetRazorpayInstance() {
+  razorpayInstance = null;
+}
+
 /**
  * Validates credentials and returns official Razorpay client instance.
  * Rejects live credentials if operating in test mode.
@@ -74,10 +79,16 @@ export function getRazorpayClient() {
 
   // Safety check: Never allow live keys while configured in test mode
   if (mode === 'test' && key_id && key_id.startsWith('rzp_live_')) {
-    throw new Error('Security Violation: Live Razorpay credentials detected while RAZORPAY_MODE=test');
+    throw new BadRequestError('Security Violation: Live Razorpay credentials detected while RAZORPAY_MODE=test');
   }
 
   if (!key_id || !key_secret) {
+    if (process.env.NODE_ENV === 'production') {
+      logger.error('Razorpay payment gateway credentials (RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET) are missing or not configured on Render.');
+      throw new ServiceUnavailableError('Payment gateway is temporarily unavailable. Please verify server configuration or contact support.', {
+        code: 'ERR_GATEWAY_CREDENTIALS_MISSING'
+      });
+    }
     logger.warn('Razorpay credentials not fully configured. Using mock gateway client for development/testing.');
     return mockRazorpayClient;
   }

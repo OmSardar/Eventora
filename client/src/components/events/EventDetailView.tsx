@@ -11,6 +11,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RazorpayCheckoutButton } from "@/components/payments/RazorpayCheckoutModal";
+import { SeatMap } from "@/components/seating/SeatMap";
+import { ConfirmedTicketModal } from "@/components/seating/ConfirmedTicketModal";
 import {
   AlertCircle,
   Calendar,
@@ -34,6 +36,7 @@ export function EventDetailView({ eventId, initialEvent }: EventDetailViewProps)
 
   const [registrationSuccess, setRegistrationSuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [showTicketModal, setShowTicketModal] = useState(false);
 
   // Fetch Event details with initialData fallback if provided
   const { data: eventData, isLoading: eventLoading } = useQuery({
@@ -73,6 +76,7 @@ export function EventDetailView({ eventId, initialEvent }: EventDetailViewProps)
     mutationFn: () => api.post(`/events/${eventId}/registrations`),
     onSuccess: () => {
       setRegistrationSuccess(true);
+      setShowTicketModal(true);
       setErrorMessage(null);
       queryClient.invalidateQueries({ queryKey: ["event", eventId] });
       queryClient.invalidateQueries({ queryKey: ["my-registrations"] });
@@ -189,6 +193,26 @@ export function EventDetailView({ eventId, initialEvent }: EventDetailViewProps)
               {event.description}
             </div>
           </div>
+
+          {/* Assigned Seating Venue Map (when event has assigned seating configured) */}
+          {event.seatingType === "ASSIGNED_SEATING" && (
+            <div className="pt-6 border-t border-border/40">
+              <SeatMap
+                eventId={eventId}
+                eventTitle={event.title}
+                isPaid={event.isPaid}
+                baseTicketPrice={event.ticketPrice}
+                user={user}
+                onBookingSuccess={() => {
+                  setRegistrationSuccess(true);
+                  setShowTicketModal(true);
+                  setErrorMessage(null);
+                  queryClient.invalidateQueries({ queryKey: ["event", eventId] });
+                  queryClient.invalidateQueries({ queryKey: ["my-registrations"] });
+                }}
+              />
+            </div>
+          )}
 
           {/* Organizer Card */}
           <div className="rounded-xl border border-border bg-card p-5 space-y-2">
@@ -384,6 +408,22 @@ export function EventDetailView({ eventId, initialEvent }: EventDetailViewProps)
           </Card>
         </div>
       </div>
+
+      {/* Confirmed Ticket Pass Modal */}
+      {event && (
+        <ConfirmedTicketModal
+          isOpen={showTicketModal}
+          onClose={() => setShowTicketModal(false)}
+          booking={{
+            bookingId: existingRegistration?._id,
+            eventTitle: event.title,
+            eventDate: event.eventDate,
+            venue: event.venue,
+            attendeeName: user?.name || "Attendee",
+            totalAmount: event.isPaid ? event.ticketPrice : 0,
+          }}
+        />
+      )}
     </div>
   );
 }

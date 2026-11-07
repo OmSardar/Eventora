@@ -12,10 +12,16 @@ const nextConfig = {
     ],
   },
   async rewrites() {
+    const backendUrl =
+      process.env.INTERNAL_API_URL ||
+      process.env.NEXT_PUBLIC_API_URL ||
+      "http://localhost:5000/api/v1";
+    const cleanBackendUrl = backendUrl.replace(/\/+$/, "");
+
     return [
       {
         source: "/api/v1/:path*",
-        destination: "https://eventora-server-omslabs.onrender.com/api/v1/:path*",
+        destination: `${cleanBackendUrl}/:path*`,
       },
     ];
   },

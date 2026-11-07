@@ -1,6 +1,9 @@
+import dotenv from 'dotenv';
 import { Resend } from 'resend';
 import { logger } from '../logging/logger.js';
 import { Registration } from '../../modules/registrations/Registration.js';
+
+dotenv.config();
 
 let resendInstance = null;
 
@@ -17,32 +20,19 @@ export function getResendClient() {
     return null;
   }
 
-  const hardcodedKnownGoodKey = '***REMOVED***';
-  let apiKey = process.env.RESEND_API_KEY;
+  const apiKey = process.env.RESEND_API_KEY;
 
-  if (
-    !apiKey ||
-    typeof apiKey !== 'string' ||
-    apiKey.trim() === '' ||
-    apiKey.startsWith('re_mock') ||
-    apiKey.includes('placeholder') ||
-    apiKey.includes('your_') ||
-    !apiKey.startsWith('re_')
-  ) {
-    apiKey = hardcodedKnownGoodKey;
+  if (!apiKey || typeof apiKey !== 'string' || apiKey.trim() === '') {
+    logger.error('RESEND_API_KEY is not defined in environment variables.');
+    return null;
   }
 
   try {
-    resendInstance = new Resend(apiKey);
+    resendInstance = new Resend(apiKey.trim());
     return resendInstance;
   } catch (err) {
-    logger.warn({ err: err?.message }, 'Failed to initialize Resend client with env key, falling back to verified production key');
-    try {
-      resendInstance = new Resend(hardcodedKnownGoodKey);
-      return resendInstance;
-    } catch {
-      return null;
-    }
+    logger.error({ err: err?.message }, 'Failed to initialize Resend client with RESEND_API_KEY from environment');
+    return null;
   }
 }
 
@@ -57,26 +47,12 @@ export function setResendClient(mock) {
  * Resolves the authoritative frontend application base URL.
  */
 export function getAppBaseUrl() {
-  let raw =
+  const raw =
     process.env.APP_BASE_URL ||
     process.env.CLIENT_URL ||
-    process.env.FRONTEND_URL;
-
-  // In production or when deploying, never emit localhost links in customer-facing emails
-  if (process.env.NODE_ENV === 'production' && (!raw || raw.includes('localhost') || raw.includes('127.0.0.1'))) {
-    raw = 'https://eventora-black.vercel.app';
-  }
-
-  if (!raw) {
-    if (process.env.ALLOWED_ORIGINS) {
-      const prodOrigin = process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim()).find((o) => !o.includes('localhost'));
-      if (prodOrigin) raw = prodOrigin;
-    }
-  }
-
-  if (!raw) {
-    raw = process.env.NODE_ENV === 'production' ? 'https://eventora-black.vercel.app' : 'http://localhost:3000';
-  }
+    process.env.FRONTEND_URL ||
+    (process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',')[0].trim() : '') ||
+    'http://localhost:3000';
 
   return raw.replace(/\/+$/, '');
 }
@@ -85,11 +61,13 @@ export function getAppBaseUrl() {
  * Dispatches an email via Resend or logs in simulation/mock mode.
  */
 async function sendEmail({ to, subject, html, text }) {
-  let fromEmail = process.env.EMAIL_FROM || 'Eventora <notifications@mail.omslabs.tech>';
-  if (!fromEmail || fromEmail.includes('resend.dev') || fromEmail.includes('example.com') || !fromEmail.includes('@')) {
-    fromEmail = 'Eventora <notifications@mail.omslabs.tech>';
+  const fromEmail = process.env.EMAIL_FROM;
+  if (!fromEmail) {
+    logger.error('EMAIL_FROM is not defined in environment variables.');
+    return { success: false, error: 'EMAIL_FROM environment variable missing' };
   }
-  let client = getResendClient();
+
+  const client = getResendClient();
 
   if (!client && process.env.NODE_ENV === 'test') {
     logger.info(
@@ -100,15 +78,11 @@ async function sendEmail({ to, subject, html, text }) {
   }
 
   if (!client) {
-    try {
-      client = new Resend('***REMOVED***');
-    } catch (e) {
-      logger.error({ err: e?.message, to, subject }, 'Could not initialize Resend fallback client');
-      return { success: false, error: 'Could not initialize Resend client' };
-    }
+    logger.error({ to, subject }, 'Could not dispatch email: Resend client is not initialized (check RESEND_API_KEY in .env)');
+    return { success: false, error: 'Resend client is not initialized. Please verify RESEND_API_KEY in .env' };
   }
 
-  const replyTo = process.env.EMAIL_REPLY_TO || 'omsardar12@gmail.com';
+  const replyTo = process.env.EMAIL_REPLY_TO;
 
   try {
     const payload = {

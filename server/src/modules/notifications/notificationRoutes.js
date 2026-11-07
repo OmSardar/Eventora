@@ -16,6 +16,7 @@ router.use(requireAuth);
 router.get('/', getNotifications);
 router.get('/unread-count', getUnreadCount);
 router.patch('/:id/read', csrfProtection, markAsRead);
+router.patch('/read-all', csrfProtection, markAllRead);
 router.post('/mark-all-read', csrfProtection, markAllRead);
 router.patch('/preferences', csrfProtection, updatePreferences);
 

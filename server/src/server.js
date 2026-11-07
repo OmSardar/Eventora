@@ -4,6 +4,7 @@ dotenv.config();
 import app from './app.js';
 import { connectDatabase, disconnectDatabase } from './infrastructure/database/connection.js';
 import { logger } from './infrastructure/logging/logger.js';
+import { reconcileExpiredReservations } from './modules/payments/paymentService.js';
 
 const PORT = parseInt(process.env.PORT, 10) || 5000;
 
@@ -17,9 +18,17 @@ async function bootstrap() {
       logger.info(`Health check available at http://localhost:${PORT}/api/v1/health`);
     });
 
+    // Background job: reconcile expired payment seat holds every 60 seconds
+    const holdReconciliationInterval = setInterval(() => {
+      reconcileExpiredReservations().catch((err) => {
+        logger.error({ err: err?.message }, 'Background hold reconciliation error');
+      });
+    }, 60000);
+
     // Graceful shutdown handling
     const shutdown = async (signal) => {
       logger.info(`Received ${signal}. Shutting down gracefully...`);
+      clearInterval(holdReconciliationInterval);
       server.close(async () => {
         logger.info('HTTP server closed');
         await disconnectDatabase();

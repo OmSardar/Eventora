@@ -30,3 +30,5 @@ export function validateQuery(schema) {
   };
 }
 
+export const validate = validateBody;
+

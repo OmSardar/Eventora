@@ -10,6 +10,7 @@ import { formatDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { RazorpayCheckoutButton } from "@/components/payments/RazorpayCheckoutModal";
 import {
   AlertCircle,
   Calendar,
@@ -143,6 +144,15 @@ export function EventDetailView({ eventId, initialEvent }: EventDetailViewProps)
           <Badge variant="secondary" className="backdrop-blur-md bg-background/80 text-xs font-semibold">
             {event.category || "General"}
           </Badge>
+          {event.isPaid ? (
+            <Badge className="bg-indigo-600 text-white text-xs font-bold border-none shadow-md">
+              ₹{event.ticketPrice} INR
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="backdrop-blur-md bg-background/80 text-xs font-bold">
+              Free Admission
+            </Badge>
+          )}
           {isCancelled && (
             <Badge variant="destructive" className="text-xs font-bold shadow-md">
               Event Cancelled
@@ -207,7 +217,12 @@ export function EventDetailView({ eventId, initialEvent }: EventDetailViewProps)
           <Card className="sticky top-24 border-border/80 shadow-md">
             <CardHeader className="pb-4">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-lg">RSVP &amp; Tickets</CardTitle>
+                <div>
+                  <CardTitle className="text-lg">RSVP &amp; Tickets</CardTitle>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {event.isPaid ? `₹${event.ticketPrice} per attendee` : "Free admission"}
+                  </p>
+                </div>
                 {isSoldOut ? (
                   <Badge variant="destructive">Sold Out</Badge>
                 ) : isCancelled ? (
@@ -313,15 +328,34 @@ export function EventDetailView({ eventId, initialEvent }: EventDetailViewProps)
                       </p>
                     </div>
                   ) : isAttendee ? (
-                    <Button
-                      onClick={() => bookingMutation.mutate()}
-                      disabled={isSoldOut || bookingMutation.isPending}
-                      isLoading={bookingMutation.isPending}
-                      className="w-full h-11 text-xs font-semibold gap-1.5 shadow-sm"
-                    >
-                      <Ticket className="h-4 w-4" aria-hidden="true" />
-                      {isSoldOut ? "Sold Out" : "Confirm My RSVP"}
-                    </Button>
+                    isSoldOut ? (
+                      <Button disabled className="w-full h-11 text-xs font-semibold">
+                        Sold Out
+                      </Button>
+                    ) : event.isPaid ? (
+                      <RazorpayCheckoutButton
+                        event={event}
+                        user={user}
+                        onSuccess={() => {
+                          setRegistrationSuccess(true);
+                          setErrorMessage(null);
+                          queryClient.invalidateQueries({ queryKey: ["event", eventId] });
+                          queryClient.invalidateQueries({ queryKey: ["my-registrations"] });
+                        }}
+                        onError={(err) => setErrorMessage(err)}
+                      />
+                    ) : (
+                      <Button
+                        onClick={() => bookingMutation.mutate()}
+                        disabled={bookingMutation.isPending}
+                        isLoading={bookingMutation.isPending}
+                        className="w-full h-11 text-xs font-semibold gap-1.5 shadow-sm"
+                        data-testid="confirm-free-rsvp-btn"
+                      >
+                        <Ticket className="h-4 w-4" aria-hidden="true" />
+                        Confirm Free RSVP
+                      </Button>
+                    )
                   ) : (
                     <div className="space-y-3">
                       <Link href="/login" className="block">

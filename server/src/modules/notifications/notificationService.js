@@ -157,3 +157,4 @@ export async function updateUserNotificationPreferences(userId, { phone, smsCons
 
   return User.findByIdAndUpdate(userId, { $set: update }, { new: true });
 }
+

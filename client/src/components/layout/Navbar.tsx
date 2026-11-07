@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/features/authentication/AuthContext";
 import { ThemeToggle } from "./ThemeToggle";
+import { NotificationBell } from "./NotificationBell";
 import { BrandLogo } from "@/components/brand/BrandLogo";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -113,6 +114,8 @@ export function Navbar() {
 
           {user ? (
             <div className="flex items-center gap-3">
+              <NotificationBell />
+
               {isOrganizer && (
                 <Link href="/organizer/events/create">
                   <Button size="sm" className="gap-1.5">
@@ -159,6 +162,7 @@ export function Navbar() {
 
         {/* Mobile menu toggle */}
         <div className="flex items-center gap-2 md:hidden">
+          {user && <NotificationBell />}
           <ThemeToggle />
           <Button
             variant="ghost"

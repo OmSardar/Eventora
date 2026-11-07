@@ -132,8 +132,8 @@ export default async function EventPage({ params }: PageProps) {
         offers: {
           "@type": "Offer",
           url: `${siteUrl}/events/${event._id || params.eventId}`,
-          price: "0",
-          priceCurrency: "USD",
+          price: event.isPaid && event.ticketPrice ? `${event.ticketPrice}` : "0",
+          priceCurrency: event.currency || "INR",
           availability:
             (event.seatsBooked || 0) >= event.seatLimit
               ? "https://schema.org/SoldOut"

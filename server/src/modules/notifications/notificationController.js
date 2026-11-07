@@ -16,6 +16,7 @@ export async function getNotifications(req, res, next) {
     const unreadCount = await getUnreadNotificationCount(req.session.userId);
 
     res.status(200).json({
+      success: true,
       status: 'success',
       data: {
         notifications,
@@ -31,6 +32,7 @@ export async function getUnreadCount(req, res, next) {
   try {
     const unreadCount = await getUnreadNotificationCount(req.session.userId);
     res.status(200).json({
+      success: true,
       status: 'success',
       data: { unreadCount }
     });
@@ -46,6 +48,7 @@ export async function markAsRead(req, res, next) {
       throw new NotFoundError('Notification not found.');
     }
     res.status(200).json({
+      success: true,
       status: 'success',
       data: { notification }
     });
@@ -58,6 +61,7 @@ export async function markAllRead(req, res, next) {
   try {
     await markAllNotificationsAsRead(req.session.userId);
     res.status(200).json({
+      success: true,
       status: 'success',
       message: 'All notifications marked as read'
     });
@@ -76,6 +80,7 @@ export async function updatePreferences(req, res, next) {
     });
 
     res.status(200).json({
+      success: true,
       status: 'success',
       data: {
         user: {

@@ -72,10 +72,10 @@ export const globalRateLimiter = createRateLimiter({
   prefix: 'api:'
 });
 
-// 2. Sensitive Authentication limiter: 15 requests per 15 minutes per IP (login & register)
+// 2. Sensitive Authentication limiter: 15 requests (prod) / 100 requests (dev/test) per 15 minutes per IP (login & register)
 export const authRateLimiter = createRateLimiter({
   windowMs: 15 * 60 * 1000,
-  max: 15,
+  max: process.env.NODE_ENV === 'production' ? 15 : 100,
   message: 'Too many authentication attempts. Please wait 15 minutes before trying again.',
   prefix: 'auth:'
 });

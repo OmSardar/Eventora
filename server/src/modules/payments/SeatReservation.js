@@ -50,3 +50,4 @@ seatReservationSchema.index({ eventId: 1, attendeeId: 1, status: 1 });
 seatReservationSchema.index({ status: 1, expiresAt: 1 });
 
 export const SeatReservation = mongoose.model('SeatReservation', seatReservationSchema);
+

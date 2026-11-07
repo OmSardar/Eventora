@@ -8,10 +8,10 @@
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
     "seed": "node src/scripts/seed.js",
-    "test": "node --test --test-force-exit tests/**/*.test.js",
-    "test:unit": "node --test --test-force-exit tests/unit/**/*.test.js",
-    "test:integration": "node --test --test-force-exit tests/integration/**/*.test.js",
-    "test:security": "node --test --test-force-exit tests/security/**/*.test.js",
+    "test": "cross-env NODE_ENV=test node --test --test-force-exit tests/**/*.test.js",
+    "test:unit": "cross-env NODE_ENV=test node --test --test-force-exit tests/unit/**/*.test.js",
+    "test:integration": "cross-env NODE_ENV=test node --test --test-force-exit tests/integration/**/*.test.js",
+    "test:security": "cross-env NODE_ENV=test node --test --test-force-exit tests/security/**/*.test.js",
     "lint": "echo \"Linting backend...\""
   },
   "dependencies": {

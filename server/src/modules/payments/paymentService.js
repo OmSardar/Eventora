@@ -369,12 +369,12 @@ export async function processRefundForCancellation({
     throw new NotFoundError('Payment transaction record not found.');
   }
 
-  if (payment.status !== PAYMENT_STATUS.CAPTURED) {
-    throw new BadRequestError(`Cannot refund payment with status ${payment.status}.`);
+  if (payment.refundStatus === REFUND_STATUS.PROCESSED || payment.status === PAYMENT_STATUS.REFUNDED) {
+    throw new ConflictError('This transaction has already been refunded.');
   }
 
-  if (payment.refundStatus === REFUND_STATUS.PROCESSED) {
-    throw new ConflictError('This transaction has already been refunded.');
+  if (payment.status !== PAYMENT_STATUS.CAPTURED) {
+    throw new BadRequestError(`Cannot refund payment with status ${payment.status}.`);
   }
 
   let refundRes;

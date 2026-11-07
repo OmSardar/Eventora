@@ -193,6 +193,11 @@ export async function getEventAttendees(eventId, organizerId) {
       registrationId: r._id,
       status: r.status,
       registeredAt: r.createdAt,
+      isPaid: r.isPaid || false,
+      ticketPrice: r.ticketPrice || 0,
+      currency: r.currency || 'INR',
+      refundStatus: r.refundStatus || 'NONE',
+      paymentId: r.paymentId,
       attendee: r.attendeeId
         ? {
             id: r.attendeeId._id,

@@ -105,3 +105,4 @@ paymentSchema.index({ eventId: 1, attendeeId: 1, createdAt: -1 });
 paymentSchema.index({ status: 1, createdAt: -1 });
 
 export const Payment = mongoose.model('Payment', paymentSchema);
+

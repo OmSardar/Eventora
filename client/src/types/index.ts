@@ -1,10 +1,19 @@
 export type UserRole = "ATTENDEE" | "ORGANIZER";
 
+export interface NotificationPreferences {
+  sms: boolean;
+  inApp: boolean;
+  email: boolean;
+}
+
 export interface User {
   id: string;
   name: string;
   email: string;
   role: UserRole;
+  phone?: string;
+  smsConsent?: boolean;
+  notificationPreferences?: NotificationPreferences;
   createdAt?: string;
 }
 
@@ -31,6 +40,9 @@ export interface EventItem {
   category?: string;
   bannerUrl?: string;
   image?: EventImage;
+  isPaid?: boolean;
+  ticketPrice?: number;
+  currency?: string;
   organizerId: {
     _id: string;
     id?: string;
@@ -47,6 +59,28 @@ export type RegistrationStatus =
   | "CANCELLED"
   | "REJECTED";
 
+export type PaymentStatus =
+  | "CREATED"
+  | "AUTHORIZED"
+  | "CAPTURED"
+  | "FAILED"
+  | "REFUND_PENDING"
+  | "REFUNDED";
+
+export type RefundStatus = "NONE" | "PENDING" | "PROCESSED" | "FAILED";
+
+export interface PaymentItem {
+  _id: string;
+  orderId: string;
+  paymentId?: string;
+  amount: number;
+  currency: string;
+  status: PaymentStatus;
+  refundStatus: RefundStatus;
+  refundAmount?: number;
+  createdAt: string;
+}
+
 export interface RegistrationItem {
   _id: string;
   id?: string;
@@ -55,6 +89,11 @@ export interface RegistrationItem {
   status: RegistrationStatus;
   cancellationReason?: string;
   decisionNote?: string;
+  isPaid?: boolean;
+  ticketPrice?: number;
+  currency?: string;
+  paymentId?: string | PaymentItem;
+  refundStatus?: RefundStatus;
   createdAt: string;
   updatedAt: string;
 }
@@ -67,8 +106,36 @@ export interface AttendeeListing {
     id: string;
     name: string;
     email: string;
+    phone?: string;
   } | null;
   cancellationReason?: string;
+  isPaid?: boolean;
+  ticketPrice?: number;
+  currency?: string;
+  refundStatus?: RefundStatus;
+  paymentId?: string | PaymentItem;
+}
+
+export type NotificationType =
+  | "BOOKING_CONFIRMED"
+  | "BOOKING_CANCELLED"
+  | "PAYMENT_SUCCESS"
+  | "PAYMENT_FAILED"
+  | "REFUND_PROCESSED"
+  | "EVENT_UPDATED"
+  | "EVENT_REMINDER";
+
+export interface NotificationItem {
+  _id: string;
+  userId: string;
+  type: NotificationType;
+  title: string;
+  message: string;
+  eventId?: string;
+  registrationId?: string;
+  paymentId?: string;
+  isRead: boolean;
+  createdAt: string;
 }
 
 export interface ApiResponse<T = unknown> {

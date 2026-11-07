@@ -13,3 +13,4 @@ export const verifyPaymentSchema = z.object({
   paymentId: z.string({ required_error: 'Payment ID is required' }).trim().min(5),
   signature: z.string({ required_error: 'Signature is required' }).trim().min(10)
 });
+

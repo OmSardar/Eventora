@@ -99,11 +99,22 @@ app.get('/api/v1/health', (_req, res) => {
   });
 });
 
+// Webhook endpoint (authenticated via HMAC-SHA256 signature, exempt from CSRF & Origin checks)
+app.post('/api/v1/webhooks/razorpay', handleRazorpayWebhook);
+
 // API Routes
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/events', eventRoutes);
+app.use('/api/v1/payments', paymentRoutes);
+app.use('/api/v1/notifications', notificationRoutes);
 app.use('/api/v1', registrationRoutes);
 
 // Handle 404 for undefined routes
 app.use('*', (req, _res, next) => {
-  next(new NotFoundError(`Route ${req.meth
+  next(new NotFoundError(`Route ${req.method} ${req.originalUrl} not found`));
+});
+
+// Centralized error handler
+app.use(errorHandler);
+
+export default app;

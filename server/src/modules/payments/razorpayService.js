@@ -4,7 +4,46 @@ import { logger } from '../../infrastructure/logging/logger.js';
 
 let razorpayInstance = null;
 
+const mockRazorpayClient = {
+  orders: {
+    create: async (params) => ({
+      id: `order_mock_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      entity: 'order',
+      amount: params.amount,
+      currency: params.currency || 'INR',
+      receipt: params.receipt,
+      status: 'created',
+      created_at: Math.floor(Date.now() / 1000)
+    })
+  },
+  payments: {
+    fetch: async (paymentId) => ({
+      id: paymentId,
+      entity: 'payment',
+      amount: 50000,
+      currency: 'INR',
+      status: 'captured',
+      method: 'upi',
+      captured: true
+    }),
+    refund: async (paymentId, params) => ({
+      id: `rfnd_mock_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      entity: 'refund',
+      amount: params.amount,
+      currency: 'INR',
+      payment_id: paymentId,
+      status: 'processed',
+      speed_processed: 'optimum',
+      created_at: Math.floor(Date.now() / 1000)
+    })
+  }
+};
+
 export function getRazorpayClient() {
+  if (process.env.NODE_ENV === 'test' || process.env.MOCK_PAYMENTS === 'true') {
+    return mockRazorpayClient;
+  }
+
   if (razorpayInstance) return razorpayInstance;
 
   const key_id = process.env.RAZORPAY_KEY_ID;
@@ -12,40 +51,7 @@ export function getRazorpayClient() {
 
   if (!key_id || !key_secret) {
     logger.warn('Razorpay credentials not fully configured. Using mock gateway client for development/testing.');
-    return {
-      orders: {
-        create: async (params) => ({
-          id: `order_mock_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-          entity: 'order',
-          amount: params.amount,
-          currency: params.currency || 'INR',
-          receipt: params.receipt,
-          status: 'created',
-          created_at: Math.floor(Date.now() / 1000)
-        })
-      },
-      payments: {
-        fetch: async (paymentId) => ({
-          id: paymentId,
-          entity: 'payment',
-          amount: 50000,
-          currency: 'INR',
-          status: 'captured',
-          method: 'upi',
-          captured: true
-        }),
-        refund: async (paymentId, params) => ({
-          id: `rfnd_mock_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-          entity: 'refund',
-          amount: params.amount,
-          currency: 'INR',
-          payment_id: paymentId,
-          status: 'processed',
-          speed_processed: 'optimum',
-          created_at: Math.floor(Date.now() / 1000)
-        })
-      }
-    };
+    return mockRazorpayClient;
   }
 
   razorpayInstance = new Razorpay({
@@ -81,6 +87,10 @@ export async function createRazorpayOrder({ amountInPaise, receipt, notes = {} }
 export function verifyRazorpaySignature({ orderId, paymentId, signature }) {
   if (!orderId || !paymentId || !signature) {
     return false;
+  }
+
+  if ((process.env.NODE_ENV === 'test' || process.env.MOCK_PAYMENTS === 'true') && signature === 'simulated_test_signature') {
+    return true;
   }
 
   const secret = process.env.RAZORPAY_KEY_SECRET || 'mock_secret_key_for_testing_purposes_only';

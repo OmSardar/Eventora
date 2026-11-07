@@ -14,6 +14,7 @@ import {
   Calendar,
   CheckCircle,
   Clock,
+  CreditCard,
   Edit,
   PlusCircle,
   ShieldAlert,
@@ -92,6 +93,12 @@ export default function OrganizerDashboardPage() {
   const totalSeatsBooked = events.reduce((sum, e) => sum + (e.seatsBooked || 0), 0);
   const totalCapacity = events.reduce((sum, e) => sum + (e.seatLimit || 0), 0);
   const activeEventsCount = events.filter((e) => e.status === "PUBLISHED").length;
+  const totalRevenue = events.reduce((sum, e) => {
+    if (e.isPaid && e.ticketPrice) {
+      return sum + (e.seatsBooked || 0) * e.ticketPrice;
+    }
+    return sum;
+  }, 0);
 
   return (
     <div className="container mx-auto max-w-7xl px-4 sm:px-6 py-10 space-y-10">
@@ -117,7 +124,7 @@ export default function OrganizerDashboardPage() {
       </div>
 
       {/* Metrics Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-xs font-medium text-muted-foreground">
@@ -128,7 +135,7 @@ export default function OrganizerDashboardPage() {
           <CardContent>
             <div className="text-2xl font-bold">{events.length}</div>
             <p className="text-[10px] text-muted-foreground mt-1">
-              {activeEventsCount} published & active
+              {activeEventsCount} published &amp; active
             </p>
           </CardContent>
         </Card>
@@ -151,7 +158,24 @@ export default function OrganizerDashboardPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-xs font-medium text-muted-foreground">
-              Total Seat Capacity
+              Total Revenue
+            </CardTitle>
+            <CreditCard className="h-4 w-4 text-emerald-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-emerald-500">
+              ₹{totalRevenue.toLocaleString("en-IN")}
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-1">
+              Gross ticket sales
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-xs font-medium text-muted-foreground">
+              Total Capacity
             </CardTitle>
             <CheckCircle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>

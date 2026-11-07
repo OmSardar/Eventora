@@ -13,9 +13,11 @@ import { Card } from "@/components/ui/card";
 import {
   AlertCircle,
   Calendar,
+  CheckCircle,
   ExternalLink,
   MapPin,
   ShieldAlert,
+  Smartphone,
   Ticket,
 } from "lucide-react";
 
@@ -25,6 +27,24 @@ export default function MyRegistrationsPage() {
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
+
+  const [phone, setPhone] = useState(user?.phone || "");
+  const [smsConsent, setSmsConsent] = useState(user?.smsConsent || false);
+  const [prefSuccess, setPrefSuccess] = useState(false);
+  const [prefError, setPrefError] = useState<string | null>(null);
+
+  const updatePreferencesMutation = useMutation({
+    mutationFn: (payload: { phone: string; smsConsent: boolean }) =>
+      api.patch("/notifications/preferences", payload),
+    onSuccess: () => {
+      setPrefSuccess(true);
+      setPrefError(null);
+      setTimeout(() => setPrefSuccess(false), 4000);
+    },
+    onError: (err: Error) => {
+      setPrefError(err.message || "Failed to update notification settings");
+    },
+  });
 
   const { data, isLoading } = useQuery({
     queryKey: ["my-registrations"],
@@ -144,6 +164,27 @@ export default function MyRegistrationsPage() {
                       <Badge variant="outline" className="text-[10px]">
                         {event.category || "General"}
                       </Badge>
+                      {reg.isPaid ? (
+                        <Badge className="bg-indigo-600 text-white border-none text-[10px] font-semibold">
+                          Paid ₹{reg.ticketPrice}
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-[10px]">
+                          Free RSVP
+                        </Badge>
+                      )}
+                      {reg.refundStatus && reg.refundStatus !== "NONE" && (
+                        <Badge
+                          variant="outline"
+                          className={`text-[10px] font-medium ${
+                            reg.refundStatus === "PROCESSED"
+                              ? "text-emerald-500 border-emerald-500/30"
+                              : "text-amber-500 border-amber-500/30"
+                          }`}
+                        >
+                          Refund: {reg.refundStatus}
+                        </Badge>
+                      )}
                     </div>
 
                     <h3 className="font-bold text-lg text-foreground leading-snug">
@@ -249,6 +290,74 @@ export default function MyRegistrationsPage() {
           })}
         </div>
       )}
+
+      {/* SMS & Transactional Notification Settings */}
+      <Card className="border-border/80 shadow-xs p-6 space-y-4">
+        <div className="flex items-center gap-2">
+          <Smartphone className="h-5 w-5 text-primary" />
+          <div>
+            <h3 className="font-bold text-base text-foreground">
+              SMS &amp; Transactional Notifications
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              Receive automated SMS alerts via MSG91 for ticket reservations, confirmations, and refund statuses.
+            </p>
+          </div>
+        </div>
+
+        {prefSuccess && (
+          <div className="flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-3 text-xs text-emerald-500">
+            <CheckCircle className="h-4 w-4 shrink-0" />
+            <span>Notification preferences updated successfully!</span>
+          </div>
+        )}
+
+        {prefError && (
+          <div className="flex items-center gap-2 rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-xs text-destructive">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <span>{prefError}</span>
+          </div>
+        )}
+
+        <div className="space-y-4 max-w-lg pt-2">
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-foreground">
+              Mobile Phone Number (India +91)
+            </label>
+            <input
+              type="tel"
+              placeholder="e.g. 9876543210 or +91 9876543210"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            />
+            <p className="text-[10px] text-muted-foreground">
+              Valid 10-digit Indian mobile number with optional +91 country prefix.
+            </p>
+          </div>
+
+          <label className="flex items-start gap-2.5 cursor-pointer pt-1">
+            <input
+              type="checkbox"
+              checked={smsConsent}
+              onChange={(e) => setSmsConsent(e.target.checked)}
+              className="mt-0.5 rounded border-border"
+            />
+            <span className="text-xs text-muted-foreground leading-normal">
+              I consent to receive critical transactional SMS messages concerning my event bookings, seat holds, and refund receipts.
+            </span>
+          </label>
+
+          <Button
+            size="sm"
+            onClick={() => updatePreferencesMutation.mutate({ phone, smsConsent })}
+            isLoading={updatePreferencesMutation.isPending}
+            className="text-xs h-9"
+          >
+            Save Preferences
+          </Button>
+        </div>
+      </Card>
     </div>
   );
 }

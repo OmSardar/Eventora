@@ -73,3 +73,4 @@ describe('Security Middleware Origin Validation', () => {
     });
   });
 });
+

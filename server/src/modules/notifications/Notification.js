@@ -41,11 +41,6 @@ const notificationSchema = new mongoose.Schema(
       ref: 'Registration',
       default: null
     },
-    paymentId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Payment',
-      default: null
-    },
     status: {
       type: String,
       enum: ['SENT', 'DELIVERED', 'FAILED', 'SKIPPED'],

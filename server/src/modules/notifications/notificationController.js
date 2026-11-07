@@ -2,8 +2,7 @@ import {
   getUserNotifications,
   getUnreadNotificationCount,
   markNotificationAsRead,
-  markAllNotificationsAsRead,
-  updateUserNotificationPreferences
+  markAllNotificationsAsRead
 } from './notificationService.js';
 import { NotFoundError } from '../../shared/errors/AppError.js';
 
@@ -17,7 +16,6 @@ export async function getNotifications(req, res, next) {
 
     res.status(200).json({
       success: true,
-      status: 'success',
       data: {
         notifications,
         unreadCount
@@ -33,7 +31,6 @@ export async function getUnreadCount(req, res, next) {
     const unreadCount = await getUnreadNotificationCount(req.session.userId);
     res.status(200).json({
       success: true,
-      status: 'success',
       data: { unreadCount }
     });
   } catch (error) {
@@ -49,7 +46,6 @@ export async function markAsRead(req, res, next) {
     }
     res.status(200).json({
       success: true,
-      status: 'success',
       data: { notification }
     });
   } catch (error) {
@@ -62,36 +58,7 @@ export async function markAllRead(req, res, next) {
     await markAllNotificationsAsRead(req.session.userId);
     res.status(200).json({
       success: true,
-      status: 'success',
       message: 'All notifications marked as read'
-    });
-  } catch (error) {
-    next(error);
-  }
-}
-
-export async function updatePreferences(req, res, next) {
-  try {
-    const { phone, smsConsent, preferences } = req.body;
-    const user = await updateUserNotificationPreferences(req.session.userId, {
-      phone,
-      smsConsent,
-      preferences
-    });
-
-    res.status(200).json({
-      success: true,
-      status: 'success',
-      data: {
-        user: {
-          id: user._id,
-          name: user.name,
-          email: user.email,
-          phone: user.phone,
-          smsConsent: user.smsConsent,
-          notificationPreferences: user.notificationPreferences
-        }
-      }
     });
   } catch (error) {
     next(error);

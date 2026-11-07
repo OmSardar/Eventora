@@ -22,39 +22,29 @@ import {
 import { ImageUploadField } from "@/components/shared/ImageUploadField";
 import { AlertCircle, ArrowLeft, Sparkles } from "lucide-react";
 
-const createEventSchema = z
-  .object({
-    title: z.string().min(3, "Title must be at least 3 characters").max(200),
-    description: z.string().min(10, "Description must be at least 10 characters").max(5000),
-    eventDate: z
-      .string()
-      .refine((val) => !isNaN(Date.parse(val)), {
-        message: "Valid date format required",
-      })
-      .refine((val) => new Date(val).getTime() > Date.now(), {
-        message: "Event date must be in the future",
-      }),
-    venue: z.string().min(3, "Venue must be at least 3 characters").max(300),
-    seatLimit: z.coerce.number().int().min(1, "Seat limit must be at least 1"),
-    isPaid: z.boolean().default(false),
-    ticketPrice: z.coerce.number().optional().default(0),
-    category: z.string().optional().default("Technology"),
-    bannerUrl: z.string().optional().default(""),
-    image: z
-      .object({
-        source: z.enum(["URL", "CLOUDINARY"]).default("URL"),
-        url: z.string().default(""),
-        publicId: z.string().nullable().optional().default(null),
-      })
-      .optional(),
-  })
-  .refine(
-    (data) => !data.isPaid || (typeof data.ticketPrice === "number" && data.ticketPrice > 0),
-    {
-      message: "Ticket price must be greater than ₹0 for paid events",
-      path: ["ticketPrice"],
-    }
-  );
+const createEventSchema = z.object({
+  title: z.string().min(3, "Title must be at least 3 characters").max(200),
+  description: z.string().min(10, "Description must be at least 10 characters").max(5000),
+  eventDate: z
+    .string()
+    .refine((val) => !isNaN(Date.parse(val)), {
+      message: "Valid date format required",
+    })
+    .refine((val) => new Date(val).getTime() > Date.now(), {
+      message: "Event date must be in the future",
+    }),
+  venue: z.string().min(3, "Venue must be at least 3 characters").max(300),
+  seatLimit: z.coerce.number().int().min(1, "Seat limit must be at least 1"),
+  category: z.string().optional().default("Technology"),
+  bannerUrl: z.string().optional().default(""),
+  image: z
+    .object({
+      source: z.enum(["URL", "CLOUDINARY"]).default("URL"),
+      url: z.string().default(""),
+      publicId: z.string().nullable().optional().default(null),
+    })
+    .optional(),
+});
 
 type CreateEventFormData = z.infer<typeof createEventSchema>;
 
@@ -220,75 +210,6 @@ export default function CreateEventPage() {
                   <p className="text-[11px] text-destructive">{errors.seatLimit.message}</p>
                 )}
               </div>
-            </div>
-
-            {/* Pricing Section: Free vs Paid */}
-            <div className="rounded-xl border border-border/80 bg-muted/20 p-4 space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <label className="text-xs font-semibold text-foreground">Ticketing &amp; Pricing</label>
-                  <p className="text-[11px] text-muted-foreground">
-                    Choose whether this is a free RSVP or a paid event with tickets processed via Razorpay.
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setValue("isPaid", false);
-                      setValue("ticketPrice", 0);
-                    }}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                      !watch("isPaid")
-                        ? "bg-primary text-primary-foreground shadow-sm"
-                        : "bg-muted text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    Free RSVP
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setValue("isPaid", true);
-                      if (!watch("ticketPrice")) setValue("ticketPrice", 499);
-                    }}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                      watch("isPaid")
-                        ? "bg-indigo-600 text-white shadow-sm"
-                        : "bg-muted text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    Paid Ticket
-                  </button>
-                </div>
-              </div>
-
-              {watch("isPaid") && (
-                <div className="space-y-1.5 pt-2 border-t border-border/40">
-                  <label className="text-xs font-semibold text-foreground">
-                    Ticket Price (in INR ₹) *
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-2.5 text-xs text-muted-foreground font-semibold">
-                      ₹
-                    </span>
-                    <Input
-                      type="number"
-                      min="1"
-                      max="500000"
-                      placeholder="e.g. 499"
-                      className="text-xs pl-7"
-                      {...register("ticketPrice")}
-                    />
-                  </div>
-                  {errors.ticketPrice && (
-                    <p className="text-[11px] text-destructive">{errors.ticketPrice.message}</p>
-                  )}
-                  <p className="text-[10px] text-muted-foreground">
-                    Attendees will pay in Indian Rupees (INR) through Razorpay UPI, Cards, NetBanking, or Wallets.
-                  </p>
-                </div>
-              )}
             </div>
 
             {/* Date and Time */}

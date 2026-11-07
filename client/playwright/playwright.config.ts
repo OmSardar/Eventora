@@ -21,6 +21,10 @@ export default defineConfig({
       reuseExistingServer: true,
       timeout: 15000,
       env: {
+        ...process.env,
+        SystemRoot: process.env.SystemRoot || "C:\\Windows",
+        ComSpec: process.env.ComSpec || process.env.COMSPEC || "C:\\Windows\\system32\\cmd.exe",
+        PATH: process.env.PATH || process.env.Path || "",
         PORT: "5000",
         NODE_ENV: "test",
         MONGODB_URI: "mongodb://127.0.0.1:27017/eventora",
@@ -33,6 +37,10 @@ export default defineConfig({
       reuseExistingServer: true,
       timeout: 20000,
       env: {
+        ...process.env,
+        SystemRoot: process.env.SystemRoot || "C:\\Windows",
+        ComSpec: process.env.ComSpec || process.env.COMSPEC || "C:\\Windows\\system32\\cmd.exe",
+        PATH: process.env.PATH || process.env.Path || "",
         NEXT_PUBLIC_API_URL: "http://localhost:5000/api/v1",
       },
     },

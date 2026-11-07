@@ -85,6 +85,38 @@ Retrieve attendee names and emails for an owned event.
 List all events created by the logged-in organizer.
 - **Access:** Authenticated (ORGANIZER only)
 
+### `POST /events/:eventId/banner`
+Upload or replace an event banner image using server-side Cloudinary integration.
+- **Access:** Authenticated (Event Owner only, Rate limited: 20 uploads / 15 min)
+- **Headers:** `X-CSRF-Token: <token>`, `Content-Type: multipart/form-data`
+- **Body:** `multipart/form-data` with field `file` or `banner` (JPEG, PNG, or WebP; maximum 5MB)
+- **Validation:** Cryptographic magic bytes inspection; SVG, HTML, and executables strictly rejected
+- **Response 200:**
+  ```json
+  {
+    "success": true,
+    "data": {
+      "image": {
+        "source": "CLOUDINARY",
+        "url": "https://res.cloudinary.com/.../banner.jpg",
+        "publicId": "eventora/events/banner_...",
+        "format": "jpg",
+        "width": 1200,
+        "height": 630,
+        "bytes": 245120
+      },
+      "bannerUrl": "https://res.cloudinary.com/.../banner.jpg"
+    }
+  }
+  ```
+
+### `POST /events/banner`
+Upload a banner image during draft event creation prior to obtaining an event ID.
+- **Access:** Authenticated (ORGANIZER only, Rate limited: 20 uploads / 15 min)
+- **Headers:** `X-CSRF-Token: <token>`, `Content-Type: multipart/form-data`
+- **Body:** `multipart/form-data` with field `file` or `banner` (JPEG, PNG, or WebP; maximum 5MB)
+- **Response 200:** Returns `{ success: true, data: { image, bannerUrl } }`
+
 ---
 
 ## 3. Registration Endpoints

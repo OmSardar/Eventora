@@ -104,10 +104,12 @@ export const cancellationRateLimiter = createRateLimiter({
   prefix: 'cancellation:'
 });
 
-// 6. Cloudinary Upload Signature limiter: 20 requests per 15 minutes per organizer account/IP
-export const uploadSignatureRateLimiter = createRateLimiter({
+// 6. Cloudinary Upload limiter: 20 image uploads per 15 minutes per organizer account/IP
+export const uploadBannerRateLimiter = createRateLimiter({
   windowMs: 15 * 60 * 1000,
   max: 20,
-  message: 'Too many image upload authorization requests. Please wait a few minutes.',
-  prefix: 'upload_sig:'
+  message: 'Too many image upload attempts. Please wait a few minutes.',
+  prefix: 'upload_banner:'
 });
+
+export const uploadSignatureRateLimiter = uploadBannerRateLimiter;

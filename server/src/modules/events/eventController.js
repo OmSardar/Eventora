@@ -1,6 +1,5 @@
 import * as eventService from './eventService.js';
 import * as registrationService from '../registrations/registrationService.js';
-import { generateUploadSignature } from '../../infrastructure/cloudinary/cloudinaryService.js';
 
 export async function getEvents(req, res, next) {
   try {
@@ -59,17 +58,26 @@ export async function createEvent(req, res, next) {
   }
 }
 
-export async function getUploadSignature(req, res, next) {
+export async function uploadEventBanner(req, res, next) {
   try {
+    const { eventId } = req.params;
     const organizerId = req.user.id;
-    const signatureData = generateUploadSignature({
+    const ipAddress = req.ip;
+    const userAgent = req.headers['user-agent'];
+    const file = req.file;
+
+    const result = await eventService.uploadEventBanner({
+      eventId: eventId || null,
+      file,
       organizerId,
-      timestamp: Math.round(Date.now() / 1000)
+      ipAddress,
+      userAgent
     });
 
     res.status(200).json({
       success: true,
-      data: signatureData
+      message: 'Banner image uploaded successfully',
+      data: result
     });
   } catch (error) {
     next(error);

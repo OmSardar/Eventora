@@ -10,12 +10,12 @@ import { formatDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { RazorpayCheckoutButton } from "@/components/payments/RazorpayCheckoutModal";
 import {
   AlertCircle,
   Calendar,
   CheckCircle,
   Compass,
+  Mail,
   MapPin,
   ShieldAlert,
   Ticket,
@@ -144,15 +144,9 @@ export function EventDetailView({ eventId, initialEvent }: EventDetailViewProps)
           <Badge variant="secondary" className="backdrop-blur-md bg-background/80 text-xs font-semibold">
             {event.category || "General"}
           </Badge>
-          {event.isPaid ? (
-            <Badge className="bg-indigo-600 text-white text-xs font-bold border-none shadow-md">
-              ₹{event.ticketPrice} INR
-            </Badge>
-          ) : (
-            <Badge variant="outline" className="backdrop-blur-md bg-background/80 text-xs font-bold">
-              Free Admission
-            </Badge>
-          )}
+          <Badge variant="outline" className="backdrop-blur-md bg-background/80 text-xs font-bold">
+            Free Admission
+          </Badge>
           {isCancelled && (
             <Badge variant="destructive" className="text-xs font-bold shadow-md">
               Event Cancelled
@@ -220,7 +214,7 @@ export function EventDetailView({ eventId, initialEvent }: EventDetailViewProps)
                 <div>
                   <CardTitle className="text-lg">RSVP &amp; Tickets</CardTitle>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    {event.isPaid ? `₹${event.ticketPrice} per attendee` : "Free admission"}
+                    Free admission (Limited Seats)
                   </p>
                 </div>
                 {isSoldOut ? (
@@ -273,12 +267,16 @@ export function EventDetailView({ eventId, initialEvent }: EventDetailViewProps)
                 <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-4 text-xs text-emerald-500 space-y-2">
                   <div className="flex items-center gap-2 font-semibold">
                     <CheckCircle className="h-4 w-4" aria-hidden="true" />
-                    <span>Booking Confirmed!</span>
+                    <span>Registration Successful!</span>
                   </div>
                   <p className="text-[11px] text-muted-foreground leading-normal">
-                    Your seat is secured with atomic confirmation. View your digital ticket in My Registrations.
+                    Your seat has been reserved. A confirmation email has been scheduled for your registered email address.
                   </p>
-                  <Link href="/attendee/registrations" className="block pt-1">
+                  <div className="flex items-center gap-1.5 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
+                    <Mail className="h-3.5 w-3.5" aria-hidden="true" />
+                    <span>Confirmation email on the way via Resend</span>
+                  </div>
+                  <Link href="/attendee/registrations" className="block pt-2">
                     <Button size="sm" variant="outline" className="w-full text-xs">
                       View My Tickets
                     </Button>
@@ -332,18 +330,6 @@ export function EventDetailView({ eventId, initialEvent }: EventDetailViewProps)
                       <Button disabled className="w-full h-11 text-xs font-semibold">
                         Sold Out
                       </Button>
-                    ) : event.isPaid ? (
-                      <RazorpayCheckoutButton
-                        event={event}
-                        user={user}
-                        onSuccess={() => {
-                          setRegistrationSuccess(true);
-                          setErrorMessage(null);
-                          queryClient.invalidateQueries({ queryKey: ["event", eventId] });
-                          queryClient.invalidateQueries({ queryKey: ["my-registrations"] });
-                        }}
-                        onError={(err) => setErrorMessage(err)}
-                      />
                     ) : (
                       <Button
                         onClick={() => bookingMutation.mutate()}
@@ -353,7 +339,7 @@ export function EventDetailView({ eventId, initialEvent }: EventDetailViewProps)
                         data-testid="confirm-free-rsvp-btn"
                       >
                         <Ticket className="h-4 w-4" aria-hidden="true" />
-                        Confirm Free RSVP
+                        Confirm My RSVP
                       </Button>
                     )
                   ) : (
@@ -380,4 +366,3 @@ export function EventDetailView({ eventId, initialEvent }: EventDetailViewProps)
     </div>
   );
 }
-

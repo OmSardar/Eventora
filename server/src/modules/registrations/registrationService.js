@@ -1,7 +1,8 @@
 import mongoose from 'mongoose';
 import { Registration } from './Registration.js';
 import { Event } from '../events/Event.js';
-import { EVENT_STATUS, REGISTRATION_STATUS } from '../../shared/constants/status.js';
+import { User } from '../users/User.js';
+import { EVENT_STATUS, REGISTRATION_STATUS, NOTIFICATION_TYPE } from '../../shared/constants/status.js';
 import {
   BadRequestError,
   ConflictError,
@@ -9,15 +10,19 @@ import {
   NotFoundError
 } from '../../shared/errors/AppError.js';
 import { logAuditEvent } from '../audit/AuditLog.js';
-import { processRefundForCancellation } from '../payments/paymentService.js';
 import { dispatchNotification } from '../notifications/notificationService.js';
-import { NOTIFICATION_TYPE } from '../../shared/constants/status.js';
+import { sendRegistrationConfirmationEmail } from '../../infrastructure/email/emailService.js';
+import { logger } from '../../infrastructure/logging/logger.js';
 
 function canUseReplicaSetTransactions() {
   const topologyType = mongoose.connection?.client?.topology?.description?.type;
   return topologyType === 'ReplicaSet' || topologyType === 'Sharded';
 }
 
+/**
+ * Registers an attendee for an event with atomic capacity guarantee.
+ * After the registration is successfully persisted, triggers a confirmation email via Resend.
+ */
 export async function registerForEvent({
   eventId,
   attendeeId,
@@ -44,11 +49,6 @@ export async function registerForEvent({
     throw new BadRequestError('Cannot register for a past event.');
   }
 
-  // 3b. Free event endpoint only accepts free events
-  if (event.isPaid) {
-    throw new BadRequestError('This is a paid event. Please complete checkout to register.');
-  }
-
   // 4. Check if attendee is already registered
   const existingRegistration = await Registration.findOne({
     eventId: new mongoose.Types.ObjectId(eventId),
@@ -70,9 +70,11 @@ export async function registerForEvent({
     session.startTransaction();
   }
 
+  let updatedEvent = null;
+
   try {
     // Atomically reserve seat ONLY if seatsBooked < seatLimit
-    const updatedEvent = await Event.findOneAndUpdate(
+    updatedEvent = await Event.findOneAndUpdate(
       {
         _id: new mongoose.Types.ObjectId(eventId),
         status: EVENT_STATUS.PUBLISHED,
@@ -95,7 +97,8 @@ export async function registerForEvent({
           {
             eventId: new mongoose.Types.ObjectId(eventId),
             attendeeId: new mongoose.Types.ObjectId(attendeeId),
-            status: REGISTRATION_STATUS.CONFIRMED
+            status: REGISTRATION_STATUS.CONFIRMED,
+            confirmationEmailSent: false
           }
         ],
         { session }
@@ -106,7 +109,8 @@ export async function registerForEvent({
       registration = await Registration.create({
         eventId: new mongoose.Types.ObjectId(eventId),
         attendeeId: new mongoose.Types.ObjectId(attendeeId),
-        status: REGISTRATION_STATUS.CONFIRMED
+        status: REGISTRATION_STATUS.CONFIRMED,
+        confirmationEmailSent: false
       });
     }
 
@@ -120,11 +124,6 @@ export async function registerForEvent({
       userAgent,
       details: { eventId, eventTitle: updatedEvent.title }
     });
-
-    return {
-      registration,
-      event: updatedEvent
-    };
   } catch (error) {
     if (useReplicaSet && session) {
       try {
@@ -146,6 +145,47 @@ export async function registerForEvent({
       session.endSession();
     }
   }
+
+  // 6. Post-persistence notification & Resend email confirmation
+  // Executed strictly after successful registration persistence and outside of transaction
+  try {
+    const attendeeUser = await User.findById(attendeeId).select('name email');
+
+    // Trigger transactional confirmation email via Resend
+    if (attendeeUser && attendeeUser.email) {
+      sendRegistrationConfirmationEmail({
+        registrationId: registration._id.toString(),
+        attendee: {
+          name: attendeeUser.name,
+          email: attendeeUser.email
+        },
+        event: updatedEvent
+      }).catch((emailErr) => {
+        logger.error(
+          { err: emailErr?.message, registrationId: registration._id },
+          'Non-blocking confirmation email delivery failed'
+        );
+      });
+    }
+
+    // In-app alert for attendee
+    dispatchNotification({
+      userId: attendeeId,
+      type: NOTIFICATION_TYPE.BOOKING_CONFIRMED,
+      title: 'Booking Confirmed!',
+      message: `Your seat for "${updatedEvent.title}" has been confirmed. A confirmation email has been scheduled.`,
+      eventId: updatedEvent._id,
+      registrationId: registration._id
+    });
+  } catch (notificationErr) {
+    // Non-blocking: registration is already safely committed
+    logger.warn({ err: notificationErr?.message }, 'Post-registration notification dispatch failed safely');
+  }
+
+  return {
+    registration,
+    event: updatedEvent
+  };
 }
 
 export async function getAttendeeRegistrations(attendeeId) {
@@ -193,11 +233,6 @@ export async function getEventAttendees(eventId, organizerId) {
       registrationId: r._id,
       status: r.status,
       registeredAt: r.createdAt,
-      isPaid: r.isPaid || false,
-      ticketPrice: r.ticketPrice || 0,
-      currency: r.currency || 'INR',
-      refundStatus: r.refundStatus || 'NONE',
-      paymentId: r.paymentId,
       attendee: r.attendeeId
         ? {
             id: r.attendeeId._id,
@@ -300,25 +335,13 @@ export async function processCancellationDecision({
   }
 
   if (decision === 'APPROVE') {
-    if (registration.isPaid && registration.paymentId) {
-      // Process authoritative gateway refund for paid event
-      await processRefundForCancellation({
-        registrationId,
-        organizerId,
-        ipAddress,
-        userAgent
-      });
-      const updatedReg = await Registration.findById(registrationId);
-      return updatedReg;
-    }
-
     registration.status = REGISTRATION_STATUS.CANCELLED;
     registration.decisionNote = note || 'Cancellation approved by organizer';
     registration.decidedBy = new mongoose.Types.ObjectId(organizerId);
     registration.decidedAt = new Date();
     await registration.save();
 
-    // Release seat atomically for free events
+    // Release seat atomically back to the event
     await Event.findByIdAndUpdate(registration.eventId._id, {
       $inc: { seatsBooked: -1 }
     });

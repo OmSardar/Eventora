@@ -50,23 +50,6 @@ const eventSchema = new mongoose.Schema(
       default: EVENT_STATUS.PUBLISHED,
       index: true
     },
-    isPaid: {
-      type: Boolean,
-      default: false,
-      index: true
-    },
-    ticketPrice: {
-      type: Number,
-      default: 0,
-      min: [0, 'Ticket price cannot be negative']
-    },
-    currency: {
-      type: String,
-      default: 'INR',
-      uppercase: true,
-      trim: true,
-      enum: ['INR']
-    },
     category: {
       type: String,
       trim: true,
@@ -87,6 +70,22 @@ const eventSchema = new mongoose.Schema(
         type: String,
         trim: true,
         default: null
+      },
+      format: {
+        type: String,
+        default: null
+      },
+      width: {
+        type: Number,
+        default: null
+      },
+      height: {
+        type: Number,
+        default: null
+      },
+      bytes: {
+        type: Number,
+        default: null
       }
     },
     bannerUrl: {
@@ -105,7 +104,11 @@ const eventSchema = new mongoose.Schema(
           ret.image = {
             source: 'URL',
             url: ret.bannerUrl || '',
-            publicId: null
+            publicId: null,
+            format: null,
+            width: null,
+            height: null,
+            bytes: null
           };
         }
         if (!ret.bannerUrl && ret.image?.url) {

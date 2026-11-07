@@ -184,7 +184,6 @@ export default function EventAttendeesPage() {
                   <tr className="border-b border-border/60 text-muted-foreground">
                     <th className="py-3 px-3 font-semibold">Attendee Name</th>
                     <th className="py-3 px-3 font-semibold">Email</th>
-                    <th className="py-3 px-3 font-semibold">Ticket &amp; Price</th>
                     <th className="py-3 px-3 font-semibold">Registration Date</th>
                     <th className="py-3 px-3 font-semibold">Status</th>
                   </tr>
@@ -200,20 +199,6 @@ export default function EventAttendeesPage() {
                           <Mail className="h-3 w-3 text-muted-foreground shrink-0" />
                           {att.attendee?.email || "N/A"}
                         </span>
-                      </td>
-                      <td className="py-3 px-3">
-                        {att.isPaid ? (
-                          <div className="flex flex-col gap-0.5">
-                            <span className="font-semibold text-foreground">₹{att.ticketPrice}</span>
-                            {att.refundStatus && att.refundStatus !== "NONE" && (
-                              <span className="text-[10px] text-amber-500 font-medium">
-                                Refund: {att.refundStatus}
-                              </span>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground">Free RSVP</span>
-                        )}
                       </td>
                       <td className="py-3 px-3 text-muted-foreground">
                         {formatDate(att.registeredAt)}

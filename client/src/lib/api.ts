@@ -40,8 +40,10 @@ export async function apiClient<T>(
     method.toUpperCase()
   );
 
+  const isFormData = typeof FormData !== "undefined" && data instanceof FormData;
+
   const headers: Record<string, string> = {
-    "Content-Type": "application/json",
+    ...(isFormData ? {} : { "Content-Type": "application/json" }),
     Accept: "application/json",
     ...((customHeaders as Record<string, string>) || {}),
   };
@@ -60,7 +62,9 @@ export async function apiClient<T>(
     ...customConfig,
   };
 
-  if (data !== undefined) {
+  if (isFormData) {
+    config.body = data as FormData;
+  } else if (data !== undefined) {
     config.body = JSON.stringify(data);
   }
 

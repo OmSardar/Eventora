@@ -179,24 +179,6 @@ export default function EditEventPage() {
               {errors.title && <p className="text-[11px] text-destructive">{errors.title.message}</p>}
             </div>
 
-            {/* Pricing Model Display */}
-            <div className="rounded-xl border border-border/80 bg-muted/20 p-4 space-y-1">
-              <label className="text-xs font-semibold text-foreground">Ticketing Model</label>
-              <div className="flex items-center gap-2 pt-1">
-                {event.isPaid ? (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-500/10 px-2.5 py-0.5 text-xs font-semibold text-indigo-500">
-                    Paid Ticket: ₹{event.ticketPrice} INR
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-xs font-semibold text-emerald-500">
-                    Free RSVP
-                  </span>
-                )}
-                <span className="text-[11px] text-muted-foreground">
-                  (Pricing structure is immutable once published)
-                </span>
-              </div>
-            </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
@@ -246,8 +228,9 @@ export default function EditEventPage() {
               {errors.venue && <p className="text-[11px] text-destructive">{errors.venue.message}</p>}
             </div>
 
-            {/* Dual-Option Banner Image Component (Upload vs URL) */}
+            {/* Dual-Option Banner Image Component (Upload via Eventora Backend vs URL) */}
             <ImageUploadField
+              eventId={eventId}
               value={watch("image") || watch("bannerUrl")}
               onChange={(img) => {
                 setValue("image", {

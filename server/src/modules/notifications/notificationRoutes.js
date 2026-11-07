@@ -3,8 +3,7 @@ import {
   getNotifications,
   getUnreadCount,
   markAsRead,
-  markAllRead,
-  updatePreferences
+  markAllRead
 } from './notificationController.js';
 import { requireAuth } from '../../shared/middleware/authMiddleware.js';
 import { csrfProtection } from '../../shared/middleware/securityMiddleware.js';
@@ -18,6 +17,5 @@ router.get('/unread-count', getUnreadCount);
 router.patch('/:id/read', csrfProtection, markAsRead);
 router.patch('/read-all', csrfProtection, markAllRead);
 router.post('/mark-all-read', csrfProtection, markAllRead);
-router.patch('/preferences', csrfProtection, updatePreferences);
 
 export default router;

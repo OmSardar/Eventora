@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef } from "react";
-import { api } from "@/lib/api";
+import { getCsrfToken } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EventImage } from "@/types";
@@ -17,19 +17,15 @@ import {
   RefreshCw,
 } from "lucide-react";
 
-interface UploadSignatureResponse {
-  signature: string;
-  timestamp: number;
-  apiKey: string;
-  cloudName: string;
-  folder: string;
-}
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api/v1";
 
 interface ImageUploadFieldProps {
   value?: EventImage | string;
   onChange: (image: EventImage) => void;
   error?: string;
   disabled?: boolean;
+  eventId?: string;
 }
 
 export function ImageUploadField({
@@ -37,6 +33,7 @@ export function ImageUploadField({
   onChange,
   error,
   disabled = false,
+  eventId,
 }: ImageUploadFieldProps) {
   // Normalize initial value
   const initialImage: EventImage =
@@ -62,7 +59,7 @@ export function ImageUploadField({
         : ""
       : urlInput;
 
-  // Option B: Handle URL input change
+  // Handle URL input change
   const handleUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newUrl = e.target.value;
     setUrlInput(newUrl);
@@ -75,9 +72,8 @@ export function ImageUploadField({
     });
   };
 
-  // Option A: Direct Signed Cloudinary Upload
-  const uploadToCloudinary = async (file: File) => {
-    // Client-side validation: format and max 5MB
+  // Upload file exclusively via authenticated Eventora backend API
+  const uploadToBackend = async (file: File) => {
     const validFormats = ["image/jpeg", "image/png", "image/webp"];
     if (!validFormats.includes(file.type)) {
       setUploadError("Only JPEG, PNG, and WebP images are permitted.");
@@ -93,81 +89,92 @@ export function ImageUploadField({
     setUploadProgress(10);
     setUploadError(null);
 
+    // Create temporary local preview for immediate visual feedback
+    const previewUrl = URL.createObjectURL(file);
+
     try {
-      // 1. Request signed authorization parameters from Eventora backend
-      const sigData = await api.post<UploadSignatureResponse>(
-        "/events/image-signature"
-      );
-
-      setUploadProgress(30);
-
-      // 2. Perform direct upload to Cloudinary using XMLHttpRequest for live progress tracking
+      const csrfToken = await getCsrfToken();
       const formData = new FormData();
-      formData.append("file", file);
-      formData.append("api_key", sigData.apiKey);
-      formData.append("timestamp", String(sigData.timestamp));
-      formData.append("signature", sigData.signature);
-      formData.append("folder", sigData.folder);
+      formData.append("banner", file);
+
+      const endpoint = eventId
+        ? `${API_BASE_URL}/events/${eventId}/banner`
+        : `${API_BASE_URL}/events/banner`;
 
       const xhr = new XMLHttpRequest();
-      const cloudinaryUrl = `https://api.cloudinary.com/v1_1/${sigData.cloudName}/image/upload`;
 
-      const uploadPromise = new Promise<{ secure_url: string; public_id: string }>(
-        (resolve, reject) => {
-          xhr.upload.addEventListener("progress", (evt) => {
-            if (evt.lengthComputable) {
-              const percent = Math.round((evt.loaded / evt.total) * 60) + 30;
-              setUploadProgress(Math.min(95, percent));
-            }
-          });
+      const uploadPromise = new Promise<{
+        banner: {
+          url: string;
+          publicId: string;
+          format?: string;
+          width?: number;
+          height?: number;
+          bytes?: number;
+        };
+      }>((resolve, reject) => {
+        xhr.upload.addEventListener("progress", (evt) => {
+          if (evt.lengthComputable) {
+            const percent = Math.round((evt.loaded / evt.total) * 90);
+            setUploadProgress(Math.min(95, percent));
+          }
+        });
 
-          xhr.onreadystatechange = () => {
-            if (xhr.readyState === 4) {
-              if (xhr.status >= 200 && xhr.status < 300) {
-                try {
-                  const res = JSON.parse(xhr.responseText);
-                  resolve(res);
-                } catch {
-                  reject(new Error("Failed to parse Cloudinary response"));
-                }
+        xhr.onreadystatechange = () => {
+          if (xhr.readyState === 4) {
+            try {
+              const res = JSON.parse(xhr.responseText);
+              if (xhr.status >= 200 && xhr.status < 300 && res.success) {
+                resolve(res.data);
               } else {
-                reject(
-                  new Error(
-                    `Cloudinary upload rejected (${xhr.status}). Ensure cloud credentials are configured.`
-                  )
-                );
+                const message =
+                  res.error?.message ||
+                  res.message ||
+                  `Upload rejected by server (HTTP ${xhr.status})`;
+                reject(new Error(message));
               }
+            } catch {
+              reject(
+                new Error(`Upload failed with server status ${xhr.status}`)
+              );
             }
-          };
+          }
+        };
 
-          xhr.onerror = () => {
-            reject(
-              new Error("Network error occurred during direct Cloudinary upload.")
-            );
-          };
+        xhr.onerror = () => {
+          reject(new Error("Network connection error during file upload"));
+        };
 
-          xhr.open("POST", cloudinaryUrl, true);
-          xhr.send(formData);
+        xhr.open("POST", endpoint, true);
+        xhr.withCredentials = true;
+        if (csrfToken) {
+          xhr.setRequestHeader("X-CSRF-Token", csrfToken);
         }
-      );
+        // Note: Do NOT set Content-Type header on xhr - let the browser set boundary for multipart FormData!
+        xhr.send(formData);
+      });
 
-      const result = await uploadPromise;
+      const data = await uploadPromise;
       setUploadProgress(100);
 
-      // 3. Persist Cloudinary metadata
       onChange({
         source: "CLOUDINARY",
-        url: result.secure_url,
-        publicId: result.public_id,
+        url: data.banner.url,
+        publicId: data.banner.publicId,
+        format: data.banner.format || null,
+        width: data.banner.width || null,
+        height: data.banner.height || null,
+        bytes: data.banner.bytes || null,
       });
       setImagePreviewError(false);
     } catch (err: unknown) {
-      const error = err as Error;
+      const errorObj = err as Error;
       setUploadError(
-        error.message ||
-          "Direct upload failed. You can also provide an image URL directly."
+        errorObj.message ||
+          "Backend upload failed. You can also provide an image URL directly."
       );
     } finally {
+      URL.revokeObjectURL(previewUrl);
       setIsUploading(false);
       setTimeout(() => setUploadProgress(null), 1000);
     }
@@ -179,13 +186,13 @@ export function ImageUploadField({
     if (disabled || isUploading) return;
 
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      uploadToCloudinary(e.dataTransfer.files[0]);
+      uploadToBackend(e.dataTransfer.files[0]);
     }
   };
 
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      uploadToCloudinary(e.target.files[0]);
+      uploadToBackend(e.target.files[0]);
     }
   };
 
@@ -244,7 +251,7 @@ export function ImageUploadField({
         </div>
       </div>
 
-      {/* Option A: Upload Image (Drag-and-Drop + Cloudinary) */}
+      {/* Option A: Upload Image (Drag-and-Drop via Eventora Backend) */}
       {activeTab === "UPLOAD" && (
         <div className="space-y-3">
           <input
@@ -282,7 +289,7 @@ export function ImageUploadField({
               {isUploading ? (
                 <div className="space-y-2 w-full max-w-xs">
                   <p className="text-xs font-medium text-foreground">
-                    Uploading directly to Cloudinary...
+                    Uploading to server...
                   </p>
                   <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
                     <div
@@ -342,7 +349,7 @@ export function ImageUploadField({
                 </div>
                 <div className="absolute bottom-2 left-2 flex items-center gap-1 bg-background/80 backdrop-blur-md px-2 py-0.5 rounded text-[10px] text-emerald-500 font-medium border border-border/50">
                   <CheckCircle2 className="h-3 w-3" />
-                  Cloudinary Asset Verified
+                  Verified Cloud Asset
                 </div>
               </div>
             </div>
@@ -413,4 +420,3 @@ export function ImageUploadField({
     </div>
   );
 }
-

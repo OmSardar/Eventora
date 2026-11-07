@@ -5,7 +5,8 @@ import { validateBody } from '../../shared/middleware/validate.js';
 import { createEventSchema, updateEventSchema } from '../../shared/validation/eventValidation.js';
 import { ROLES } from '../../shared/constants/roles.js';
 import { csrfProtection } from '../../shared/middleware/securityMiddleware.js';
-import { eventMutationRateLimiter, uploadSignatureRateLimiter } from '../../shared/middleware/rateLimiter.js';
+import { eventMutationRateLimiter, uploadBannerRateLimiter } from '../../shared/middleware/rateLimiter.js';
+import { handleBannerUpload } from '../../shared/middleware/uploadMiddleware.js';
 
 const router = Router();
 
@@ -20,17 +21,29 @@ router.get(
   eventController.getMyEvents
 );
 
-// Cloudinary signed upload authorization endpoint (strictly for authenticated organizers)
+// Cloudinary backend-only banner upload (for new events before creation)
 router.post(
-  '/image-signature',
+  '/banner',
   authenticate,
   requireRole(ROLES.ORGANIZER),
-  uploadSignatureRateLimiter,
+  uploadBannerRateLimiter,
   csrfProtection,
-  eventController.getUploadSignature
+  handleBannerUpload,
+  eventController.uploadEventBanner
 );
 
 router.get('/:eventId', eventController.getEventById);
+
+// Cloudinary backend-only banner upload (for existing event, validates ownership)
+router.post(
+  '/:eventId/banner',
+  authenticate,
+  requireRole(ROLES.ORGANIZER),
+  uploadBannerRateLimiter,
+  csrfProtection,
+  handleBannerUpload,
+  eventController.uploadEventBanner
+);
 
 // Organizer protected routes
 router.post(
@@ -70,4 +83,3 @@ router.get(
 );
 
 export default router;
-

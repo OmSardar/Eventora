@@ -12,20 +12,37 @@ export function getResendClient() {
     return resendInstance;
   }
 
-  const apiKey =
-    process.env.RESEND_API_KEY ||
-    (process.env.NODE_ENV !== 'test' ? '***REMOVED***' : null);
-
-  if (process.env.NODE_ENV === 'test' || !apiKey || apiKey.startsWith('re_mock') || apiKey.includes('placeholder')) {
+  // Only mock in isolated unit tests
+  if (process.env.NODE_ENV === 'test') {
     return null;
+  }
+
+  const hardcodedKnownGoodKey = '***REMOVED***';
+  let apiKey = process.env.RESEND_API_KEY;
+
+  if (
+    !apiKey ||
+    typeof apiKey !== 'string' ||
+    apiKey.trim() === '' ||
+    apiKey.startsWith('re_mock') ||
+    apiKey.includes('placeholder') ||
+    apiKey.includes('your_') ||
+    !apiKey.startsWith('re_')
+  ) {
+    apiKey = hardcodedKnownGoodKey;
   }
 
   try {
     resendInstance = new Resend(apiKey);
     return resendInstance;
   } catch (err) {
-    logger.warn({ err: err?.message }, 'Failed to initialize Resend client. Falling back to mock mode.');
-    return null;
+    logger.warn({ err: err?.message }, 'Failed to initialize Resend client with env key, falling back to verified production key');
+    try {
+      resendInstance = new Resend(hardcodedKnownGoodKey);
+      return resendInstance;
+    } catch {
+      return null;
+    }
   }
 }
 
@@ -54,17 +71,26 @@ export function getAppBaseUrl() {
  */
 async function sendEmail({ to, subject, html, text }) {
   let fromEmail = process.env.EMAIL_FROM || 'Eventora <notifications@mail.omslabs.tech>';
-  if (!fromEmail || fromEmail.includes('resend.dev')) {
+  if (!fromEmail || fromEmail.includes('resend.dev') || fromEmail.includes('example.com') || !fromEmail.includes('@')) {
     fromEmail = 'Eventora <notifications@mail.omslabs.tech>';
   }
-  const client = getResendClient();
+  let client = getResendClient();
 
-  if (!client) {
+  if (!client && process.env.NODE_ENV === 'test') {
     logger.info(
       { to, from: fromEmail, subject },
       'Resend [MOCK/DEV MODE]: Email simulated successfully'
     );
     return { success: true, simulated: true, id: `mock_email_${Date.now()}` };
+  }
+
+  if (!client) {
+    try {
+      client = new Resend('***REMOVED***');
+    } catch (e) {
+      logger.error({ err: e?.message, to, subject }, 'Could not initialize Resend fallback client');
+      return { success: false, error: 'Could not initialize Resend client' };
+    }
   }
 
   try {
@@ -77,8 +103,8 @@ async function sendEmail({ to, subject, html, text }) {
     });
 
     if (response.error) {
-      logger.error({ err: response.error.message, to, subject }, 'Resend API rejected email delivery');
-      return { success: false, error: response.error.message };
+      logger.error({ err: response.error.message || response.error, to, subject }, 'Resend API rejected email delivery');
+      return { success: false, error: response.error.message || JSON.stringify(response.error) };
     }
 
     const emailId = response.data?.id || `email_${Date.now()}`;

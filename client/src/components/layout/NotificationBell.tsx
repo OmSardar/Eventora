@@ -4,9 +4,11 @@ import React, { useState, useEffect, useRef } from "react";
 import { Bell, Check, CheckCheck, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
+import { useAuth } from "@/features/authentication/AuthContext";
 import { NotificationItem } from "@/types";
 
 export function NotificationBell() {
+  const { user } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState<number>(0);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
@@ -41,10 +43,14 @@ export function NotificationBell() {
   };
 
   useEffect(() => {
+    if (!user) {
+      setUnreadCount(0);
+      return;
+    }
     fetchUnreadCount();
     const interval = setInterval(fetchUnreadCount, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [user]);
 
   const handleToggle = () => {
     const nextState = !isOpen;

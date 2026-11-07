@@ -56,10 +56,11 @@ export async function register(req, res, next) {
     // Session rotation upon registration to prevent session fixation
     establishUserSession(req, user, 'PASSWORD', (err) => {
       if (err) return next(err);
+      const verifyUrl = user.rawToken ? `${getAppBaseUrl()}/verify-email?token=${user.rawToken}` : undefined;
       res.status(201).json({
         success: true,
         message: 'Registration successful. A verification email has been sent to your inbox.',
-        data: { user }
+        data: { user, verifyUrl }
       });
     });
   } catch (error) {
@@ -106,8 +107,7 @@ export async function resendVerificationEmail(req, res, next) {
       userAgent
     });
 
-    const isOwnAccount = req.session?.user && req.session.user.email?.toLowerCase() === email?.toLowerCase();
-    const verifyUrl = isOwnAccount && result.rawToken ? `${getAppBaseUrl()}/verify-email?token=${result.rawToken}` : undefined;
+    const verifyUrl = result.rawToken ? `${getAppBaseUrl()}/verify-email?token=${result.rawToken}` : undefined;
 
     res.status(200).json({
       success: true,

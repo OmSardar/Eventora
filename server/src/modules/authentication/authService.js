@@ -124,7 +124,8 @@ export async function register({ name, email, password, role, ipAddress, userAge
     email: user.email,
     role: user.role,
     emailVerified: user.emailVerified,
-    createdAt: user.createdAt
+    createdAt: user.createdAt,
+    rawToken
   };
 }
 

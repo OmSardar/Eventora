@@ -104,9 +104,10 @@ function VerifyEmailContent() {
         email: resendEmail.trim(),
       });
       const data = (res as any)?.data || res;
-      setResendFeedback(res.message || "A new verification link has been dispatched to your email.");
-      if (data?.verifyUrl) {
-        setDirectVerifyUrl(data.verifyUrl);
+      const verifyUrl = data?.verifyUrl || (res as any)?.verifyUrl;
+      setResendFeedback((res as any)?.message || "A new verification link has been dispatched to your email.");
+      if (verifyUrl) {
+        setDirectVerifyUrl(verifyUrl);
       }
       setResendCooldown(60);
     } catch (err: unknown) {

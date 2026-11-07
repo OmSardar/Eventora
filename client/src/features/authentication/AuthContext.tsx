@@ -18,7 +18,7 @@ interface AuthContextType {
     email: string;
     password: string;
     role: "ATTENDEE" | "ORGANIZER";
-  }) => Promise<User>;
+  }) => Promise<{ user: User; verifyUrl?: string }>;
   verifyMfaOtp: (params: { challengeId: string; otp: string }) => Promise<User>;
   verifyMfaTotp: (params: { challengeId: string; code: string }) => Promise<User>;
   verifyMfaRecovery: (params: { challengeId: string; recoveryCode: string }) => Promise<User>;
@@ -104,11 +104,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     email: string;
     password: string;
     role: "ATTENDEE" | "ORGANIZER";
-  }): Promise<User> => {
-    const res = await api.post<{ user: User }>("/auth/register", payload);
-    setUser(res.user);
+  }): Promise<{ user: User; verifyUrl?: string }> => {
+    const res = await api.post<{ user: User; verifyUrl?: string }>("/auth/register", payload);
+    const data = (res as any)?.data || res;
+    if (data.user) {
+      setUser(data.user);
+    }
     resetCsrfToken();
-    return res.user;
+    return data;
   };
 
   const logout = async () => {

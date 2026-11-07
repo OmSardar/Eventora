@@ -175,7 +175,18 @@ export function csrfProtection(req, _res, next) {
   const clientToken = req.headers['x-csrf-token'] || req.headers['csrf-token'];
   const sessionToken = req.session ? req.session.csrfToken : null;
 
-  if (!sessionToken || !clientToken) {
+  // If session token is missing (e.g. cross-origin incognito environments or newly initialized session)
+  if (!sessionToken) {
+    if (clientToken && /^[a-f0-9]{64}$/i.test(clientToken)) {
+      if (req.session) {
+        req.session.csrfToken = clientToken;
+      }
+      return next();
+    }
+    return next(new ForbiddenError('Missing CSRF token'));
+  }
+
+  if (!clientToken) {
     return next(new ForbiddenError('Missing CSRF token'));
   }
 

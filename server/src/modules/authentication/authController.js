@@ -325,6 +325,15 @@ export async function getMe(req, res) {
 
 export async function getCsrfToken(req, res) {
   const token = getOrCreateCsrfToken(req);
+  if (req.session && typeof req.session.save === 'function') {
+    req.session.save(() => {
+      res.status(200).json({
+        success: true,
+        data: { csrfToken: token }
+      });
+    });
+    return;
+  }
   res.status(200).json({
     success: true,
     data: { csrfToken: token }

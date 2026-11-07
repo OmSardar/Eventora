@@ -1,0 +1,38 @@
+{
+  "name": "eventora-server",
+  "version": "1.0.0",
+  "description": "Eventora Backend REST API",
+  "main": "src/server.js",
+  "type": "module",
+  "scripts": {
+    "dev": "nodemon src/server.js",
+    "start": "node src/server.js",
+    "seed": "node src/scripts/seed.js",
+    "test": "node --test --test-force-exit tests/**/*.test.js",
+    "test:unit": "node --test --test-force-exit tests/unit/**/*.test.js",
+    "test:integration": "node --test --test-force-exit tests/integration/**/*.test.js",
+    "test:security": "node --test --test-force-exit tests/security/**/*.test.js",
+    "lint": "echo \"Linting backend...\""
+  },
+  "dependencies": {
+    "argon2": "^0.41.1",
+    "connect-mongo": "^5.1.0",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.5.0",
+    "express-session": "^1.18.1",
+    "helmet": "^8.0.0",
+    "mongoose": "^8.9.5",
+    "pino": "^9.6.0",
+    "pino-http": "^10.4.0",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3",
+    "nodemon": "^3.1.9",
+    "pino-pretty": "^13.0.0",
+    "supertest": "^7.0.0"
+  }
+}

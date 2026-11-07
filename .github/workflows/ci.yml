@@ -1,0 +1,46 @@
+name: Eventora CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+
+    services:
+      mongodb:
+        image: mongo:7.0
+        ports:
+          - 27017:27017
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+
+      - name: Install Dependencies
+        run: |
+          npm install --prefix server
+          npm install --prefix client
+
+      - name: Run Backend Tests (Unit, Integration, Security)
+        run: npm test --prefix server
+        env:
+          PORT: 5000
+          NODE_ENV: test
+          MONGODB_URI: mongodb://localhost:27017/eventora_test
+          SESSION_SECRET: ci-test-session-secret-key-min-32-chars!
+          ALLOWED_ORIGINS: http://localhost:3000
+
+      - name: Build Frontend Application
+        run: npm run build --prefix client
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:5000/api/v1

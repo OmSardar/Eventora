@@ -1,0 +1,98 @@
+openapi: 3.0.3
+info:
+  title: Eventora REST API
+  description: Production-grade Event Booking and RSVP API.
+  version: 1.0.0
+servers:
+  - url: http://localhost:5000/api/v1
+    description: Local Development Server
+  - url: https://eventora-api.onrender.com/api/v1
+    description: Production Render Deployment
+paths:
+  /auth/csrf:
+    get:
+      summary: Get CSRF Synchronizer Token
+      responses:
+        '200':
+          description: CSRF Token issued
+  /auth/register:
+    post:
+      summary: Register User
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password, role]
+              properties:
+                name: { type: string }
+                email: { type: string, format: email }
+                password: { type: string }
+                role: { type: string, enum: [ATTENDEE, ORGANIZER] }
+      responses:
+        '201':
+          description: User registered successfully
+        '400':
+          description: Validation error
+        '409':
+          description: Email already in use
+  /auth/login:
+    post:
+      summary: User Login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string }
+      responses:
+        '200':
+          description: Login successful
+        '401':
+          description: Invalid email or password
+  /events:
+    get:
+      summary: Browse Events
+      parameters:
+        - name: search
+          in: query
+          schema: { type: string }
+        - name: category
+          in: query
+          schema: { type: string }
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 12 }
+      responses:
+        '200':
+          description: List of events
+    post:
+      summary: Create Event (Organizer Only)
+      responses:
+        '201':
+          description: Event created
+        '403':
+          description: Restricted to Organizers
+  /events/{eventId}/registrations:
+    post:
+      summary: Atomic Event RSVP (Attendee Only)
+      parameters:
+        - name: eventId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '201':
+          description: Registration confirmed
+        '400':
+          description: Event sold out or past
+        '409':
+          description: Already registered

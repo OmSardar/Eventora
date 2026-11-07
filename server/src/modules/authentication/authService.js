@@ -124,8 +124,7 @@ export async function register({ name, email, password, role, ipAddress, userAge
     email: user.email,
     role: user.role,
     emailVerified: user.emailVerified,
-    createdAt: user.createdAt,
-    rawToken
+    createdAt: user.createdAt
   };
 }
 
@@ -337,7 +336,7 @@ export async function login({ email, password, ipAddress, userAgent }) {
       otpHash = hashOtp(otp, challengeId);
       otpExpiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
 
-      sendEmailOtpEmail({
+      await sendEmailOtpEmail({
         email: user.email,
         name: user.name,
         otp
@@ -615,7 +614,7 @@ export async function resendMfaOtp({ challengeId }) {
   challenge.lastResendAt = new Date();
   await challenge.save();
 
-  sendEmailOtpEmail({
+  await sendEmailOtpEmail({
     email: user.email,
     name: user.name,
     otp
@@ -783,11 +782,16 @@ export async function initiateEmailOtpEnrollment({ userId, password, req }) {
     req.session.save((err) => (err ? reject(err) : resolve()));
   });
 
-  await sendEmailOtpEmail({
+  const emailResult = await sendEmailOtpEmail({
     email: user.email,
     name: user.name,
     otp
   });
+
+  if (!emailResult?.success) {
+    logger.error({ err: emailResult?.error, email: user.email }, 'Failed to deliver MFA setup OTP email');
+    throw new BadRequestError(`Unable to send verification email: ${emailResult?.error || 'Email dispatch failed'}. Please verify your email settings.`);
+  }
 
   return {
     success: true,

@@ -814,6 +814,9 @@ export default function SecuritySettingsPage() {
                     onChange={(e) => setOtpCodeInput(e.target.value)}
                     className="text-center font-mono text-lg tracking-widest"
                   />
+                  <p className="text-[11px] text-muted-foreground text-center pt-1">
+                    Did not receive the code? Please check your <strong>Spam</strong> or <strong>Promotions</strong> folder. Codes expire in 5 minutes.
+                  </p>
                 </div>
               </CardContent>
               <CardFooter className="flex justify-end gap-2 border-t border-border/40 pt-4">

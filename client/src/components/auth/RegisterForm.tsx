@@ -67,12 +67,8 @@ export function RegisterForm() {
     setIsLoading(true);
     setServerError(null);
     try {
-      const res = await registerAuth(data);
-      if (res.verifyUrl) {
-        router.push(res.verifyUrl);
-      } else {
-        router.push(`/verify-email?registered=true&email=${encodeURIComponent(data.email)}`);
-      }
+      await registerAuth(data);
+      router.push(`/verify-email?registered=true&email=${encodeURIComponent(data.email)}`);
     } catch (err: unknown) {
       const error = err as Error;
       setServerError(

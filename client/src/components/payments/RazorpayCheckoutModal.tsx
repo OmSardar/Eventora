@@ -76,38 +76,25 @@ export function RazorpayCheckoutButton({
 
       // 2. Load SDK script
       const scriptLoaded = await loadRazorpayScript();
+      if (!scriptLoaded || typeof window === "undefined" || !window.Razorpay) {
+        throw new Error("Failed to load Razorpay payment SDK. Please check your internet connection.");
+      }
 
       // Resolve public test key from backend response or environment variable
       const activeKeyId =
         orderData.keyId && !orderData.keyId.includes("placeholder")
           ? orderData.keyId
-          : process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID;
+          : (process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "rzp_test_Y5eWu9yUJZbd1c");
 
-      const isRealRazorpayOrder =
-        scriptLoaded &&
-        typeof window !== "undefined" &&
-        !!window.Razorpay &&
-        !!activeKeyId &&
-        activeKeyId.startsWith("rzp_") &&
-        !activeKeyId.includes("placeholder") &&
-        !orderData.orderId.startsWith("order_mock_");
-
-      if (!isRealRazorpayOrder) {
-        // Fallback simulator for offline test environments or when gateway credentials are not yet configured
-        setSimulatedOrder({ ...orderData, keyId: activeKeyId });
-        setIsSimulating(true);
-        setLoading(false);
-        return;
-      }
+      const isGenuineRazorpayOrder = orderData.orderId && !orderData.orderId.startsWith("order_mock_");
 
       // 3. Open Razorpay Standard Checkout in Test Mode
-      const options = {
+      const options: any = {
         key: activeKeyId,
         amount: orderData.amount,
         currency: orderData.currency || "INR",
         name: "Eventora",
         description: `Ticket RSVP for ${event.title}`,
-        order_id: orderData.orderId,
         prefill: {
           name: user?.name || "",
           email: user?.email || "",
@@ -122,15 +109,15 @@ export function RazorpayCheckoutButton({
           },
         },
         handler: async function (response: {
-          razorpay_order_id: string;
+          razorpay_order_id?: string;
           razorpay_payment_id: string;
-          razorpay_signature: string;
+          razorpay_signature?: string;
         }) {
           try {
             await api.post("/payments/verify", {
-              orderId: response.razorpay_order_id,
+              orderId: response.razorpay_order_id || orderData.orderId,
               paymentId: response.razorpay_payment_id,
-              signature: response.razorpay_signature,
+              signature: response.razorpay_signature || "simulated_test_signature",
             });
             onSuccess();
           } catch (err: any) {
@@ -141,19 +128,17 @@ export function RazorpayCheckoutButton({
         },
       };
 
-      try {
-        const razorpayInstance = new window.Razorpay(options);
-        razorpayInstance.on("payment.failed", function (response: any) {
-          onError(response.error?.description || "Payment failed. Please try again.");
-          setLoading(false);
-        });
-        razorpayInstance.open();
-      } catch (openErr: any) {
-        console.error("Razorpay popup initialization error:", openErr);
-        setSimulatedOrder(orderData);
-        setIsSimulating(true);
-        setLoading(false);
+      // Only pass order_id if it's an authentic Razorpay order ID to prevent Razorpay from rejecting mock IDs
+      if (isGenuineRazorpayOrder) {
+        options.order_id = orderData.orderId;
       }
+
+      const razorpayInstance = new window.Razorpay(options);
+      razorpayInstance.on("payment.failed", function (response: any) {
+        onError(response.error?.description || "Payment failed. Please try again.");
+        setLoading(false);
+      });
+      razorpayInstance.open();
     } catch (err: any) {
       onError(err?.message || "Failed to initiate checkout session.");
       setLoading(false);

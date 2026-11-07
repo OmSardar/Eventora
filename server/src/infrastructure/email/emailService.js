@@ -61,11 +61,13 @@ export function getAppBaseUrl() {
  * Dispatches an email via Resend or logs in simulation/mock mode.
  */
 async function sendEmail({ to, subject, html, text }) {
-  const fromEmail = process.env.EMAIL_FROM;
+  let fromEmail = process.env.EMAIL_FROM;
   if (!fromEmail) {
     logger.error('EMAIL_FROM is not defined in environment variables.');
     return { success: false, error: 'EMAIL_FROM environment variable missing' };
   }
+  // Strip any accidental surrounding quotes introduced during dashboard copy-paste
+  fromEmail = fromEmail.trim().replace(/^["']|["']$/g, '').trim();
 
   const client = getResendClient();
 
@@ -82,7 +84,10 @@ async function sendEmail({ to, subject, html, text }) {
     return { success: false, error: 'Resend client is not initialized. Please verify RESEND_API_KEY in .env' };
   }
 
-  const replyTo = process.env.EMAIL_REPLY_TO;
+  let replyTo = process.env.EMAIL_REPLY_TO;
+  if (replyTo) {
+    replyTo = replyTo.trim().replace(/^["']|["']$/g, '').trim();
+  }
 
   try {
     const payload = {

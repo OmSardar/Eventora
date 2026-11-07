@@ -56,11 +56,10 @@ export async function register(req, res, next) {
     // Session rotation upon registration to prevent session fixation
     establishUserSession(req, user, 'PASSWORD', (err) => {
       if (err) return next(err);
-      const verifyUrl = user.rawToken ? `${getAppBaseUrl()}/verify-email?token=${user.rawToken}` : undefined;
       res.status(201).json({
         success: true,
         message: 'Registration successful. A verification email has been sent to your inbox.',
-        data: { user, verifyUrl }
+        data: { user }
       });
     });
   } catch (error) {

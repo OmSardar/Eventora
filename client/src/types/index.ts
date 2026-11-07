@@ -77,6 +77,7 @@ export interface EventItem {
   isPast?: boolean;
   status: EventStatus;
   category?: string;
+  seatingType?: "GENERAL_ADMISSION" | "ASSIGNED_SEATING";
   isPaid?: boolean;
   ticketPrice?: number;
   currency?: string;
@@ -159,3 +160,30 @@ export interface ApiResponse<T = unknown> {
     details?: Array<{ field: string; message: string }>;
   };
 }
+
+export type SeatCategory = "VIP" | "PREMIUM" | "STANDARD";
+export type SeatStatus = "AVAILABLE" | "HELD" | "BOOKED" | "BLOCKED";
+
+export interface EventSeatItem {
+  id: string;
+  sectionId: string;
+  sectionName: string;
+  rowLabel: string;
+  seatNumber: number;
+  seatLabel: string;
+  category: SeatCategory;
+  price: number;
+  currency: string;
+  status: SeatStatus;
+  heldUntil?: string | null;
+}
+
+export interface SeatHoldItem {
+  id: string;
+  eventId: string;
+  seatIds: string[];
+  seatLabels: string[];
+  totalAmount: number;
+  expiresAt: string;
+}
+

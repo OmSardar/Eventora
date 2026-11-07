@@ -57,12 +57,27 @@ export function setResendClient(mock) {
  * Resolves the authoritative frontend application base URL.
  */
 export function getAppBaseUrl() {
-  const raw =
+  let raw =
     process.env.APP_BASE_URL ||
     process.env.CLIENT_URL ||
-    process.env.FRONTEND_URL ||
-    (process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',')[0].trim() : '') ||
-    (process.env.NODE_ENV === 'production' ? 'https://eventora-black.vercel.app' : 'http://localhost:3000');
+    process.env.FRONTEND_URL;
+
+  // In production or when deploying, never emit localhost links in customer-facing emails
+  if (process.env.NODE_ENV === 'production' && (!raw || raw.includes('localhost') || raw.includes('127.0.0.1'))) {
+    raw = 'https://eventora-black.vercel.app';
+  }
+
+  if (!raw) {
+    if (process.env.ALLOWED_ORIGINS) {
+      const prodOrigin = process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim()).find((o) => !o.includes('localhost'));
+      if (prodOrigin) raw = prodOrigin;
+    }
+  }
+
+  if (!raw) {
+    raw = process.env.NODE_ENV === 'production' ? 'https://eventora-black.vercel.app' : 'http://localhost:3000';
+  }
+
   return raw.replace(/\/+$/, '');
 }
 

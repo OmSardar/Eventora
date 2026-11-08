@@ -118,6 +118,9 @@ async function sendEmail({ to, subject, html, text }) {
  * Base email layout wrapper.
  */
 function wrapEmailTemplate({ title, badge, heading, bodyHtml, actionUrl, actionLabel, footerNotes }) {
+  const appBaseUrl = getAppBaseUrl();
+  const logoUrl = `${appBaseUrl}/brand/eventora-avatar.png`;
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -151,8 +154,17 @@ function wrapEmailTemplate({ title, badge, heading, bodyHtml, actionUrl, actionL
   <div class="wrapper">
     <div class="container">
       <div class="header">
-        <div class="brand-title">EVENTORA</div>
-        <div class="brand-tagline">Event Booking & RSVP Platform</div>
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="border-collapse: collapse;">
+          <tr>
+            <td style="vertical-align: middle; padding-right: 14px;">
+              <img src="${logoUrl}" alt="Eventora" width="40" height="40" style="display: block; width: 40px; height: 40px; border-radius: 9px; border: 0;" />
+            </td>
+            <td style="vertical-align: middle;">
+              <div class="brand-title">EVENTORA</div>
+              <div class="brand-tagline">Event Booking & RSVP Platform</div>
+            </td>
+          </tr>
+        </table>
       </div>
       <div class="content">
         ${badge ? `<div class="status-badge ${badge.type || ''}">${badge.text}</div>` : ''}

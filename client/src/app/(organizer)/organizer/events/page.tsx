@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
@@ -9,6 +9,7 @@ import { EventItem } from "@/types";
 import { formatDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import {
   Calendar,
   Clock,
@@ -21,6 +22,7 @@ import {
 export default function OrganizerEventsListPage() {
   const queryClient = useQueryClient();
   const { user, isLoading: authLoading } = useAuth();
+  const [eventToCancel, setEventToCancel] = useState<EventItem | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["organizer-events"],
@@ -143,11 +145,7 @@ export default function OrganizerEventsListPage() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => {
-                          if (confirm(`Are you sure you want to cancel "${evt.title}"?`)) {
-                            cancelEventMutation.mutate(evt._id || (evt.id as string));
-                          }
-                        }}
+                        onClick={() => setEventToCancel(evt)}
                         className="text-xs h-8 text-muted-foreground hover:text-destructive"
                       >
                         Cancel
@@ -160,6 +158,25 @@ export default function OrganizerEventsListPage() {
           })}
         </div>
       )}
+
+      {/* Styled Event Cancellation Modal */}
+      <ConfirmDialog
+        isOpen={!!eventToCancel}
+        onClose={() => setEventToCancel(null)}
+        onConfirm={() => {
+          if (eventToCancel) {
+            cancelEventMutation.mutate(eventToCancel._id || (eventToCancel.id as string), {
+              onSettled: () => setEventToCancel(null),
+            });
+          }
+        }}
+        isLoading={cancelEventMutation.isPending}
+        title="Cancel Event"
+        description={`Are you sure you want to cancel "${eventToCancel?.title}"? This will mark the event as cancelled, release any held seats, and notify registered attendees.`}
+        confirmText="Yes, Cancel Event"
+        cancelText="Keep Event"
+        variant="destructive"
+      />
     </div>
   );
 }

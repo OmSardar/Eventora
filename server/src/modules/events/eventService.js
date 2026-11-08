@@ -12,6 +12,10 @@ import {
   deleteCloudinaryAsset
 } from '../../infrastructure/cloudinary/cloudinaryService.js';
 import { validateImageBuffer } from '../../shared/validation/fileValidation.js';
+import {
+  MIN_EVENT_ADVANCE_MS,
+  MAX_EVENT_ADVANCE_MS
+} from '../../shared/validation/eventValidation.js';
 import { generateEventSeats } from '../seating/seatingService.js';
 import { logger } from '../../infrastructure/logging/logger.js';
 
@@ -35,8 +39,15 @@ export async function createEvent({
   userAgent
 }) {
   const parsedDate = new Date(eventDate);
-  if (parsedDate.getTime() <= Date.now()) {
-    throw new BadRequestError('Event date must be in the future.');
+  const now = Date.now();
+  const minAllowed = now + MIN_EVENT_ADVANCE_MS - 60000;
+  const maxAllowed = now + MAX_EVENT_ADVANCE_MS + 86400000;
+
+  if (parsedDate.getTime() < minAllowed) {
+    throw new BadRequestError('Event date must be scheduled at least 12 hours in advance.');
+  }
+  if (parsedDate.getTime() > maxAllowed) {
+    throw new BadRequestError('Event date cannot be scheduled more than 3 months in advance.');
   }
 
   const finalImage =
@@ -107,8 +118,15 @@ export async function updateEvent({
   // Validate date if updating
   if (updateData.eventDate) {
     const parsedDate = new Date(updateData.eventDate);
-    if (parsedDate.getTime() <= Date.now()) {
-      throw new BadRequestError('Event date must be in the future.');
+    const now = Date.now();
+    const minAllowed = now + MIN_EVENT_ADVANCE_MS - 60000;
+    const maxAllowed = now + MAX_EVENT_ADVANCE_MS + 86400000;
+
+    if (parsedDate.getTime() < minAllowed) {
+      throw new BadRequestError('Event date must be scheduled at least 12 hours in advance.');
+    }
+    if (parsedDate.getTime() > maxAllowed) {
+      throw new BadRequestError('Event date cannot be scheduled more than 3 months in advance.');
     }
     event.eventDate = parsedDate;
   }

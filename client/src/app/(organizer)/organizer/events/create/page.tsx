@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -27,13 +28,22 @@ const createEventSchema = z.object({
   title: z.string().min(3, "Title must be at least 3 characters").max(200),
   description: z.string().min(10, "Description must be at least 10 characters").max(5000),
   eventDate: z
-    .string()
+    .string({ required_error: "Event date is required" })
     .refine((val) => !isNaN(Date.parse(val)), {
       message: "Valid date format required",
     })
-    .refine((val) => new Date(val).getTime() > Date.now(), {
-      message: "Event date must be in the future",
-    }),
+    .refine(
+      (val) => new Date(val).getTime() >= Date.now() + 12 * 60 * 60 * 1000 - 60000,
+      {
+        message: "Event date must be scheduled at least 12 hours in advance",
+      }
+    )
+    .refine(
+      (val) => new Date(val).getTime() <= Date.now() + 90 * 24 * 60 * 60 * 1000 + 86400000,
+      {
+        message: "Event date cannot be scheduled more than 3 months in advance",
+      }
+    ),
   venue: z.string().min(3, "Venue must be at least 3 characters").max(300),
   seatLimit: z.coerce.number().int().min(1, "Seat limit must be at least 1"),
   category: z.string().optional().default("Technology"),
@@ -61,10 +71,24 @@ type CreateEventFormData = z.infer<typeof createEventSchema>;
 
 export default function CreateEventPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { user, isLoading: authLoading } = useAuth();
   const [serverError, setServerError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [seatingConfig, setSeatingConfig] = useState<SeatingConfigPayload | null>(null);
+
+  // Compute allowed date boundaries: min 12 hours from now, max 3 months (90 days)
+  const { minDateTime, maxDateTime } = useMemo(() => {
+    const min = new Date(Date.now() + 12 * 60 * 60 * 1000);
+    const max = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const format = (d: Date) =>
+      `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    return {
+      minDateTime: format(min),
+      maxDateTime: format(max),
+    };
+  }, []);
 
   const {
     register,
@@ -99,8 +123,11 @@ export default function CreateEventPage() {
         maxTicketsPerBooking: seatingConfig?.maxTicketsPerBooking || 6,
         seatingConfig: seatingConfig?.seatingType === "ASSIGNED_SEATING" ? seatingConfig : null,
       };
-      const res = await api.post<{ event: { _id: string } }>("/events", payload);
-      router.push(`/events/${res.event._id}`);
+      await api.post("/events", payload);
+      queryClient.invalidateQueries({ queryKey: ["organizer-events"] });
+      queryClient.invalidateQueries({ queryKey: ["events"] });
+      router.push("/organizer/events");
+      router.refresh();
     } catch (err: unknown) {
       const error = err as Error & { details?: Array<{ field: string; message: string }> };
       const detailMsg = error.details?.map((d) => `${d.field}: ${d.message}`).join(", ");
@@ -112,6 +139,8 @@ export default function CreateEventPage() {
 
   const populateSampleTemplate = () => {
     const futureDate = new Date(Date.now() + 14 * 86400000);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const formattedDate = `${futureDate.getFullYear()}-${pad(futureDate.getMonth() + 1)}-${pad(futureDate.getDate())}T${pad(futureDate.getHours())}:${pad(futureDate.getMinutes())}`;
     const sampleBanner =
       "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&w=1200&q=80";
 
@@ -123,7 +152,7 @@ export default function CreateEventPage() {
     setValue("venue", "Tech Commons Pavilion, Floor 4, Seattle, WA");
     setValue("seatLimit", 75);
     setValue("category", "Technology");
-    setValue("eventDate", futureDate.toISOString().slice(0, 16));
+    setValue("eventDate", formattedDate);
     setValue("bannerUrl", sampleBanner);
     setValue("image", {
       source: "URL",
@@ -282,11 +311,18 @@ export default function CreateEventPage() {
 
             {/* Date and Time */}
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-foreground">
-                Date & Start Time (Future Date) *
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-foreground">
+                  Date & Start Time *
+                </label>
+                <span className="text-[10px] text-muted-foreground">
+                  Min 12 hrs in advance • Max 3 months
+                </span>
+              </div>
               <Input
                 type="datetime-local"
+                min={minDateTime}
+                max={maxDateTime}
                 className="text-xs"
                 {...register("eventDate")}
               />

@@ -27,7 +27,24 @@ import { AlertCircle, ArrowLeft, ShieldAlert } from "lucide-react";
 const updateEventSchema = z.object({
   title: z.string().min(3).max(200).optional(),
   description: z.string().min(10).max(5000).optional(),
-  eventDate: z.string().optional(),
+  eventDate: z
+    .string()
+    .refine((val) => !val || !isNaN(Date.parse(val)), {
+      message: "Valid date format required",
+    })
+    .refine(
+      (val) => !val || new Date(val).getTime() >= Date.now() + 12 * 60 * 60 * 1000 - 60000,
+      {
+        message: "Event date must be scheduled at least 12 hours in advance",
+      }
+    )
+    .refine(
+      (val) => !val || new Date(val).getTime() <= Date.now() + 90 * 24 * 60 * 60 * 1000 + 86400000,
+      {
+        message: "Event date cannot be scheduled more than 3 months in advance",
+      }
+    )
+    .optional(),
   venue: z.string().min(3).max(300).optional(),
   seatLimit: z.coerce.number().int().min(1).optional(),
   category: z.string().optional(),
@@ -53,6 +70,19 @@ export default function EditEventPage() {
   const eventId = params.eventId as string;
 
   const [serverError, setServerError] = useState<string | null>(null);
+
+  // Compute allowed date boundaries: min 12 hours from now, max 3 months (90 days)
+  const { minDateTime, maxDateTime } = React.useMemo(() => {
+    const min = new Date(Date.now() + 12 * 60 * 60 * 1000);
+    const max = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const format = (d: Date) =>
+      `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    return {
+      minDateTime: format(min),
+      maxDateTime: format(max),
+    };
+  }, []);
 
   const { data, isLoading } = useQuery({
     queryKey: ["event", eventId],
@@ -284,8 +314,22 @@ export default function EditEventPage() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-foreground">Date & Time</label>
-              <Input type="datetime-local" className="text-xs" {...register("eventDate")} />
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-foreground">Date & Time</label>
+                <span className="text-[10px] text-muted-foreground">
+                  Min 12 hrs in advance • Max 3 months
+                </span>
+              </div>
+              <Input
+                type="datetime-local"
+                min={minDateTime}
+                max={maxDateTime}
+                className="text-xs"
+                {...register("eventDate")}
+              />
+              {errors.eventDate && (
+                <p className="text-[11px] text-destructive">{errors.eventDate.message}</p>
+              )}
             </div>
 
             <div className="space-y-1.5">

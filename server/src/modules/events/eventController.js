@@ -40,7 +40,10 @@ export async function createEvent(req, res, next) {
       image,
       isPaid,
       ticketPrice,
-      currency
+      currency,
+      seatingType,
+      maxTicketsPerBooking,
+      seatingConfig
     } = req.validatedBody;
     const organizerId = req.user.id;
     const ipAddress = req.ip;
@@ -58,6 +61,9 @@ export async function createEvent(req, res, next) {
       isPaid,
       ticketPrice,
       currency,
+      seatingType,
+      maxTicketsPerBooking,
+      seatingConfig,
       organizerId,
       ipAddress,
       userAgent

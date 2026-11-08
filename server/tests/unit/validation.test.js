@@ -75,6 +75,32 @@ describe('Validation Schemas (Zod)', () => {
       assert.equal(result.success, false);
     });
 
+    test('should reject event scheduled less than 12 hours in advance', () => {
+      const tooSoonDate = new Date(Date.now() + 2 * 3600 * 1000).toISOString(); // 2 hours ahead
+      const invalid = {
+        title: 'Too Soon Event',
+        description: 'An event scheduled with insufficient lead time.',
+        eventDate: tooSoonDate,
+        venue: 'Grand Hall Center',
+        seatLimit: 50
+      };
+      const result = createEventSchema.safeParse(invalid);
+      assert.equal(result.success, false);
+    });
+
+    test('should reject event scheduled more than 3 months in advance', () => {
+      const tooFarDate = new Date(Date.now() + 120 * 86400000).toISOString(); // ~4 months ahead
+      const invalid = {
+        title: 'Far Future Event',
+        description: 'An event scheduled beyond the 3-month window limit.',
+        eventDate: tooFarDate,
+        venue: 'Grand Hall Center',
+        seatLimit: 50
+      };
+      const result = createEventSchema.safeParse(invalid);
+      assert.equal(result.success, false);
+    });
+
     test('should reject seatLimit less than 1', () => {
       const futureDate = new Date(Date.now() + 86400000 * 5).toISOString();
       const invalid = {

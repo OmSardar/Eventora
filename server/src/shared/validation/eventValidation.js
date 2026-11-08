@@ -2,6 +2,11 @@ import { z } from 'zod';
 
 const safeUrlRegex = /^https?:\/\/[^\s$.?#].[^\s]*$/i;
 
+export const MIN_EVENT_ADVANCE_MS = 12 * 60 * 60 * 1000; // 12 hours
+export const MAX_EVENT_ADVANCE_MS = 90 * 24 * 60 * 60 * 1000; // 3 months (90 days)
+const CLOCK_SKEW_BUFFER_MS = 60 * 1000; // 1 minute
+const MAX_TIMEZONE_BUFFER_MS = 24 * 60 * 60 * 1000; // 24 hours
+
 export const eventImageSchema = z.object({
   source: z.enum(['URL', 'CLOUDINARY']).default('URL'),
   url: z
@@ -30,8 +35,11 @@ export const createEventSchema = z.object({
     .refine((val) => !isNaN(Date.parse(val)), {
       message: 'Invalid date format'
     })
-    .refine((val) => new Date(val).getTime() > Date.now(), {
-      message: 'Event date must be in the future'
+    .refine((val) => new Date(val).getTime() >= Date.now() + MIN_EVENT_ADVANCE_MS - CLOCK_SKEW_BUFFER_MS, {
+      message: 'Event date must be scheduled at least 12 hours in advance'
+    })
+    .refine((val) => new Date(val).getTime() <= Date.now() + MAX_EVENT_ADVANCE_MS + MAX_TIMEZONE_BUFFER_MS, {
+      message: 'Event date cannot be scheduled more than 3 months in advance'
     }),
   venue: z
     .string({ required_error: 'Venue is required' })
@@ -81,8 +89,11 @@ export const updateEventSchema = z.object({
     .refine((val) => !isNaN(Date.parse(val)), {
       message: 'Invalid date format'
     })
-    .refine((val) => new Date(val).getTime() > Date.now(), {
-      message: 'Event date must be in the future'
+    .refine((val) => new Date(val).getTime() >= Date.now() + MIN_EVENT_ADVANCE_MS - CLOCK_SKEW_BUFFER_MS, {
+      message: 'Event date must be scheduled at least 12 hours in advance'
+    })
+    .refine((val) => new Date(val).getTime() <= Date.now() + MAX_EVENT_ADVANCE_MS + MAX_TIMEZONE_BUFFER_MS, {
+      message: 'Event date cannot be scheduled more than 3 months in advance'
     })
     .optional(),
   venue: z.string().trim().min(3).max(300).optional(),

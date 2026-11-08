@@ -5,6 +5,7 @@ import app from './app.js';
 import { connectDatabase, disconnectDatabase } from './infrastructure/database/connection.js';
 import { logger } from './infrastructure/logging/logger.js';
 import { startHoldExpirationWorker, stopHoldExpirationWorker } from './modules/seating/holdExpirationWorker.js';
+import { startRefundReconciliationWorker, stopRefundReconciliationWorker } from './modules/payments/refundReconciliationWorker.js';
 
 const PORT = parseInt(process.env.PORT, 10) || 5000;
 
@@ -21,10 +22,14 @@ async function bootstrap() {
     // Start background worker to automatically sweep expired seat holds (every 30s)
     startHoldExpirationWorker(30000);
 
+    // Start background worker to automatically reconcile pending/failed refunds (every 60s)
+    startRefundReconciliationWorker(60000);
+
     // Graceful shutdown handling
     const shutdown = async (signal) => {
       logger.info(`Received ${signal}. Shutting down gracefully...`);
       stopHoldExpirationWorker();
+      stopRefundReconciliationWorker();
       server.close(async () => {
         logger.info('HTTP server closed');
         await disconnectDatabase();

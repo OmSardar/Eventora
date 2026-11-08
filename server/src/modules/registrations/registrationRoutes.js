@@ -27,6 +27,20 @@ router.get(
   registrationController.getMyRegistrations
 );
 
+router.get(
+  '/registrations/:registrationId/calendar',
+  authenticate,
+  requireRole(ROLES.ATTENDEE),
+  registrationController.downloadCalendarIcs
+);
+
+router.get(
+  '/registrations/:registrationId/calendar.ics',
+  authenticate,
+  requireRole(ROLES.ATTENDEE),
+  registrationController.downloadCalendarIcs
+);
+
 router.post(
   '/registrations/:registrationId/cancellation-request',
   authenticate,

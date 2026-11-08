@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/features/authentication/AuthContext";
 import { RegistrationItem } from "@/types";
 import { formatDate } from "@/lib/utils";
+import { downloadRegistrationCalendarIcs } from "@/lib/calendar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -15,6 +16,7 @@ import {
   AlertCircle,
   Armchair,
   Calendar,
+  Download,
   ExternalLink,
   Eye,
   Mail,
@@ -30,6 +32,7 @@ export default function MyRegistrationsPage() {
   const [cancelReason, setCancelReason] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
   const [selectedRegistration, setSelectedRegistration] = useState<RegistrationItem | null>(null);
+  const [downloadingCalendarId, setDownloadingCalendarId] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["my-registrations", user?.id],
@@ -124,9 +127,10 @@ export default function MyRegistrationsPage() {
             const event = typeof reg.eventId === "object" ? reg.eventId : null;
             if (!event) return null;
 
-            const isPendingCancellation = reg.status === "CANCELLATION_REQUESTED";
-            const isCancelled = reg.status === "CANCELLED";
-            const isConfirmed = reg.status === "CONFIRMED";
+            const isEventCancelled = event.status === "CANCELLED";
+            const isPendingCancellation = reg.status === "CANCELLATION_REQUESTED" && !isEventCancelled;
+            const isCancelled = reg.status === "CANCELLED" || isEventCancelled;
+            const isConfirmed = reg.status === "CONFIRMED" && !isEventCancelled;
 
             const booking = reg.booking;
             const bookingRef =
@@ -145,7 +149,9 @@ export default function MyRegistrationsPage() {
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge
                         variant={
-                          isConfirmed
+                          isEventCancelled
+                            ? "destructive"
+                            : isConfirmed
                             ? "success"
                             : isPendingCancellation
                             ? "warning"
@@ -153,7 +159,7 @@ export default function MyRegistrationsPage() {
                         }
                         className="text-[10px] uppercase font-bold"
                       >
-                        {reg.status}
+                        {isEventCancelled ? "Event Cancelled" : reg.status}
                       </Badge>
                       <Badge variant="outline" className="text-[10px]">
                         {event.category || "General"}
@@ -202,13 +208,20 @@ export default function MyRegistrationsPage() {
                       Registered on {formatDate(reg.createdAt)}
                     </p>
 
-                    {isPendingCancellation && (
+                    {isEventCancelled && (
+                      <p className="text-xs text-destructive bg-destructive/10 p-2.5 rounded-lg border border-destructive/20 font-medium">
+                        This event was cancelled by the organizer. Admission tickets are void.
+                        {reg.isPaid ? " A full refund has been initiated." : ""}
+                      </p>
+                    )}
+
+                    {!isEventCancelled && isPendingCancellation && (
                       <p className="text-xs text-amber-500 bg-amber-500/10 p-2 rounded border border-amber-500/20">
                         Cancellation request submitted. Pending organizer review.
                       </p>
                     )}
 
-                    {isCancelled && reg.decisionNote && (
+                    {!isEventCancelled && isCancelled && reg.decisionNote && (
                       <p className="text-xs text-muted-foreground italic">
                         Note: {reg.decisionNote}
                       </p>
@@ -229,13 +242,37 @@ export default function MyRegistrationsPage() {
                       <Ticket className="h-3.5 w-3.5" /> View Ticket Pass
                     </Button>
 
+                    {isConfirmed && !isEventCancelled && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={async () => {
+                          const regId = reg._id || (reg.id as string);
+                          try {
+                            setDownloadingCalendarId(regId);
+                            await downloadRegistrationCalendarIcs(regId, event.title);
+                          } catch (err: unknown) {
+                            const msg =
+                              err instanceof Error ? err.message : "Failed to download calendar file";
+                            alert(msg);
+                          } finally {
+                            setDownloadingCalendarId(null);
+                          }
+                        }}
+                        isLoading={downloadingCalendarId === (reg._id || reg.id)}
+                        className="w-full sm:w-auto text-xs gap-1.5 h-8 border-border text-foreground hover:bg-accent"
+                      >
+                        <Calendar className="h-3.5 w-3.5" /> Download (.ics)
+                      </Button>
+                    )}
+
                     <Link href={`/events/${event._id || event.id}`} className="w-full sm:w-auto">
                       <Button variant="outline" size="sm" className="w-full text-xs gap-1.5 h-8">
                         View Event <ExternalLink className="h-3 w-3" />
                       </Button>
                     </Link>
 
-                    {isConfirmed && (
+                    {isConfirmed && !isEventCancelled && (
                       <Button
                         variant="ghost"
                         size="sm"

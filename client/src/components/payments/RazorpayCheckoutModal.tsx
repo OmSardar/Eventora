@@ -92,9 +92,12 @@ export function RazorpayCheckoutButton({
       const activeKeyId =
         orderData.keyId && !orderData.keyId.includes("placeholder")
           ? orderData.keyId
-          : (process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "rzp_test_Y5eWu9yUJZbd1c");
+          : (process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "");
 
-      const isGenuineRazorpayOrder = orderData.orderId && !orderData.orderId.startsWith("order_mock_");
+      const isGenuineRazorpayOrder =
+        Boolean(activeKeyId) &&
+        Boolean(orderData.orderId) &&
+        !orderData.orderId.startsWith("order_mock_");
 
       // In sandbox/mock mode without Razorpay credentials, display interactive test simulator
       if (!isGenuineRazorpayOrder) {

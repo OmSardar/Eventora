@@ -25,8 +25,26 @@ lerna-debug.log*
 
 # Environment variables
 .env
+.env.*
 .env*.local
 !.env.example
+!.env.*.example
+
+# Private Keys, Certificates, and Credentials
+*.pem
+*.key
+*.crt
+*.cert
+*.pfx
+*.p12
+
+# Database Dumps and Backups
+*.dump
+*.sql
+*.tar.gz
+*.bak
+*.backup
+
 
 # OS generated files
 .DS_Store

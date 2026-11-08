@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { RegistrationItem, PopulatedPayment } from "@/types";
 import { formatDate } from "@/lib/utils";
+import { downloadRegistrationCalendarIcs } from "@/lib/calendar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -39,6 +40,8 @@ export function TicketDetailsModal({
   onClose,
   onRequestCancellation,
 }: TicketDetailsModalProps) {
+  const [isDownloadingCalendar, setIsDownloadingCalendar] = useState(false);
+
   // Handle ESC key to close modal
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -59,9 +62,10 @@ export function TicketDetailsModal({
       ? (registration.paymentId as PopulatedPayment)
       : null;
 
-  const isConfirmed = registration.status === "CONFIRMED";
-  const isPendingCancellation = registration.status === "CANCELLATION_REQUESTED";
-  const isCancelled = registration.status === "CANCELLED";
+  const isEventCancelled = event?.status === "CANCELLED";
+  const isPendingCancellation = registration.status === "CANCELLATION_REQUESTED" && !isEventCancelled;
+  const isCancelled = registration.status === "CANCELLED" || isEventCancelled;
+  const isConfirmed = registration.status === "CONFIRMED" && !isEventCancelled;
 
   const fallbackBanner =
     "https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&w=1200&q=80";
@@ -105,6 +109,22 @@ export function TicketDetailsModal({
     window.print();
   };
 
+  const handleDownloadCalendar = async () => {
+    if (!registration || isCancelled || isEventCancelled) return;
+    try {
+      setIsDownloadingCalendar(true);
+      await downloadRegistrationCalendarIcs(
+        registration._id || registration.id || "",
+        event?.title || "event"
+      );
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to download calendar event.";
+      alert(msg);
+    } finally {
+      setIsDownloadingCalendar(false);
+    }
+  };
+
   return (
     <div
       role="dialog"
@@ -143,7 +163,9 @@ export function TicketDetailsModal({
               <div className="flex items-center gap-2">
                 <Badge
                   variant={
-                    isConfirmed
+                    isEventCancelled
+                      ? "destructive"
+                      : isConfirmed
                       ? "success"
                       : isPendingCancellation
                       ? "warning"
@@ -151,9 +173,10 @@ export function TicketDetailsModal({
                   }
                   className="font-bold text-xs shadow-sm uppercase tracking-wider"
                 >
-                  {isConfirmed && "Confirmed Ticket"}
-                  {isPendingCancellation && "Cancellation Pending"}
-                  {isCancelled && "Cancelled & Void"}
+                  {isEventCancelled && "Event Cancelled & Void"}
+                  {!isEventCancelled && isConfirmed && "Confirmed Ticket"}
+                  {!isEventCancelled && isPendingCancellation && "Cancellation Pending"}
+                  {!isEventCancelled && isCancelled && "Cancelled & Void"}
                 </Badge>
                 {event?.category && (
                   <Badge variant="secondary" className="text-xs backdrop-blur-md bg-background/80">
@@ -200,11 +223,12 @@ export function TicketDetailsModal({
             <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-4 space-y-2 text-destructive">
               <div className="flex items-center gap-2 font-bold text-sm">
                 <Ban className="h-4 w-4" />
-                <span>Ticket Cancelled &amp; Void</span>
+                <span>{isEventCancelled ? "Event Cancelled by Organizer" : "Ticket Cancelled & Void"}</span>
               </div>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                This registration has been officially cancelled by the organizer. The seat hold has
-                been released back to available inventory.
+                {isEventCancelled
+                  ? "This event was officially cancelled by the organizer. All registrations and tickets for this event are void."
+                  : "This registration has been officially cancelled. The seat hold has been released back to available inventory."}
               </p>
               {registration.decisionNote && (
                 <div className="text-xs bg-background/50 p-2.5 rounded border border-destructive/20 text-foreground">
@@ -214,7 +238,7 @@ export function TicketDetailsModal({
               )}
               {registration.cancellationReason && (
                 <p className="text-[11px] text-muted-foreground">
-                  Reason specified by attendee: &quot;{registration.cancellationReason}&quot;
+                  {isEventCancelled ? "Cancellation details:" : "Reason specified by attendee:"} &quot;{registration.cancellationReason}&quot;
                 </p>
               )}
               {payment && (payment.refundStatus === "PROCESSED" || payment.refundStatus === "PENDING" || payment.status === "REFUND_PENDING") && (
@@ -223,9 +247,11 @@ export function TicketDetailsModal({
                   <span>Amount: ₹{(payment.amount / 100).toFixed(2)}</span>
                 </div>
               )}
-              <p className="text-[11px] text-destructive font-medium pt-1">
-                Notice: Re-booking this event with this account is not permitted.
-              </p>
+              {!isEventCancelled && (
+                <p className="text-[11px] text-destructive font-medium pt-1">
+                  Notice: Re-booking this event with this account is not permitted.
+                </p>
+              )}
             </div>
           )}
 
@@ -413,7 +439,7 @@ export function TicketDetailsModal({
 
         {/* Modal Actions Footer */}
         <div className="p-4 border-t border-border bg-card flex flex-wrap items-center justify-between gap-3 shrink-0">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
               size="sm"
@@ -423,6 +449,19 @@ export function TicketDetailsModal({
               <Printer className="h-3.5 w-3.5" />
               Print Pass
             </Button>
+
+            {isConfirmed && !isEventCancelled && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleDownloadCalendar}
+                isLoading={isDownloadingCalendar}
+                className="text-xs h-9 gap-1.5 border-primary/30 text-primary hover:bg-primary/10"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Download Calendar (.ics)
+              </Button>
+            )}
 
             {event && (
               <Link href={`/events/${event._id || event.id}`} target="_blank">
@@ -434,7 +473,7 @@ export function TicketDetailsModal({
           </div>
 
           <div className="flex items-center gap-2">
-            {isConfirmed && onRequestCancellation && (
+            {isConfirmed && !isEventCancelled && onRequestCancellation && (
               <Button
                 variant="destructive"
                 size="sm"

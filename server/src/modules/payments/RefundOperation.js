@@ -18,7 +18,7 @@ const refundOperationSchema = new mongoose.Schema(
     registrationId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Registration',
-      required: [true, 'Registration ID is required'],
+      default: null,
       index: true
     },
     eventId: {

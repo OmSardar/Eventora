@@ -132,3 +132,22 @@ export async function rejectCancellation(req, res, next) {
   }
 }
 
+export async function downloadCalendarIcs(req, res, next) {
+  try {
+    const { registrationId } = req.params;
+    const attendeeId = req.user.id;
+
+    const { icsContent, filename } = await registrationService.getRegistrationCalendarIcs({
+      registrationId,
+      attendeeId
+    });
+
+    res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.status(200).send(icsContent);
+  } catch (error) {
+    next(error);
+  }
+}
+

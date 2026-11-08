@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import mongoose from 'mongoose';
 import { Payment } from './Payment.js';
 import { SeatReservation } from './SeatReservation.js';
@@ -224,6 +225,83 @@ export async function createOrderWithSeatHold({
 }
 
 /**
+ * Initiates an authoritative, idempotent refund for a captured payment when an event is cancelled or capacity exceeded.
+ */
+export async function initiateAutoRefundForPayment({ payment, paymentId, event, reason }) {
+  // Prevent duplicate refund dispatches if payment is already in refund flow
+  if (
+    payment.status === PAYMENT_STATUS.REFUND_PENDING ||
+    payment.status === PAYMENT_STATUS.REFUNDED ||
+    payment.refundStatus === REFUND_STATUS.PROCESSED
+  ) {
+    return;
+  }
+
+  const idempotencyKey = `refund_pay_${payment._id}`;
+  let refundOp = await RefundOperation.findOne({ idempotencyKey });
+
+  if (!refundOp) {
+    try {
+      refundOp = await RefundOperation.create({
+        refundOpId: `rfop_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`,
+        paymentId: payment._id,
+        eventId: event?._id || payment.eventId,
+        attendeeId: payment.attendeeId,
+        organizerId: event?.organizerId || payment.attendeeId,
+        orderId: payment.orderId,
+        gatewayPaymentId: paymentId || payment.paymentId,
+        amount: payment.amount,
+        currency: payment.currency || 'INR',
+        reason,
+        status: 'INITIATED',
+        idempotencyKey,
+        lastAttemptAt: new Date()
+      });
+    } catch (dupErr) {
+      if (dupErr.code === 11000) {
+        refundOp = await RefundOperation.findOne({ idempotencyKey });
+      }
+    }
+  }
+
+  payment.status = PAYMENT_STATUS.REFUND_PENDING;
+  payment.refundStatus = REFUND_STATUS.PENDING;
+  payment.refundAmount = payment.amount;
+  payment.refundReason = reason;
+
+  try {
+    const refundResult = await initiateRazorpayRefund({
+      paymentId: paymentId || payment.paymentId,
+      amountInPaise: payment.amount,
+      notes: {
+        refundOpId: refundOp?.refundOpId,
+        reason
+      }
+    });
+
+    payment.refundId = refundResult?.id || `rfnd_${Date.now()}`;
+    if (refundOp && refundOp.status !== 'PROCESSED') {
+      refundOp.status = 'PENDING';
+      refundOp.gatewayRefundId = refundResult?.id || null;
+      refundOp.lastAttemptAt = new Date();
+      await refundOp.save();
+    }
+  } catch (refundErr) {
+    logger.error({ err: refundErr?.message }, 'Auto-refund dispatch failed');
+    payment.failureDetails = { code: 'REFUND_DISPATCH_FAILED', description: refundErr?.message };
+    if (refundOp && refundOp.status !== 'PROCESSED') {
+      refundOp.status = 'FAILED';
+      refundOp.retryCount += 1;
+      refundOp.lastError = refundErr?.message || 'Gateway error';
+      refundOp.nextRetryAt = new Date(Date.now() + 60000);
+      await refundOp.save();
+    }
+  }
+
+  await payment.save();
+}
+
+/**
  * Single authoritative confirmation service for captured payments.
  * Shared by client checkout verify callback AND asynchronous Razorpay webhooks.
  * Transitions payment, reservations, seat holds, and physical seats to confirmed status atomically.
@@ -276,10 +354,24 @@ export async function confirmCapturedPayment({
     }
   }
 
-  // 3. Resolve Event
+  // 3. Resolve Event and verify it is not CANCELLED
   const event = await Event.findById(payment.eventId);
   if (!event) {
     throw new NotFoundError('Associated event not found.');
+  }
+
+  if (event.status === EVENT_STATUS.CANCELLED) {
+    logger.warn(
+      { orderId: payment.orderId, paymentId, eventId: event._id },
+      'Payment captured for cancelled event. Initiating automated refund.'
+    );
+    await initiateAutoRefundForPayment({
+      payment,
+      paymentId,
+      event,
+      reason: 'Event was cancelled by organizer'
+    });
+    throw new BadRequestError('Event has been cancelled by the organizer. A full refund has been initiated.');
   }
 
   // 4. Resolve Reservation & SeatHold
@@ -356,24 +448,12 @@ export async function confirmCapturedPayment({
       { orderId: payment.orderId, paymentId, holdId: seatHold._id },
       'Payment captured after hold expired and seats were reassigned. Initiating automated refund.'
     );
-
-    try {
-      const refundResult = await initiateRazorpayRefund({
-        paymentId,
-        amountInPaise: payment.amount,
-        notes: { reason: 'Seats reassigned after hold expired' }
-      });
-      payment.status = PAYMENT_STATUS.REFUND_PENDING;
-      payment.refundStatus = REFUND_STATUS.PENDING;
-      payment.refundId = refundResult?.id || `rfnd_${Date.now()}`;
-      payment.refundAmount = payment.amount;
-      payment.refundReason = 'Seats reassigned after hold expired';
-    } catch (refundErr) {
-      logger.error({ err: refundErr?.message }, 'Auto-refund dispatch failed for reassigned seats');
-      payment.refundStatus = REFUND_STATUS.PENDING;
-      payment.failureDetails = { code: 'REFUND_DISPATCH_FAILED', description: refundErr?.message };
-    }
-    await payment.save();
+    await initiateAutoRefundForPayment({
+      payment,
+      paymentId,
+      event,
+      reason: 'Seats reassigned after hold expired'
+    });
     throw new BadRequestError('Seat hold expired and selected seats were assigned to another attendee. A full refund has been initiated.');
   }
 
@@ -401,129 +481,154 @@ export async function confirmCapturedPayment({
       { $inc: { seatsBooked: seatsNeeded } },
       { new: true }
     );
+  }
 
-    if (!updatedEvent) {
-      // Sold out: trigger refund
-      logger.warn({ orderId: payment.orderId, paymentId }, 'Payment captured but event capacity exceeded. Initiating refund.');
-      try {
-        const refundResult = await initiateRazorpayRefund({
-          paymentId,
-          amountInPaise: payment.amount,
-          notes: { reason: 'Capacity exceeded after hold expired' }
-        });
-        payment.status = PAYMENT_STATUS.REFUND_PENDING;
-        payment.refundStatus = REFUND_STATUS.PENDING;
-        payment.refundId = refundResult?.id || `rfnd_${Date.now()}`;
-        payment.refundAmount = payment.amount;
-        payment.refundReason = 'Capacity exceeded after hold expired';
-      } catch (refundErr) {
-        logger.error({ err: refundErr?.message }, 'Auto-refund dispatch failed for capacity exceeded');
-        payment.refundStatus = REFUND_STATUS.PENDING;
-        payment.failureDetails = { code: 'REFUND_DISPATCH_FAILED', description: refundErr?.message };
-      }
-      await payment.save();
-      throw new BadRequestError('Reservation expired and event is now sold out. A full refund has been initiated.');
-    }
+  if (!updatedEvent) {
+    const freshEvent = await Event.findById(payment.eventId).select('status');
+    const isCancelled = freshEvent?.status === EVENT_STATUS.CANCELLED;
+    const reason = isCancelled ? 'Event was cancelled by organizer' : 'Capacity exceeded after hold expired';
+    logger.warn({ orderId: payment.orderId, paymentId, isCancelled }, 'Payment captured but event cannot accept booking. Initiating refund.');
+    await initiateAutoRefundForPayment({
+      payment,
+      paymentId,
+      event,
+      reason
+    });
+    throw new BadRequestError(
+      isCancelled
+        ? 'Event has been cancelled by the organizer. A full refund has been initiated.'
+        : 'Reservation expired and event is now sold out. A full refund has been initiated.'
+    );
   }
 
   // 7. Execute durable state updates within transaction where supported
-  return withTransaction(async (session) => {
-    // A. Update Payment to CAPTURED
-    payment.status = PAYMENT_STATUS.CAPTURED;
-    payment.paymentId = paymentId;
-    payment.method = paymentMethod || payment.method || 'online';
+  let confirmedResult;
+  try {
+    confirmedResult = await withTransaction(async (session) => {
+      // Authoritative check inside transaction session to prevent race with concurrent cancelEvent
+      const activeEvent = await Event.findOne(
+        { _id: payment.eventId, status: EVENT_STATUS.PUBLISHED },
+        null,
+        session ? { session } : {}
+      );
 
-    // B. Update Reservation to CONFIRMED
-    if (reservation) {
-      reservation.status = RESERVATION_STATUS.CONFIRMED;
-      await reservation.save(session ? { session } : {});
-    }
+      if (!activeEvent) {
+        throw new Error('EVENT_CONCURRENTLY_CANCELLED');
+      }
 
-    // C. Create Confirmed Registration
-    const [registration] = await Registration.create(
-      [
-        {
-          eventId: payment.eventId,
+      // A. Update Payment to CAPTURED
+      payment.status = PAYMENT_STATUS.CAPTURED;
+      payment.paymentId = paymentId;
+      payment.method = paymentMethod || payment.method || 'online';
+
+      // B. Update Reservation to CONFIRMED
+      if (reservation) {
+        reservation.status = RESERVATION_STATUS.CONFIRMED;
+        await reservation.save(session ? { session } : {});
+      }
+
+      // C. Create Confirmed Registration
+      const [registration] = await Registration.create(
+        [
+          {
+            eventId: payment.eventId,
+            attendeeId: payment.attendeeId,
+            paymentId: payment._id,
+            isPaid: true,
+            ticketPrice: payment.amount / 100,
+            currency: payment.currency,
+            status: REGISTRATION_STATUS.CONFIRMED,
+            confirmationEmailSent: false
+          }
+        ],
+        session ? { session } : {}
+      );
+
+      payment.registrationId = registration._id;
+      await payment.save(session ? { session } : {});
+
+      // D. If assigned seating, confirm Booking and transition EventSeat records to BOOKED
+      let booking = null;
+      if (seatHold && canConfirmAssignedSeats) {
+        booking = await confirmBookingFromHold({
+          holdId: seatHold._id,
           attendeeId: payment.attendeeId,
           paymentId: payment._id,
           isPaid: true,
-          ticketPrice: payment.amount / 100,
-          currency: payment.currency,
-          status: REGISTRATION_STATUS.CONFIRMED,
-          confirmationEmailSent: false
-        }
-      ],
-      session ? { session } : {}
-    );
-
-    payment.registrationId = registration._id;
-    await payment.save(session ? { session } : {});
-
-    // D. If assigned seating, confirm Booking and transition EventSeat records to BOOKED
-    let booking = null;
-    if (seatHold && canConfirmAssignedSeats) {
-      booking = await confirmBookingFromHold({
-        holdId: seatHold._id,
-        attendeeId: payment.attendeeId,
-        paymentId: payment._id,
-        isPaid: true,
-        session
-      });
-      booking.registrationId = registration._id;
-      await booking.save(session ? { session } : {});
-    }
-
-    return { payment, registration, booking };
-  }).then(async (result) => {
-    // 8. Post-confirmation Notifications & Audit (non-blocking)
-    try {
-      const attendeeUser = await User.findById(payment.attendeeId).select('name email');
-      if (attendeeUser && attendeeUser.email) {
-        sendRegistrationConfirmationEmail({
-          registrationId: result.registration._id.toString(),
-          attendee: { name: attendeeUser.name, email: attendeeUser.email },
-          event: updatedEvent || event,
-          seatNumbers: result.booking?.seatLabels || []
-        }).catch(() => {});
+          session
+        });
+        booking.registrationId = registration._id;
+        await booking.save(session ? { session } : {});
       }
 
-      dispatchNotification({
-        userId: payment.attendeeId,
-        type: NOTIFICATION_TYPE.BOOKING_CONFIRMED,
-        title: 'Booking Confirmed!',
-        message: `Payment confirmed for "${(updatedEvent || event).title}". Your seat is reserved.`,
-        eventId: payment.eventId,
-        registrationId: result.registration._id
-      });
+      return { payment, registration, booking };
+    });
+  } catch (txErr) {
+    if (txErr.message === 'EVENT_CONCURRENTLY_CANCELLED') {
+      await Event.findOneAndUpdate(
+        { _id: payment.eventId, seatsBooked: { $gt: 0 } },
+        { $inc: { seatsBooked: -seatsNeeded } }
+      ).catch(() => {});
 
-      await logAuditEvent({
-        action: source === 'WEBHOOK' ? 'PAYMENT_CAPTURED_VIA_WEBHOOK' : 'PAYMENT_CAPTURED_AND_BOOKING_CONFIRMED',
-        actorId: payment.attendeeId,
-        actorRole: 'ATTENDEE',
-        resourceId: payment._id,
-        resourceType: 'Payment',
-        ipAddress,
-        userAgent,
-        details: {
-          orderId: payment.orderId,
-          paymentId,
-          registrationId: result.registration._id,
-          bookingId: result.booking?._id,
-          amount: payment.amount,
-          source
-        }
+      await initiateAutoRefundForPayment({
+        payment,
+        paymentId,
+        event,
+        reason: 'Event was cancelled during payment confirmation'
       });
-    } catch (notifErr) {
-      logger.warn({ err: notifErr?.message }, 'Notification dispatch failed safely for paid booking');
+      throw new BadRequestError('Event has been cancelled by the organizer. A full refund has been initiated.');
+    }
+    throw txErr;
+  }
+
+  // 8. Post-confirmation Notifications & Audit (non-blocking)
+  try {
+    const attendeeUser = await User.findById(payment.attendeeId).select('name email');
+    if (attendeeUser && attendeeUser.email) {
+      sendRegistrationConfirmationEmail({
+        registrationId: confirmedResult.registration._id.toString(),
+        attendee: { name: attendeeUser.name, email: attendeeUser.email },
+        event: updatedEvent || event,
+        seatNumbers: confirmedResult.booking?.seatLabels || []
+      }).catch(() => {});
     }
 
-    return {
-      success: true,
-      payment: result.payment,
-      registration: result.registration,
-      booking: result.booking
-    };
-  });
+    dispatchNotification({
+      userId: payment.attendeeId,
+      type: NOTIFICATION_TYPE.BOOKING_CONFIRMED,
+      title: 'Booking Confirmed!',
+      message: `Payment confirmed for "${(updatedEvent || event).title}". Your seat is reserved.`,
+      eventId: payment.eventId,
+      registrationId: confirmedResult.registration._id
+    });
+
+    await logAuditEvent({
+      action: source === 'WEBHOOK' ? 'PAYMENT_CAPTURED_VIA_WEBHOOK' : 'PAYMENT_CAPTURED_AND_BOOKING_CONFIRMED',
+      actorId: payment.attendeeId,
+      actorRole: 'ATTENDEE',
+      resourceId: payment._id,
+      resourceType: 'Payment',
+      ipAddress,
+      userAgent,
+      details: {
+        orderId: payment.orderId,
+        paymentId,
+        registrationId: confirmedResult.registration._id,
+        bookingId: confirmedResult.booking?._id,
+        amount: payment.amount,
+        source
+      }
+    });
+  } catch (notifErr) {
+    logger.warn({ err: notifErr?.message }, 'Notification dispatch failed safely for paid booking');
+  }
+
+  return {
+    success: true,
+    payment: confirmedResult.payment,
+    registration: confirmedResult.registration,
+    booking: confirmedResult.booking
+  };
 }
 
 /**
@@ -635,14 +740,28 @@ export async function reconcileExpiredReservations() {
 let isRefundReconciliationRunning = false;
 
 /**
- * Reconciles pending refund operations across the platform.
+ * Returns whether a refund reconciliation sweep is currently in flight.
+ */
+export function getIsRefundReconciliationRunning() {
+  return isRefundReconciliationRunning;
+}
+
+/**
+ * Resets the refund reconciliation concurrency lock (for testing).
+ */
+export function resetRefundReconciliationRunning() {
+  isRefundReconciliationRunning = false;
+}
+
+/**
+ * Reconciles pending and failed refund operations across the platform.
  * Concurrency-safe: skips sweep if an active reconciliation is in flight.
  * Checks authoritative state on Razorpay before initiating any retry.
  */
 export async function reconcilePendingRefunds() {
   if (isRefundReconciliationRunning) {
     logger.info('Refund reconciliation sweep already in progress. Skipping overlapping execution.');
-    return { status: 'in_progress', reconciledCount: 0 };
+    return { status: 'in_progress', reconciledCount: 0, failedCount: 0 };
   }
 
   isRefundReconciliationRunning = true;
@@ -651,7 +770,7 @@ export async function reconcilePendingRefunds() {
 
   try {
     const pendingOps = await RefundOperation.find({
-      status: { $in: ['INITIATED', 'PENDING'] },
+      status: { $in: ['INITIATED', 'PENDING', 'FAILED'] },
       $or: [
         { nextRetryAt: null },
         { nextRetryAt: { $lte: new Date() } }
@@ -669,7 +788,15 @@ export async function reconcilePendingRefunds() {
         }
 
         // Authoritative query against Razorpay to see if payment was already refunded
-        const rzpPayment = await fetchRazorpayPayment(op.gatewayPaymentId);
+        let rzpPayment = null;
+        try {
+          rzpPayment = await fetchRazorpayPayment(op.gatewayPaymentId);
+        } catch (fetchErr) {
+          logger.warn(
+            { err: fetchErr?.message, gatewayPaymentId: op.gatewayPaymentId },
+            'Failed to fetch payment status during refund reconciliation'
+          );
+        }
 
         // If Razorpay already reports payment as refunded:
         if (rzpPayment && (rzpPayment.amount_refunded >= op.amount || rzpPayment.refund_status === 'full')) {
@@ -682,21 +809,23 @@ export async function reconcilePendingRefunds() {
             refundAmount: rzpPayment.amount_refunded || op.amount
           });
 
-          await Registration.findByIdAndUpdate(op.registrationId, {
-            refundStatus: REFUND_STATUS.PROCESSED
-          });
+          if (op.registrationId) {
+            await Registration.findByIdAndUpdate(op.registrationId, {
+              refundStatus: REFUND_STATUS.PROCESSED
+            });
+          }
 
           reconciledCount++;
           continue;
         }
 
-        // If payment was not refunded and operation is INITIATED or PENDING, attempt safe dispatch
+        // If payment was not refunded and operation is eligible, attempt safe dispatch
         const refundResult = await initiateRazorpayRefund({
           paymentId: op.gatewayPaymentId,
           amountInPaise: op.amount,
           notes: {
             refundOpId: op.refundOpId,
-            registrationId: op.registrationId.toString(),
+            registrationId: op.registrationId ? op.registrationId.toString() : '',
             reconciled: 'true'
           }
         });
@@ -722,8 +851,13 @@ export async function reconcilePendingRefunds() {
         );
         op.retryCount += 1;
         op.lastError = opErr?.message || 'Reconciliation failed';
-        // Exponential backoff
-        op.nextRetryAt = new Date(Date.now() + Math.pow(2, op.retryCount) * 60000);
+        if (op.retryCount >= op.maxRetries) {
+          op.status = 'MANUAL_RECONCILIATION_REQUIRED';
+        } else {
+          op.status = 'FAILED';
+          // Exponential backoff
+          op.nextRetryAt = new Date(Date.now() + Math.pow(2, op.retryCount) * 60000);
+        }
         await op.save();
         failedCount++;
       }

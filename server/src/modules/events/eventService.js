@@ -1,6 +1,23 @@
+import crypto from 'crypto';
 import mongoose from 'mongoose';
 import { Event } from './Event.js';
-import { EVENT_STATUS } from '../../shared/constants/status.js';
+import { Registration } from '../registrations/Registration.js';
+import { Booking } from '../bookings/Booking.js';
+import { EventSeat } from '../seating/EventSeat.js';
+import { SeatHold } from '../seating/SeatHold.js';
+import { Payment } from '../payments/Payment.js';
+import { RefundOperation } from '../payments/RefundOperation.js';
+import { User } from '../users/User.js';
+import {
+  EVENT_STATUS,
+  REGISTRATION_STATUS,
+  BOOKING_STATUS,
+  SEAT_STATUS,
+  SEAT_HOLD_STATUS,
+  PAYMENT_STATUS,
+  REFUND_STATUS,
+  NOTIFICATION_TYPE
+} from '../../shared/constants/status.js';
 import {
   BadRequestError,
   ForbiddenError,
@@ -18,6 +35,10 @@ import {
 } from '../../shared/validation/eventValidation.js';
 import { generateEventSeats } from '../seating/seatingService.js';
 import { logger } from '../../infrastructure/logging/logger.js';
+import { dispatchNotification } from '../notifications/notificationService.js';
+import { sendCancellationRefundEmail } from '../../infrastructure/email/emailService.js';
+import { initiateRazorpayRefund } from '../payments/razorpayService.js';
+import { withTransaction } from '../../infrastructure/database/transaction.js';
 
 export async function createEvent({
   title,
@@ -220,12 +241,16 @@ export async function cancelEvent({
   ipAddress,
   userAgent
 }) {
+  if (!mongoose.Types.ObjectId.isValid(eventId)) {
+    throw new BadRequestError('Invalid event ID format.');
+  }
+
   const event = await Event.findById(eventId);
   if (!event) {
     throw new NotFoundError('Event not found.');
   }
 
-  // Strict ownership check
+  // Strict ownership check: organizer can only cancel their own events
   if (event.organizerId.toString() !== organizerId.toString()) {
     throw new ForbiddenError('You are not authorized to cancel this event.');
   }
@@ -234,9 +259,211 @@ export async function cancelEvent({
     throw new BadRequestError('Event is already cancelled.');
   }
 
-  event.status = EVENT_STATUS.CANCELLED;
-  await event.save();
+  // 1. Fetch all affected active/pending registrations before mutating
+  const affectedRegistrations = await Registration.find({
+    eventId: event._id,
+    status: { $in: [REGISTRATION_STATUS.CONFIRMED, REGISTRATION_STATUS.CANCELLATION_REQUESTED] }
+  })
+    .populate('attendeeId', 'name email')
+    .lean();
 
+  const now = new Date();
+
+  // 2. Perform database state transitions safely within transaction (or standalone fallback)
+  await withTransaction(async (session) => {
+    const opts = session ? { session } : {};
+
+    // A. Update Event status and reset active bookings count to 0 atomically
+    const transitionedEvent = await Event.findOneAndUpdate(
+      {
+        _id: event._id,
+        status: { $ne: EVENT_STATUS.CANCELLED }
+      },
+      {
+        $set: {
+          status: EVENT_STATUS.CANCELLED,
+          seatsBooked: 0
+        }
+      },
+      { new: true, ...opts }
+    );
+
+    if (!transitionedEvent) {
+      throw new BadRequestError('Event is already cancelled.');
+    }
+
+    event.status = EVENT_STATUS.CANCELLED;
+    event.seatsBooked = 0;
+
+    // B. Synchronize all active/pending registrations to CANCELLED
+    await Registration.updateMany(
+      {
+        eventId: event._id,
+        status: { $in: [REGISTRATION_STATUS.CONFIRMED, REGISTRATION_STATUS.CANCELLATION_REQUESTED] }
+      },
+      {
+        $set: {
+          status: REGISTRATION_STATUS.CANCELLED,
+          cancellationReason: 'Event was cancelled by the organizer',
+          decisionNote: 'Event cancelled by organizer',
+          decidedBy: new mongoose.Types.ObjectId(organizerId),
+          decidedAt: now,
+          seatReleased: true,
+          seatReleasedAt: now
+        }
+      },
+      opts
+    );
+
+    // C. Synchronize all associated Bookings to CANCELLED
+    await Booking.updateMany(
+      {
+        eventId: event._id,
+        status: { $in: [BOOKING_STATUS.CONFIRMED, BOOKING_STATUS.PENDING_PAYMENT] }
+      },
+      {
+        $set: {
+          status: BOOKING_STATUS.CANCELLED,
+          cancelledAt: now
+        }
+      },
+      opts
+    );
+
+    // D. Release all active seat holds
+    await SeatHold.updateMany(
+      {
+        eventId: event._id,
+        status: SEAT_HOLD_STATUS.ACTIVE
+      },
+      {
+        $set: {
+          status: SEAT_HOLD_STATUS.RELEASED,
+          releasedAt: now
+        }
+      },
+      opts
+    );
+
+    // E. Transition all assigned EventSeats to BLOCKED so they cannot be booked
+    await EventSeat.updateMany(
+      {
+        eventId: event._id
+      },
+      {
+        $set: {
+          status: SEAT_STATUS.BLOCKED,
+          holdId: null,
+          heldBy: null,
+          heldUntil: null,
+          isBlocked: true
+        }
+      },
+      opts
+    );
+  });
+
+  // 3. Process refunds for paid registrations (preserving payment/refund records)
+  for (const reg of affectedRegistrations) {
+    if ((reg.isPaid || reg.paymentId) && reg.paymentId) {
+      try {
+        const payment = await Payment.findById(reg.paymentId);
+        if (
+          payment &&
+          payment.status === PAYMENT_STATUS.CAPTURED &&
+          payment.refundStatus !== REFUND_STATUS.PROCESSED
+        ) {
+          const idempotencyKey = `refund_reg_${reg._id}`;
+          let refundOp = await RefundOperation.findOne({ idempotencyKey });
+
+          if (!refundOp) {
+            try {
+              refundOp = await RefundOperation.create({
+                refundOpId: `rfop_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`,
+                paymentId: payment._id,
+                registrationId: reg._id,
+                eventId: event._id,
+                attendeeId: reg.attendeeId?._id || reg.attendeeId,
+                organizerId: new mongoose.Types.ObjectId(organizerId),
+                orderId: payment.orderId,
+                gatewayPaymentId: payment.paymentId,
+                amount: payment.amount,
+                currency: payment.currency || 'INR',
+                reason: 'Event was cancelled by the organizer',
+                status: 'INITIATED',
+                idempotencyKey,
+                lastAttemptAt: new Date()
+              });
+            } catch (dupErr) {
+              if (dupErr.code === 11000) {
+                refundOp = await RefundOperation.findOne({ idempotencyKey });
+              } else {
+                logger.error({ err: dupErr?.message, regId: reg._id }, 'Failed to create refundOp on event cancel');
+              }
+            }
+          }
+
+          payment.status = PAYMENT_STATUS.REFUND_PENDING;
+          payment.refundStatus = REFUND_STATUS.PENDING;
+          payment.refundAmount = payment.amount;
+          payment.refundReason = 'Event was cancelled by the organizer';
+          await payment.save();
+
+          await Registration.findByIdAndUpdate(reg._id, {
+            $set: { refundStatus: REFUND_STATUS.PENDING }
+          });
+
+          if (refundOp && refundOp.status !== 'PROCESSED') {
+            try {
+              const refundResult = await initiateRazorpayRefund({
+                paymentId: payment.paymentId,
+                amountInPaise: payment.amount,
+                notes: {
+                  refundOpId: refundOp.refundOpId,
+                  registrationId: reg._id.toString(),
+                  reason: 'Event was cancelled by the organizer'
+                }
+              });
+
+              refundOp.status = 'PENDING';
+              refundOp.gatewayRefundId = refundResult?.id || null;
+              refundOp.lastAttemptAt = new Date();
+              await refundOp.save();
+
+              if (refundResult?.id) {
+                payment.refundId = refundResult.id;
+                await payment.save();
+              }
+            } catch (refundErr) {
+              logger.error(
+                { err: refundErr?.message, registrationId: reg._id, refundOpId: refundOp?.refundOpId },
+                'Razorpay refund API call failed on event cancellation'
+              );
+              refundOp.status = 'FAILED';
+              refundOp.retryCount += 1;
+              refundOp.lastError = refundErr?.message || 'Gateway error';
+              refundOp.nextRetryAt = new Date(Date.now() + 60000);
+              refundOp.failureDetails = {
+                code: 'GATEWAY_ERROR',
+                description: refundErr?.message
+              };
+              await refundOp.save();
+
+              payment.failureDetails = {
+                code: 'REFUND_DISPATCH_FAILED',
+                description: refundErr?.message
+              };
+              await payment.save();
+            }
+          }
+        }
+      } catch (payErr) {
+        logger.error({ err: payErr?.message, regId: reg._id }, 'Error processing refund on event cancellation');
+      }
+    }
+  }
+
+  // 4. Log Audit Event
   await logAuditEvent({
     action: 'EVENT_CANCELLED',
     actorId: organizerId,
@@ -245,8 +472,61 @@ export async function cancelEvent({
     resourceType: 'Event',
     ipAddress,
     userAgent,
-    details: { title: event.title }
+    details: {
+      title: event.title,
+      affectedRegistrationsCount: affectedRegistrations.length
+    }
   });
+
+  // 5. Post-persistence Notifications & Emails (non-blocking)
+  for (const reg of affectedRegistrations) {
+    const attendeeId = reg.attendeeId?._id || reg.attendeeId;
+
+    // A. In-app notification
+    if (attendeeId) {
+      dispatchNotification({
+        userId: attendeeId,
+        type: NOTIFICATION_TYPE.EVENT_CANCELLED,
+        title: 'Event Cancelled',
+        message: `The event "${event.title}" has been cancelled by the organizer.`,
+        eventId: event._id,
+        registrationId: reg._id
+      }).catch((notifErr) => {
+        logger.error(
+          { err: notifErr?.message, userId: attendeeId, eventId: event._id },
+          'Failed to dispatch in-app notification for cancelled event'
+        );
+      });
+    }
+
+    // B. Transactional cancellation email via Resend
+    const attendeeEmail = reg.attendeeId?.email;
+    const attendeeName = reg.attendeeId?.name;
+
+    if (attendeeEmail) {
+      (async () => {
+        try {
+          const paymentDoc = reg.paymentId ? await Payment.findById(reg.paymentId) : null;
+          await sendCancellationRefundEmail({
+            attendeeEmail,
+            attendeeName,
+            event,
+            registrationId: reg._id.toString(),
+            isPaid: reg.isPaid,
+            refundAmount: paymentDoc?.amount || (reg.ticketPrice ? Math.round(reg.ticketPrice * 100) : 0),
+            refundId: paymentDoc?.refundId || null,
+            currency: paymentDoc?.currency || reg.currency || 'INR',
+            reason: 'Event was cancelled by the organizer'
+          });
+        } catch (emailErr) {
+          logger.error(
+            { err: emailErr?.message, registrationId: reg._id },
+            'Non-blocking event cancellation email failed'
+          );
+        }
+      })();
+    }
+  }
 
   return event;
 }

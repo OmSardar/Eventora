@@ -101,5 +101,31 @@ describe('Transactional Email Service (Unit Tests)', () => {
     const client = getResendClient();
     assert.equal(client, null);
   });
+
+  test('SECURITY: escapeHtml properly sanitizes potential XSS/HTML injection payloads in email templates', () => {
+    const maliciousName = '<script>alert("pwned")</script>John';
+    const maliciousEvent = {
+      ...mockEvent,
+      title: '<img src=x onerror=alert(1)>Hacking Conference',
+      venue: '<b onmouseover=evil()>Room "A" & "B"</b>'
+    };
+
+    const html = buildConfirmationEmailHtml({
+      attendeeName: maliciousName,
+      event: maliciousEvent,
+      registrationId: mockRegistrationId,
+      appBaseUrl: 'http://localhost:3000',
+      seatNumbers: ['A1<script>']
+    });
+
+    assert.ok(!html.includes('<script>alert("pwned")</script>'));
+    assert.ok(html.includes('&lt;script&gt;alert(&quot;pwned&quot;)&lt;/script&gt;John'));
+    assert.ok(!html.includes('<img src=x onerror=alert(1)>'));
+    assert.ok(html.includes('&lt;img src=x onerror=alert(1)&gt;Hacking Conference'));
+    assert.ok(!html.includes('<b onmouseover=evil()>'));
+    assert.ok(html.includes('&lt;b onmouseover=evil()&gt;Room &quot;A&quot; &amp; &quot;B&quot;&lt;/b&gt;'));
+    assert.ok(!html.includes('A1<script>'));
+    assert.ok(html.includes('A1&lt;script&gt;'));
+  });
 });
 

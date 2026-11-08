@@ -31,6 +31,7 @@ import {
   sendCancellationRefundEmail
 } from '../../infrastructure/email/emailService.js';
 import { logger } from '../../infrastructure/logging/logger.js';
+import { generateEventIcs } from '../../shared/utils/icsGenerator.js';
 
 function canUseReplicaSetTransactions() {
   const topologyType = mongoose.connection?.client?.topology?.description?.type;
@@ -679,4 +680,60 @@ export async function getPendingCancellationRequestsForOrganizer(organizerId) {
     .populate('attendeeId', 'name email')
     .sort({ updatedAt: -1 })
     .lean();
+}
+
+/**
+ * Generates an RFC 5545 compliant .ics calendar file for an attendee's confirmed registration.
+ * Validates ownership and strictly rejects cancelled events or registrations.
+ */
+export async function getRegistrationCalendarIcs({ registrationId, attendeeId }) {
+  if (!mongoose.Types.ObjectId.isValid(registrationId)) {
+    throw new BadRequestError('Invalid registration ID format.');
+  }
+
+  const registration = await Registration.findById(registrationId)
+    .populate({
+      path: 'eventId',
+      populate: { path: 'organizerId', select: 'name email' }
+    });
+
+  if (!registration) {
+    throw new NotFoundError('Registration not found.');
+  }
+
+  // Authorization: Only the attendee who owns this registration can download its calendar pass
+  if (registration.attendeeId.toString() !== attendeeId.toString()) {
+    throw new ForbiddenError('You are not authorized to download the calendar pass for this registration.');
+  }
+
+  const event = registration.eventId;
+  if (!event) {
+    throw new NotFoundError('Associated event not found.');
+  }
+
+  // Business Rule: Do not allow cancelled events or registrations to be downloaded as upcoming confirmed events
+  if (event.status === EVENT_STATUS.CANCELLED || registration.status === REGISTRATION_STATUS.CANCELLED) {
+    throw new BadRequestError('Cannot download calendar pass for a cancelled event or registration.');
+  }
+
+  // Fetch optional booking details (seats, custom reference)
+  const booking = await Booking.findOne({
+    $or: [
+      { registrationId: registration._id },
+      { attendeeId: new mongoose.Types.ObjectId(attendeeId), eventId: event._id }
+    ]
+  }).lean();
+
+  const icsContent = generateEventIcs({ event, registration, booking });
+  const slug = (event.title || 'event')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .substring(0, 50);
+  const filename = `${slug || 'event'}.ics`;
+
+  return {
+    icsContent,
+    filename
+  };
 }

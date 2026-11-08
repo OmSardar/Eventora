@@ -45,6 +45,23 @@ export function setResendClient(mock) {
 }
 
 /**
+ * Escapes characters with special meaning in HTML to prevent XSS and HTML injection.
+ * @param {any} val
+ * @returns {string}
+ */
+export function escapeHtml(val) {
+  if (val === null || val === undefined) return '';
+  const str = String(val);
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+
+/**
  * Resolves the authoritative frontend application base URL.
  */
 export function getAppBaseUrl() {
@@ -136,13 +153,15 @@ async function sendEmail({ to, subject, html, text }) {
 function wrapEmailTemplate({ title, badge, heading, bodyHtml, actionUrl, actionLabel, footerNotes }) {
   const appBaseUrl = getAppBaseUrl();
   const logoUrl = `${appBaseUrl}/brand/eventora-avatar.png`;
+  const safeTitle = escapeHtml(title);
+  const safeHeading = escapeHtml(heading);
 
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${title}</title>
+  <title>${safeTitle}</title>
   <style>
     body { margin: 0; padding: 0; width: 100% !important; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #09090b; color: #fafafa; }
     .wrapper { width: 100% !important; background-color: #09090b; padding: 24px 12px; box-sizing: border-box; }
@@ -198,7 +217,7 @@ function wrapEmailTemplate({ title, badge, heading, bodyHtml, actionUrl, actionL
       </div>
       <div class="content">
         ${badge ? `<div class="status-badge ${badge.type || ''}">${badge.text}</div>` : ''}
-        <h1>${heading}</h1>
+        <h1>${safeHeading}</h1>
         ${bodyHtml}
         ${actionUrl && actionLabel ? `
         <div class="btn-container">
@@ -239,19 +258,24 @@ function formatEventDate(date) {
 export function buildConfirmationEmailHtml({ attendeeName, event, registrationId, appBaseUrl, seatNumbers = [] }) {
   const formattedDate = formatEventDate(event.eventDate);
   const ticketsUrl = `${appBaseUrl.replace(/\/$/, '')}/attendee/registrations`;
-  const seatsDisplay = Array.isArray(seatNumbers) && seatNumbers.length > 0 ? seatNumbers.join(', ') : null;
+  const seatsDisplay = Array.isArray(seatNumbers) && seatNumbers.length > 0 ? seatNumbers.map(escapeHtml).join(', ') : null;
+
+  const safeAttendee = escapeHtml(attendeeName || 'there');
+  const safeTitle = escapeHtml(event.title);
+  const safeVenue = escapeHtml(event.venue);
+  const safeRegId = escapeHtml(registrationId);
 
   return wrapEmailTemplate({
-    title: `RSVP Confirmed - ${event.title}`,
+    title: `RSVP Confirmed - ${safeTitle}`,
     badge: { text: 'RSVP Confirmed', type: 'success' },
     heading: 'Your seat is reserved!',
     bodyHtml: `
-      <p>Hi ${attendeeName || 'there'},</p>
-      <p>Great news! Your registration for <strong>${event.title}</strong> has been successfully confirmed. We have reserved your seat.</p>
+      <p>Hi ${safeAttendee},</p>
+      <p>Great news! Your registration for <strong>${safeTitle}</strong> has been successfully confirmed. We have reserved your seat.</p>
       
       <div style="background-color: #222226; border: 1px solid #333338; border-radius: 10px; padding: 18px 16px; margin: 20px 0; box-sizing: border-box; width: 100%;">
         <div style="font-weight: 700; color: #ffffff; font-size: 16px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid #333338; line-height: 1.35; word-break: break-word;">
-          ${event.title}
+          ${safeTitle}
         </div>
 
         <div style="margin-bottom: 12px;">
@@ -261,7 +285,7 @@ export function buildConfirmationEmailHtml({ attendeeName, event, registrationId
 
         <div style="margin-bottom: 12px;">
           <div style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: #a1a1aa; margin-bottom: 3px;">Venue / Location</div>
-          <div style="font-size: 13px; font-weight: 500; color: #f4f4f5; line-height: 1.4; word-break: break-word;">${event.venue}</div>
+          <div style="font-size: 13px; font-weight: 500; color: #f4f4f5; line-height: 1.4; word-break: break-word;">${safeVenue}</div>
         </div>
 
         ${seatsDisplay ? `
@@ -273,7 +297,7 @@ export function buildConfirmationEmailHtml({ attendeeName, event, registrationId
 
         <div>
           <div style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: #a1a1aa; margin-bottom: 4px;">Booking Reference</div>
-          <div style="display: inline-block; background-color: #121214; border: 1px solid #3f3f46; color: #38bdf8; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 13px; font-weight: 700; padding: 6px 12px; border-radius: 6px; letter-spacing: 0.5px; word-break: break-all;">${registrationId}</div>
+          <div style="display: inline-block; background-color: #121214; border: 1px solid #3f3f46; color: #38bdf8; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 13px; font-weight: 700; padding: 6px 12px; border-radius: 6px; letter-spacing: 0.5px; word-break: break-all;">${safeRegId}</div>
         </div>
       </div>
 
@@ -348,14 +372,15 @@ export async function sendRegistrationConfirmationEmail({ registrationId, attend
 
 export async function sendEmailVerificationEmail({ email, name, token }) {
   const appBaseUrl = getAppBaseUrl();
-  const verifyUrl = `${appBaseUrl}/verify-email?token=${token}`;
+  const verifyUrl = `${appBaseUrl}/verify-email?token=${encodeURIComponent(token || '')}`;
+  const safeName = escapeHtml(name || 'there');
 
   const html = wrapEmailTemplate({
     title: 'Verify your Eventora account email',
     badge: { text: 'Email Verification', type: 'success' },
     heading: 'Confirm your email address',
     bodyHtml: `
-      <p>Hi ${name || 'there'},</p>
+      <p>Hi ${safeName},</p>
       <p>Thank you for joining Eventora. Please click the button below to verify your email address and activate all features on your account.</p>
       <p style="font-size: 13px; color: #a1a1aa;">This verification link will expire in <strong>30 minutes</strong> and can only be used once.</p>
       <div style="margin-top: 18px; padding: 12px 14px; background-color: rgba(255, 255, 255, 0.03); border: 1px solid #27272a; border-radius: 6px; font-size: 11px; color: #71717a; line-height: 1.5; word-break: break-all; overflow-wrap: anywhere;">
@@ -410,12 +435,21 @@ export async function sendLoginNotificationEmail({
   const locationStr = formatLocationDisplay(location);
   const deviceDisplay = device?.phoneModel || device?.summary || `${device?.browser || 'Browser'} on ${device?.os || 'OS'}`;
 
+  const safeName = escapeHtml(name || 'there');
+  const safeEmail = escapeHtml(email);
+  const safeIp = escapeHtml(ipAddress || 'Unknown');
+  const safeLocation = escapeHtml(locationStr);
+  const safePhone = device?.phoneModel ? escapeHtml(device.phoneModel) : null;
+  const safeOs = escapeHtml(device?.os || 'Unknown OS');
+  const safeBrowser = `${escapeHtml(device?.browser || 'Browser')} ${escapeHtml(device?.browserVersion || '')}`.trim();
+  const safeAuthFactor = escapeHtml(authFactor || 'Password');
+
   const html = wrapEmailTemplate({
     title: 'New sign-in to your Eventora account',
     badge: { text: 'Security Alert', type: '' },
     heading: 'New sign-in detected',
     bodyHtml: `
-      <p>Hi ${name || 'there'},</p>
+      <p>Hi ${safeName},</p>
       <p>A new sign-in to your Eventora account was recently completed:</p>
       
       <div style="background-color: #222226; border: 1px solid #333338; border-radius: 10px; padding: 18px 16px; margin: 20px 0; box-sizing: border-box; width: 100%;">
@@ -425,7 +459,7 @@ export async function sendLoginNotificationEmail({
 
         <div style="margin-bottom: 12px;">
           <div style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: #a1a1aa; margin-bottom: 3px;">Account</div>
-          <div style="font-size: 13px; color: #f4f4f5; word-break: break-all;">${email}</div>
+          <div style="font-size: 13px; color: #f4f4f5; word-break: break-all;">${safeEmail}</div>
         </div>
 
         <div style="margin-bottom: 12px;">
@@ -435,34 +469,34 @@ export async function sendLoginNotificationEmail({
 
         <div style="margin-bottom: 12px;">
           <div style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: #a1a1aa; margin-bottom: 4px;">IP Address</div>
-          <div style="display: inline-block; background-color: #121214; border: 1px solid #3f3f46; color: #38bdf8; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 6px; letter-spacing: 0.3px;">${ipAddress || 'Unknown'}</div>
+          <div style="display: inline-block; background-color: #121214; border: 1px solid #3f3f46; color: #38bdf8; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 6px; letter-spacing: 0.3px;">${safeIp}</div>
         </div>
 
         <div style="margin-bottom: 12px;">
           <div style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: #a1a1aa; margin-bottom: 3px;">Location</div>
-          <div style="font-size: 13px; color: #f4f4f5; line-height: 1.4;">${locationStr}</div>
+          <div style="font-size: 13px; color: #f4f4f5; line-height: 1.4;">${safeLocation}</div>
         </div>
 
-        ${device?.phoneModel ? `
+        ${safePhone ? `
         <div style="margin-bottom: 12px;">
           <div style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: #38bdf8; margin-bottom: 3px;">Phone / Device Model</div>
-          <div style="font-size: 13px; font-weight: 700; color: #38bdf8;">${device.phoneModel}</div>
+          <div style="font-size: 13px; font-weight: 700; color: #38bdf8;">${safePhone}</div>
         </div>
         ` : ''}
 
         <div style="margin-bottom: 12px;">
           <div style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: #a1a1aa; margin-bottom: 3px;">Operating System</div>
-          <div style="font-size: 13px; color: #f4f4f5;">${device?.os || 'Unknown OS'}</div>
+          <div style="font-size: 13px; color: #f4f4f5;">${safeOs}</div>
         </div>
 
         <div style="margin-bottom: 12px;">
           <div style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: #a1a1aa; margin-bottom: 3px;">Browser</div>
-          <div style="font-size: 13px; color: #f4f4f5;">${device?.browser || 'Browser'} ${device?.browserVersion || ''}</div>
+          <div style="font-size: 13px; color: #f4f4f5;">${safeBrowser}</div>
         </div>
 
         <div>
           <div style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: #a1a1aa; margin-bottom: 3px;">Authentication Method</div>
-          <div style="font-size: 13px; color: #10b981; font-weight: 600;">${authFactor || 'Password'}</div>
+          <div style="font-size: 13px; color: #10b981; font-weight: 600;">${safeAuthFactor}</div>
         </div>
       </div>
 
@@ -490,14 +524,17 @@ export async function sendLoginNotificationEmail({
 // -------------------------------------------------------------
 
 export async function sendEmailOtpEmail({ email, name, otp }) {
+  const safeName = escapeHtml(name || 'there');
+  const safeOtp = escapeHtml(otp);
+
   const html = wrapEmailTemplate({
-    title: `Your Eventora authentication code: ${otp}`,
+    title: `Your Eventora authentication code: ${safeOtp}`,
     badge: { text: 'Two-Factor Authentication', type: 'success' },
     heading: 'Your verification code',
     bodyHtml: `
-      <p>Hi ${name || 'there'},</p>
+      <p>Hi ${safeName},</p>
       <p>Use the six-digit verification code below to complete your sign-in to Eventora:</p>
-      <div class="otp-code">${otp}</div>
+      <div class="otp-code">${safeOtp}</div>
       <p style="font-size: 13px; color: #a1a1aa; text-align: center;">
         This code is valid for <strong>5 minutes</strong> and can only be used once. Never share this code with anyone.
       </p>
@@ -523,14 +560,16 @@ export async function sendMfaEnabledAlertEmail({ email, name, factor }) {
   const appBaseUrl = getAppBaseUrl();
   const securityUrl = `${appBaseUrl}/settings/security`;
   const factorName = factor === 'TOTP' ? 'Authenticator App (TOTP)' : 'Email OTP';
+  const safeName = escapeHtml(name || 'there');
+  const safeFactorName = escapeHtml(factorName);
 
   const html = wrapEmailTemplate({
     title: 'Two-Factor Authentication Enabled',
     badge: { text: 'Security Confirmation', type: 'success' },
     heading: 'Two-Factor Authentication Enabled',
     bodyHtml: `
-      <p>Hi ${name || 'there'},</p>
-      <p>Two-factor authentication via <strong>${factorName}</strong> has been successfully enabled for your Eventora account.</p>
+      <p>Hi ${safeName},</p>
+      <p>Two-factor authentication via <strong>${safeFactorName}</strong> has been successfully enabled for your Eventora account.</p>
       <p>Your account now has an extra layer of protection. You will be prompted for your second factor whenever you sign in from a new session.</p>
     `,
     actionUrl: securityUrl,
@@ -556,14 +595,16 @@ export async function sendMfaDisabledAlertEmail({ email, name, factor }) {
   const appBaseUrl = getAppBaseUrl();
   const securityUrl = `${appBaseUrl}/settings/security`;
   const factorName = factor === 'TOTP' ? 'Authenticator App (TOTP)' : 'Email OTP';
+  const safeName = escapeHtml(name || 'there');
+  const safeFactorName = escapeHtml(factorName);
 
   const html = wrapEmailTemplate({
     title: 'Security Alert: Two-Factor Authentication Disabled',
     badge: { text: 'Security Alert', type: 'alert' },
     heading: 'Two-Factor Authentication Disabled',
     bodyHtml: `
-      <p>Hi ${name || 'there'},</p>
-      <p style="color: #ef4444; font-weight: 600;">Two-factor authentication via ${factorName} has been turned off for your Eventora account.</p>
+      <p>Hi ${safeName},</p>
+      <p style="color: #ef4444; font-weight: 600;">Two-factor authentication via ${safeFactorName} has been turned off for your Eventora account.</p>
       <p>If you did not perform this action, please re-enable two-factor authentication and change your password immediately.</p>
     `,
     actionUrl: securityUrl,
@@ -588,13 +629,14 @@ export async function sendMfaDisabledAlertEmail({ email, name, factor }) {
 export async function sendRecoveryCodesRegeneratedAlertEmail({ email, name }) {
   const appBaseUrl = getAppBaseUrl();
   const securityUrl = `${appBaseUrl}/settings/security`;
+  const safeName = escapeHtml(name || 'there');
 
   const html = wrapEmailTemplate({
     title: 'Security Alert: MFA Recovery Codes Regenerated',
     badge: { text: 'Security Alert', type: 'alert' },
     heading: 'MFA Recovery Codes Regenerated',
     bodyHtml: `
-      <p>Hi ${name || 'there'},</p>
+      <p>Hi ${safeName},</p>
       <p>A new set of emergency recovery codes was just generated for your Eventora account.</p>
       <p>All previously generated recovery codes have been immediately invalidated and can no longer be used.</p>
       <p>If you did not regenerate these codes, please secure your account immediately.</p>
@@ -638,20 +680,27 @@ export async function sendCancellationRefundEmail({
   const formattedDate = formatEventDate(event.eventDate);
   const formattedRefund = refundAmount > 0 ? (refundAmount / 100).toFixed(2) : '0.00';
 
+  const safeAttendee = escapeHtml(attendeeName || 'there');
+  const safeTitle = escapeHtml(event.title);
+  const safeVenue = escapeHtml(event.venue);
+  const safeRegId = escapeHtml(registrationId);
+  const safeRefundId = escapeHtml(refundId);
+  const safeCurrency = escapeHtml(currency);
+
   const html = wrapEmailTemplate({
-    title: `Booking Cancelled - ${event.title}`,
+    title: `Booking Cancelled - ${safeTitle}`,
     badge: {
       text: isPaid && refundAmount > 0 ? 'Booking Cancelled & Refund Initiated' : 'Booking Cancelled',
       type: 'alert'
     },
     heading: 'Your booking has been cancelled',
     bodyHtml: `
-      <p>Hi ${attendeeName || 'there'},</p>
-      <p>Your booking for <strong>${event.title}</strong> has been cancelled and your seat has been released.</p>
+      <p>Hi ${safeAttendee},</p>
+      <p>Your booking for <strong>${safeTitle}</strong> has been cancelled and your seat has been released.</p>
       
       <div style="background-color: #222226; border: 1px solid #333338; border-radius: 10px; padding: 18px 16px; margin: 20px 0; box-sizing: border-box; width: 100%;">
         <div style="font-weight: 700; color: #ffffff; font-size: 16px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid #333338; line-height: 1.35; word-break: break-word;">
-          ${event.title}
+          ${safeTitle}
         </div>
 
         <div style="margin-bottom: 12px;">
@@ -661,23 +710,23 @@ export async function sendCancellationRefundEmail({
 
         <div style="margin-bottom: 12px;">
           <div style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: #a1a1aa; margin-bottom: 3px;">Venue / Location</div>
-          <div style="font-size: 13px; font-weight: 500; color: #f4f4f5; line-height: 1.4; word-break: break-word;">${event.venue}</div>
+          <div style="font-size: 13px; font-weight: 500; color: #f4f4f5; line-height: 1.4; word-break: break-word;">${safeVenue}</div>
         </div>
 
         <div style="margin-bottom: 12px;">
           <div style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: #a1a1aa; margin-bottom: 4px;">Booking Reference</div>
-          <div style="display: inline-block; background-color: #121214; border: 1px solid #3f3f46; color: #38bdf8; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 13px; font-weight: 700; padding: 6px 12px; border-radius: 6px; letter-spacing: 0.5px; word-break: break-all;">${registrationId}</div>
+          <div style="display: inline-block; background-color: #121214; border: 1px solid #3f3f46; color: #38bdf8; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 13px; font-weight: 700; padding: 6px 12px; border-radius: 6px; letter-spacing: 0.5px; word-break: break-all;">${safeRegId}</div>
         </div>
 
         ${
           isPaid && refundAmount > 0
             ? `<div style="margin-bottom: 12px;">
                  <div style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: #10b981; margin-bottom: 4px;">Refund Amount</div>
-                 <div style="display: inline-block; background-color: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); color: #10b981; font-weight: 700; font-size: 14px; padding: 4px 10px; border-radius: 6px;">₹${formattedRefund} ${currency}</div>
+                 <div style="display: inline-block; background-color: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); color: #10b981; font-weight: 700; font-size: 14px; padding: 4px 10px; border-radius: 6px;">₹${formattedRefund} ${safeCurrency}</div>
                </div>
-               ${refundId ? `<div>
+               ${safeRefundId ? `<div>
                  <div style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: #a1a1aa; margin-bottom: 4px;">Refund ID</div>
-                 <div style="display: inline-block; background-color: #121214; border: 1px solid #3f3f46; color: #a1a1aa; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; padding: 4px 10px; border-radius: 6px; word-break: break-all;">${refundId}</div>
+                 <div style="display: inline-block; background-color: #121214; border: 1px solid #3f3f46; color: #a1a1aa; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; padding: 4px 10px; border-radius: 6px; word-break: break-all;">${safeRefundId}</div>
                </div>` : ''}`
             : ''
         }
@@ -686,7 +735,7 @@ export async function sendCancellationRefundEmail({
       ${
         isPaid && refundAmount > 0
           ? `<p style="font-size: 13px; color: #a1a1aa; margin-top: 16px;">
-               A full refund of <strong>₹${formattedRefund} ${currency}</strong> has been initiated back to your original payment method. Depending on your bank or payment gateway, this typically appears on your account statement within 5–7 business days.
+               A full refund of <strong>₹${formattedRefund} ${safeCurrency}</strong> has been initiated back to your original payment method. Depending on your bank or payment gateway, this typically appears on your account statement within 5–7 business days.
              </p>`
           : ''
       }
@@ -721,14 +770,18 @@ export async function sendCancellationRefundEmail({
 // -------------------------------------------------------------
 
 export async function sendPasswordResetOtpEmail({ email, name, otp }) {
+  const safeName = escapeHtml(name || 'there');
+  const safeEmail = escapeHtml(email);
+  const safeOtp = escapeHtml(otp);
+
   const html = wrapEmailTemplate({
-    title: `Your Eventora password reset code: ${otp}`,
+    title: `Your Eventora password reset code: ${safeOtp}`,
     badge: { text: 'Password Reset', type: 'warning' },
     heading: 'Reset your Eventora password',
     bodyHtml: `
-      <p>Hi ${name || 'there'},</p>
-      <p>We received a request to reset the password for your Eventora account (<strong>${email}</strong>). Use the six-digit verification code below to proceed:</p>
-      <div class="otp-code">${otp}</div>
+      <p>Hi ${safeName},</p>
+      <p>We received a request to reset the password for your Eventora account (<strong>${safeEmail}</strong>). Use the six-digit verification code below to proceed:</p>
+      <div class="otp-code">${safeOtp}</div>
       <p style="font-size: 13px; color: #a1a1aa; text-align: center;">
         This code is valid for <strong>10 minutes</strong>. If you did not request a password reset, you can safely ignore this email — your account remains secure.
       </p>
@@ -756,14 +809,18 @@ export async function sendPasswordChangedAlertEmail({ email, name, ipAddress, us
   const methodLabel = method === 'RESET_WITH_OTP'
     ? 'Forgot Password Verification (Email OTP)'
     : 'Account Security Settings (Current Password Verified)';
+  const safeName = escapeHtml(name || 'there');
+  const safeEmail = escapeHtml(email);
+  const safeMethod = escapeHtml(methodLabel);
+  const safeIp = escapeHtml(ipAddress);
 
   const html = wrapEmailTemplate({
     title: 'Your Eventora password has been updated',
     badge: { text: 'Security Alert', type: 'success' },
     heading: 'Your password was successfully updated',
     bodyHtml: `
-      <p>Hi ${name || 'there'},</p>
-      <p>This email confirms that the password for your Eventora account (<strong>${email}</strong>) has been successfully updated.</p>
+      <p>Hi ${safeName},</p>
+      <p>This email confirms that the password for your Eventora account (<strong>${safeEmail}</strong>) has been successfully updated.</p>
       
       <div style="background-color: #222226; border: 1px solid #333338; border-radius: 10px; padding: 18px 16px; margin: 20px 0; box-sizing: border-box; width: 100%;">
         <div style="font-weight: 700; color: #ffffff; font-size: 15px; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid #333338; line-height: 1.35;">
@@ -772,7 +829,7 @@ export async function sendPasswordChangedAlertEmail({ email, name, ipAddress, us
 
         <div style="margin-bottom: 12px;">
           <div style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: #a1a1aa; margin-bottom: 3px;">Verification Method</div>
-          <div style="font-size: 13px; color: #f4f4f5; line-height: 1.4;">${methodLabel}</div>
+          <div style="font-size: 13px; color: #f4f4f5; line-height: 1.4;">${safeMethod}</div>
         </div>
 
         <div style="margin-bottom: 12px;">
@@ -783,7 +840,7 @@ export async function sendPasswordChangedAlertEmail({ email, name, ipAddress, us
         ${ipAddress ? `
         <div>
           <div style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: #a1a1aa; margin-bottom: 4px;">IP Address</div>
-          <div style="display: inline-block; background-color: #121214; border: 1px solid #3f3f46; color: #38bdf8; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 6px; letter-spacing: 0.3px;">${ipAddress}</div>
+          <div style="display: inline-block; background-color: #121214; border: 1px solid #3f3f46; color: #38bdf8; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 6px; letter-spacing: 0.3px;">${safeIp}</div>
         </div>` : ''}
       </div>
 

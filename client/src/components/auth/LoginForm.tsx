@@ -379,7 +379,7 @@ export function LoginForm() {
                   onClick={() => fillDemoAccount("ORGANIZER")}
                   className="w-full text-xs h-8 border-border/60 hover:bg-background"
                 >
-                  Organizer Demo
+                  Fill Organizer Demo
                 </Button>
                 <Button
                   type="button"
@@ -388,7 +388,7 @@ export function LoginForm() {
                   onClick={() => fillDemoAccount("ATTENDEE")}
                   className="w-full text-xs h-8 border-border/60 hover:bg-background"
                 >
-                  Attendee Demo
+                  Fill Attendee Demo
                 </Button>
               </div>
             </div>

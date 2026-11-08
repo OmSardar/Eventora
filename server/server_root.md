@@ -1,7 +1,9 @@
 # Eventora Backend Application Root Documentation (`server/server_root.md`)
 
+> **Note:** The comprehensive, production-ready backend guide is maintained in [`server/README.md`](./README.md).
+
 ## 1. Application Overview
-The Eventora backend is a production-grade, secure REST API engineered with Node.js 22 LTS, Express.js 4, and MongoDB Atlas (via Mongoose 8). It powers event lifecycle management, high-concurrency atomic seat reservation (RSVP), double-booking immunity, organizer attendee rosters, transactional email receipts via the Resend API, and secure backend-only Cloudinary media uploads.
+The Eventora backend is a production-grade, secure REST API engineered with Node.js 22 LTS, Express.js 4, and MongoDB Atlas (via Mongoose 8). It powers event lifecycle management, high-concurrency atomic seat reservation (RSVP), interactive assigned seating, Razorpay payments and refund reconciliation, double-booking immunity, organizer attendee rosters, RFC 5545 `.ics` calendar generation, transactional email receipts via the Resend API, and secure backend-only Cloudinary media uploads.
 
 The backend acts as an uncompromising security perimeter: all sessions, roles, file magic bytes, and concurrency controls are evaluated and enforced exclusively on the server.
 

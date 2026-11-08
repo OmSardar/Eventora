@@ -1,4 +1,10 @@
 import { defineConfig, devices } from "@playwright/test";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const baseURL = process.env.PLAYWRIGHT_TEST_BASE_URL || "http://localhost:3000";
 
 export default defineConfig({
   testDir: "./tests",
@@ -9,22 +15,19 @@ export default defineConfig({
   timeout: 30000,
   reporter: "list",
   use: {
-    baseURL: process.env.PLAYWRIGHT_TEST_BASE_URL || "http://localhost:3000",
+    baseURL,
     trace: "on-first-retry",
     screenshot: "only-on-failure",
   },
   webServer: [
     {
       command: "node src/server.js",
-      cwd: "../server",
+      cwd: path.resolve(__dirname, "../../server"),
       url: "http://localhost:5000/api/v1/health",
       reuseExistingServer: true,
-      timeout: 15000,
+      timeout: 20000,
       env: {
         ...process.env,
-        SystemRoot: process.env.SystemRoot || "C:\\Windows",
-        ComSpec: process.env.ComSpec || process.env.COMSPEC || "C:\\Windows\\system32\\cmd.exe",
-        PATH: process.env.PATH || process.env.Path || "",
         PORT: "5000",
         NODE_ENV: "test",
         MONGODB_URI: "mongodb://127.0.0.1:27017/eventora",
@@ -32,15 +35,13 @@ export default defineConfig({
       },
     },
     {
-      command: "npm run start -- -p 3000",
+      command: "npm run start",
+      cwd: path.resolve(__dirname, ".."),
       url: "http://localhost:3000",
       reuseExistingServer: true,
-      timeout: 20000,
+      timeout: 25000,
       env: {
         ...process.env,
-        SystemRoot: process.env.SystemRoot || "C:\\Windows",
-        ComSpec: process.env.ComSpec || process.env.COMSPEC || "C:\\Windows\\system32\\cmd.exe",
-        PATH: process.env.PATH || process.env.Path || "",
         NEXT_PUBLIC_API_URL: "http://localhost:5000/api/v1",
       },
     },
@@ -48,7 +49,10 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
-      use: { ...devices["Desktop Chrome"] },
+      use: {
+        ...devices["Desktop Chrome"],
+        baseURL,
+      },
     },
   ],
 });

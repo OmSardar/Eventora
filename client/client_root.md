@@ -1,5 +1,7 @@
 # Eventora Frontend Application Root Documentation (`client/client_root.md`)
 
+> **Note:** The comprehensive, production-ready frontend guide is maintained in [`client/README.md`](./README.md).
+
 ## 1. Application Overview
 The Eventora frontend is a modern, high-performance web application built with **Next.js 14 (App Router)**, **React 18**, and **TypeScript (Strict Mode)**. It delivers a fast, responsive user interface for discovering events, executing atomic Free RSVPs, managing attendee tickets, reviewing in-app alerts, and providing organizers with event authoring, attendee roster inspection, and backend-only Cloudinary banner upload tools.
 

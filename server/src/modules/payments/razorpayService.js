@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import Razorpay from 'razorpay';
 import { logger } from '../../infrastructure/logging/logger.js';
-import { ServiceUnavailableError, BadRequestError } from '../../shared/errors/AppError.js';
+import { ServiceUnavailableError, BadRequestError, ForbiddenError } from '../../shared/errors/AppError.js';
 
 let razorpayInstance = null;
 
@@ -67,19 +67,21 @@ export function _resetRazorpayInstance() {
  */
 export function getRazorpayClient() {
   const isProduction = process.env.NODE_ENV === 'production';
-  const key_id = process.env.RAZORPAY_KEY_ID;
-  const key_secret = process.env.RAZORPAY_KEY_SECRET;
+  let key_id = process.env.RAZORPAY_KEY_ID;
+  let key_secret = process.env.RAZORPAY_KEY_SECRET;
+  if (key_id) key_id = key_id.trim().replace(/^["']|["']$/g, '').trim();
+  if (key_secret) key_secret = key_secret.trim().replace(/^["']|["']$/g, '').trim();
   const mode = (process.env.RAZORPAY_MODE || 'test').toLowerCase();
 
   // Strict Production Enforcement: Fail closed if credentials are missing
   if (isProduction) {
     if (!key_id || !key_secret) {
       logger.error('CRITICAL: Razorpay credentials (RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET) missing in production.');
-      throw new Error('Payment gateway configuration error: Credentials missing in production.');
+      throw new ServiceUnavailableError('Payment gateway configuration error: Credentials missing in production.');
     }
     if (process.env.MOCK_PAYMENTS === 'true') {
       logger.error('CRITICAL: MOCK_PAYMENTS=true is strictly forbidden in production.');
-      throw new Error('Security Violation: Mock payment simulator is forbidden in production.');
+      throw new ForbiddenError('Security Violation: Mock payment simulator is forbidden in production.');
     }
   }
 
@@ -97,7 +99,7 @@ export function getRazorpayClient() {
 
   if (!key_id || !key_secret) {
     if (isProduction) {
-      throw new Error('Payment gateway credentials missing in production.');
+      throw new ServiceUnavailableError('Payment gateway credentials missing in production.');
     }
     logger.warn('Razorpay credentials not fully configured. Using sandbox mock gateway client for testing.');
     return mockRazorpayClient;
@@ -156,7 +158,8 @@ export function verifyRazorpaySignature({ orderId, paymentId, signature }) {
       return false;
     }
 
-    const secret = process.env.RAZORPAY_KEY_SECRET;
+    let secret = process.env.RAZORPAY_KEY_SECRET;
+    if (secret) secret = secret.trim().replace(/^["']|["']$/g, '').trim();
     if (!secret) {
       logger.error('Security Violation: RAZORPAY_KEY_SECRET is not configured in production. Payment verification failed closed.');
       return false;
@@ -219,7 +222,8 @@ export function verifyRazorpayWebhookSignature({ rawBody, signature }) {
       return false;
     }
 
-    const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
+    let webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
+    if (webhookSecret) webhookSecret = webhookSecret.trim().replace(/^["']|["']$/g, '').trim();
     if (!webhookSecret) {
       logger.error('Security Violation: RAZORPAY_WEBHOOK_SECRET is not configured in production. Webhook rejected.');
       return false;

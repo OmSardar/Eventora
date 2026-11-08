@@ -1,183 +1,610 @@
 import mongoose from 'mongoose';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 dotenv.config();
 
 import { User } from '../modules/users/User.js';
 import { Event } from '../modules/events/Event.js';
+import { EventSeat } from '../modules/seating/EventSeat.js';
+import { SeatHold } from '../modules/seating/SeatHold.js';
+import { Booking } from '../modules/bookings/Booking.js';
 import { Registration } from '../modules/registrations/Registration.js';
+import { Payment } from '../modules/payments/Payment.js';
+import { SeatReservation } from '../modules/payments/SeatReservation.js';
+import { RefundOperation } from '../modules/payments/RefundOperation.js';
 import { Notification } from '../modules/notifications/Notification.js';
+import { WebhookEvent } from '../modules/payments/WebhookEvent.js';
+
 import { hashPassword } from '../infrastructure/security/password.js';
 import { ROLES } from '../shared/constants/roles.js';
 import {
   EVENT_STATUS,
   REGISTRATION_STATUS,
+  BOOKING_STATUS,
+  SEAT_STATUS,
   NOTIFICATION_TYPE,
-  NOTIFICATION_CHANNEL
+  NOTIFICATION_CHANNEL,
+  PAYMENT_STATUS
 } from '../shared/constants/status.js';
-import { connectDatabase, disconnectDatabase } from '../infrastructure/database/connection.js';
+import { generateEventSeats } from '../modules/seating/seatingService.js';
+import { generateSignedTicketToken } from '../modules/bookings/ticketCrypto.js';
 
-export async function seedDatabase() {
-  const mongoUri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/eventora';
-  console.log(`Connecting to MongoDB at: ${mongoUri}...`);
-  await connectDatabase(mongoUri);
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-  console.log('Clearing existing collections (users, events, registrations, notifications)...');
-  await User.deleteMany({});
-  await Event.deleteMany({});
-  await Registration.deleteMany({});
-  await Notification.deleteMany({});
+export function getMongoUris() {
+  const envPath = path.resolve(__dirname, '../../.env');
+  let remoteUri = null;
+  let localUri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/eventora';
 
-  console.log('Creating demo users...');
+  if (fs.existsSync(envPath)) {
+    const envContent = fs.readFileSync(envPath, 'utf8');
+    const match = envContent.match(/mongodb\+srv:\/\/[^\s]+/);
+    if (match) {
+      remoteUri = match[0].trim();
+    }
+  }
+
+  // If local URI points to remote, adjust fallback
+  if (localUri.startsWith('mongodb+srv://')) {
+    remoteUri = localUri;
+    localUri = 'mongodb://127.0.0.1:27017/eventora';
+  }
+
+  return { localUri, remoteUri };
+}
+
+function sanitizeUri(uri) {
+  if (!uri) return 'undefined';
+  return uri.replace(/:\/\/.*@/, '://***@');
+}
+
+export async function seedTargetDatabase(mongoUri, label = 'Target') {
+  console.log(`\n====================================================`);
+  console.log(`[${label}] Connecting to MongoDB at: ${sanitizeUri(mongoUri)}...`);
+  console.log(`====================================================`);
+
+  await mongoose.connect(mongoUri, { serverSelectionTimeoutMS: 15000 });
+  console.log(`[${label}] Connected successfully!`);
+
+  // 1. Purge all existing events and cascading collections
+  console.log(`[${label}] Purging existing events and event-related records...`);
+  const delEvents = await Event.deleteMany({});
+  const delSeats = await EventSeat.deleteMany({});
+  const delHolds = await SeatHold.deleteMany({});
+  const delBookings = await Booking.deleteMany({});
+  const delRegs = await Registration.deleteMany({});
+  const delPayments = await Payment.deleteMany({});
+  const delReservations = await SeatReservation.deleteMany({});
+  const delRefunds = await RefundOperation.deleteMany({});
+  const delNotifications = await Notification.deleteMany({});
+  const delWebhooks = await WebhookEvent.deleteMany({});
+
+  console.log(
+    `[${label}] Cleared: ${delEvents.deletedCount} events, ${delSeats.deletedCount} seats, ${delBookings.deletedCount} bookings, ${delRegs.deletedCount} registrations, ${delPayments.deletedCount} payments, ${delNotifications.deletedCount} notifications.`
+  );
+
+  // 2. Upsert demo accounts while preserving any existing real user accounts
+  console.log(`[${label}] Ensuring demo users exist with standard credentials...`);
   const organizerPasswordHash = await hashPassword('Organizer@123');
   const attendeePasswordHash = await hashPassword('Attendee@123');
 
-  const demoOrganizer = await User.create({
+  async function upsertDemoUser({ name, email, passwordHash, role }) {
+    let user = await User.findOne({ email });
+    if (!user) {
+      user = await User.create({
+        name,
+        email,
+        normalizedEmail: email.toLowerCase(),
+        passwordHash,
+        role,
+        emailVerified: true,
+        emailVerifiedAt: new Date()
+      });
+      console.log(`[${label}] Created user: ${email} (${role})`);
+    } else {
+      user.name = name;
+      user.passwordHash = passwordHash;
+      user.role = role;
+      user.emailVerified = true;
+      user.emailVerifiedAt = user.emailVerifiedAt || new Date();
+      await user.save();
+      console.log(`[${label}] Updated existing user: ${email} (${role})`);
+    }
+    return user;
+  }
+
+  const demoOrganizer = await upsertDemoUser({
     name: 'Sarah Chen (Demo Organizer)',
     email: 'organizer@eventora.demo',
-    normalizedEmail: 'organizer@eventora.demo',
     passwordHash: organizerPasswordHash,
-    role: ROLES.ORGANIZER,
-    emailVerified: true,
-    emailVerifiedAt: new Date()
+    role: ROLES.ORGANIZER
   });
 
-  const demoAttendee = await User.create({
+  const demoAttendee = await upsertDemoUser({
     name: 'Alex Rivera (Demo Attendee)',
     email: 'attendee@eventora.demo',
-    normalizedEmail: 'attendee@eventora.demo',
     passwordHash: attendeePasswordHash,
-    role: ROLES.ATTENDEE,
-    emailVerified: true,
-    emailVerifiedAt: new Date()
+    role: ROLES.ATTENDEE
   });
 
-  const demoAttendee2 = await User.create({
+  const demoAttendee2 = await upsertDemoUser({
     name: 'Elena Rostova',
     email: 'elena@eventora.demo',
-    normalizedEmail: 'elena@eventora.demo',
     passwordHash: attendeePasswordHash,
-    role: ROLES.ATTENDEE,
-    emailVerified: true,
-    emailVerifiedAt: new Date()
+    role: ROLES.ATTENDEE
   });
 
-  console.log('Creating sample events...');
+  // Check if primary developer/admin account exists in database to give it demo tickets too
+  const devUser = await User.findOne({ email: 'osardar793@gmail.com' });
+
+  // 3. Create fresh, realistic seed events (scheduled 7 to 60 days ahead)
+  console.log(`[${label}] Seeding 8 fresh, production-ready events...`);
   const now = Date.now();
   const dayMs = 24 * 60 * 60 * 1000;
 
-  // 1. Featured Upcoming Tech Conference
+  // Event 1: Assigned Seating Technology Summit
   const event1 = await Event.create({
-    title: 'Global Tech Summit 2026',
+    title: 'Global Tech Summit 2026: Distributed Systems & AI Architecture',
     description:
-      'Join industry pioneers, AI researchers, and engineering leaders for 3 days of deep-dive keynotes, hands-on workshops, and collaborative panels on modern distributed systems.',
+      'Join industry pioneers, principal architects, and system engineers for 3 days of deep-dive keynotes, live architectural breakdowns, and collaborative workshops on zero-trust microservices, consensus protocols, and real-time streaming architectures.',
     eventDate: new Date(now + 14 * dayMs),
     venue: 'Metropolitan Convention Center, Hall A, San Francisco, CA',
-    seatLimit: 150,
-    seatsBooked: 2,
+    seatLimit: 50,
+    seatsBooked: 3,
     organizerId: demoOrganizer._id,
     status: EVENT_STATUS.PUBLISHED,
     category: 'Technology',
-    bannerUrl: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&w=1200&q=80'
+    seatingType: 'ASSIGNED_SEATING',
+    isPaid: true,
+    ticketPrice: 499,
+    currency: 'INR',
+    maxTicketsPerBooking: 6,
+    bannerUrl: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&w=1200&q=80',
+    image: {
+      source: 'URL',
+      url: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&w=1200&q=80',
+      publicId: null
+    }
   });
 
-  // 2. Next-Gen Design & UX Symposium
-  const event2 = await Event.create({
-    title: 'Future of Product Design & Craft',
+  // Generate 50 physical seats (5 rows x 10 seats: A1 to E10)
+  await generateEventSeats(event1._id, {
+    generationMode: 'AUTOMATIC',
+    totalSeats: 50,
+    rows: 5,
+    seatsPerRow: 10,
+    startingRowLabel: 'A',
+    category: 'STANDARD',
+    price: 499
+  });
+
+  // Reserve seats A1, A2 for demoAttendee
+  const seatsA1A2 = await EventSeat.find({ eventId: event1._id, seatLabel: { $in: ['A1', 'A2'] } });
+  const bookingRef1 = `EVT-BK-GTS26-01`;
+  const ticketToken1 = generateSignedTicketToken({
+    bookingReference: bookingRef1,
+    eventId: event1._id,
+    attendeeId: demoAttendee._id
+  });
+
+  const booking1 = await Booking.create({
+    bookingReference: bookingRef1,
+    eventId: event1._id,
+    attendeeId: demoAttendee._id,
+    seatIds: seatsA1A2.map((s) => s._id),
+    seatLabels: ['A1', 'A2'],
+    ticketCategory: 'STANDARD',
+    subtotal: 998,
+    fees: 0,
+    totalAmount: 998,
+    currency: 'INR',
+    status: BOOKING_STATUS.CONFIRMED,
+    ticketToken: ticketToken1,
+    paymentMethod: 'RAZORPAY',
+    confirmedAt: new Date()
+  });
+
+  await EventSeat.updateMany(
+    { _id: { $in: seatsA1A2.map((s) => s._id) } },
+    { $set: { status: SEAT_STATUS.BOOKED, bookingId: booking1._id } }
+  );
+
+  const reg1 = await Registration.create({
+    eventId: event1._id,
+    attendeeId: demoAttendee._id,
+    status: REGISTRATION_STATUS.CONFIRMED,
+    isPaid: true,
+    ticketPrice: 499,
+    currency: 'INR',
+    confirmationEmailSent: true,
+    isRedeemed: false
+  });
+  booking1.registrationId = reg1._id;
+  await booking1.save();
+
+  // Reserve seat B5 for demoAttendee2
+  const seatB5 = await EventSeat.findOne({ eventId: event1._id, seatLabel: 'B5' });
+  if (seatB5) {
+    const bookingRef2 = `EVT-BK-GTS26-02`;
+    const ticketToken2 = generateSignedTicketToken({
+      bookingReference: bookingRef2,
+      eventId: event1._id,
+      attendeeId: demoAttendee2._id
+    });
+
+    const booking2 = await Booking.create({
+      bookingReference: bookingRef2,
+      eventId: event1._id,
+      attendeeId: demoAttendee2._id,
+      seatIds: [seatB5._id],
+      seatLabels: ['B5'],
+      ticketCategory: 'STANDARD',
+      subtotal: 499,
+      fees: 0,
+      totalAmount: 499,
+      currency: 'INR',
+      status: BOOKING_STATUS.CONFIRMED,
+      ticketToken: ticketToken2,
+      paymentMethod: 'RAZORPAY',
+      confirmedAt: new Date()
+    });
+
+    seatB5.status = SEAT_STATUS.BOOKED;
+    seatB5.bookingId = booking2._id;
+    await seatB5.save();
+
+    const reg2 = await Registration.create({
+      eventId: event1._id,
+      attendeeId: demoAttendee2._id,
+      status: REGISTRATION_STATUS.CONFIRMED,
+      isPaid: true,
+      ticketPrice: 499,
+      currency: 'INR',
+      confirmationEmailSent: true,
+      isRedeemed: false
+    });
+    booking2.registrationId = reg2._id;
+    await booking2.save();
+  }
+
+  // Event 2: Design Symposium (General Admission, Paid ₹299)
+  await Event.create({
+    title: 'Future of Product Design & Spatial Interfaces',
     description:
-      'A curated gathering of digital product designers, design systems architects, and creative directors exploring minimalism, spatial interfaces, and user-centric aesthetics.',
+      'A curated symposium of digital product designers, design systems architects, and creative directors exploring minimalism, spatial computing paradigms, tactile micro-interactions, and design craft in an algorithmic era.',
     eventDate: new Date(now + 21 * dayMs),
-    venue: 'Design Loft Studio, New York, NY',
-    seatLimit: 50,
+    venue: 'Design Loft Studio, Soho, New York, NY',
+    seatLimit: 80,
     seatsBooked: 0,
     organizerId: demoOrganizer._id,
     status: EVENT_STATUS.PUBLISHED,
     category: 'Design',
-    bannerUrl: 'https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=1200&q=80'
+    seatingType: 'GENERAL_ADMISSION',
+    isPaid: true,
+    ticketPrice: 299,
+    currency: 'INR',
+    bannerUrl: 'https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=1200&q=80',
+    image: {
+      source: 'URL',
+      url: 'https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=1200&q=80',
+      publicId: null
+    }
   });
 
-  // 3. Sold Out Intimate Workshop
-  const eventSoldOut = await Event.create({
-    title: 'Advanced High-Throughput Node.js Masterclass',
+  // Event 3: Climate Innovation (General Admission, Free RSVP)
+  const event3 = await Event.create({
+    title: 'Clean Energy & Climate Innovation Roundtable',
     description:
-      'Exclusive hands-on deep dive into Node.js event loop internals, V8 memory profiling, and high-concurrency architecture. Limited to 2 seats.',
+      'Connecting venture founders, climate scientists, and infrastructure engineers building scalable decarbonization technologies, decentralized renewable microgrids, and transparent carbon accounting ledgers.',
+    eventDate: new Date(now + 10 * dayMs),
+    venue: 'Greenhouse Commons Pavilion, Denver, CO',
+    seatLimit: 120,
+    seatsBooked: 1,
+    organizerId: demoOrganizer._id,
+    status: EVENT_STATUS.PUBLISHED,
+    category: 'Sustainability',
+    seatingType: 'GENERAL_ADMISSION',
+    isPaid: false,
+    ticketPrice: 0,
+    currency: 'INR',
+    bannerUrl: 'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1200&q=80',
+    image: {
+      source: 'URL',
+      url: 'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1200&q=80',
+      publicId: null
+    }
+  });
+
+  // Free RSVP registration for Alex Rivera
+  const regFree = await Registration.create({
+    eventId: event3._id,
+    attendeeId: demoAttendee._id,
+    status: REGISTRATION_STATUS.CONFIRMED,
+    isPaid: false,
+    ticketPrice: 0,
+    currency: 'INR',
+    confirmationEmailSent: true,
+    isRedeemed: false
+  });
+
+  const bookingRefFree = `EVT-BK-CLN26-01`;
+  const ticketTokenFree = generateSignedTicketToken({
+    bookingReference: bookingRefFree,
+    eventId: event3._id,
+    attendeeId: demoAttendee._id
+  });
+
+  await Booking.create({
+    bookingReference: bookingRefFree,
+    eventId: event3._id,
+    attendeeId: demoAttendee._id,
+    registrationId: regFree._id,
+    ticketCategory: 'FREE RSVP',
+    subtotal: 0,
+    fees: 0,
+    totalAmount: 0,
+    currency: 'INR',
+    status: BOOKING_STATUS.CONFIRMED,
+    ticketToken: ticketTokenFree,
+    paymentMethod: 'FREE',
+    confirmedAt: new Date()
+  });
+
+  // Event 4: AI Agent Engineering (Assigned Seating, Paid ₹999)
+  const event4 = await Event.create({
+    title: 'AI Agent Engineering & LLM Architecture Summit',
+    description:
+      'Comprehensive master summit exploring multi-agent orchestrations, MCP server integrations, deterministic validation loops, context compaction strategies, and production-grade self-healing autonomous workflows.',
+    eventDate: new Date(now + 28 * dayMs),
+    venue: 'Silicon Valley Innovation Campus, Auditorium B, San Jose, CA',
+    seatLimit: 60,
+    seatsBooked: 0,
+    organizerId: demoOrganizer._id,
+    status: EVENT_STATUS.PUBLISHED,
+    category: 'Technology',
+    seatingType: 'ASSIGNED_SEATING',
+    isPaid: true,
+    ticketPrice: 999,
+    currency: 'INR',
+    maxTicketsPerBooking: 6,
+    bannerUrl: 'https://images.unsplash.com/photo-1485827404703-89b55fcc595e?auto=format&fit=crop&w=1200&q=80',
+    image: {
+      source: 'URL',
+      url: 'https://images.unsplash.com/photo-1485827404703-89b55fcc595e?auto=format&fit=crop&w=1200&q=80',
+      publicId: null
+    }
+  });
+
+  // Generate 60 seats (6 rows x 10 seats: A1 to F10)
+  await generateEventSeats(event4._id, {
+    generationMode: 'AUTOMATIC',
+    totalSeats: 60,
+    rows: 6,
+    seatsPerRow: 10,
+    startingRowLabel: 'A',
+    category: 'STANDARD',
+    price: 999
+  });
+
+  // Event 5: Next.js 14 App Router (General Admission, Free RSVP)
+  await Event.create({
+    title: 'Next.js 14 App Router & Performance Masterclass',
+    description:
+      'Practical hands-on masterclass focusing on streaming Server Components, Partial Prerendering (PPR), aggressive caching strategies, optimistic mutation state management, and edge runtime optimizations.',
+    eventDate: new Date(now + 35 * dayMs),
+    venue: 'Tech Commons Auditorium, Floor 3, Seattle, WA',
+    seatLimit: 75,
+    seatsBooked: 0,
+    organizerId: demoOrganizer._id,
+    status: EVENT_STATUS.PUBLISHED,
+    category: 'Workshop',
+    seatingType: 'GENERAL_ADMISSION',
+    isPaid: false,
+    ticketPrice: 0,
+    currency: 'INR',
+    bannerUrl: 'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&w=1200&q=80',
+    image: {
+      source: 'URL',
+      url: 'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&w=1200&q=80',
+      publicId: null
+    }
+  });
+
+  // Event 6: Fintech Infrastructure (General Admission, Paid ₹1499)
+  await Event.create({
+    title: 'Fintech Infrastructure & Payment Systems Summit',
+    description:
+      'Examining idempotent payment ledgers, ISO 20022 messaging, zero-loss double-entry transaction journals, reconciliation automata, and PCI-DSS compliance across distributed banking infrastructure.',
+    eventDate: new Date(now + 45 * dayMs),
+    venue: 'Financial District Executive Center, Floor 18, Boston, MA',
+    seatLimit: 100,
+    seatsBooked: 0,
+    organizerId: demoOrganizer._id,
+    status: EVENT_STATUS.PUBLISHED,
+    category: 'Business',
+    seatingType: 'GENERAL_ADMISSION',
+    isPaid: true,
+    ticketPrice: 1499,
+    currency: 'INR',
+    bannerUrl: 'https://images.unsplash.com/photo-1559526324-4b87b5e36e44?auto=format&fit=crop&w=1200&q=80',
+    image: {
+      source: 'URL',
+      url: 'https://images.unsplash.com/photo-1559526324-4b87b5e36e44?auto=format&fit=crop&w=1200&q=80',
+      publicId: null
+    }
+  });
+
+  // Event 7: Cancelled Forum (To showcase cancellation state handling)
+  await Event.create({
+    title: 'Autonomous Systems & Robotics Forum (Cancelled)',
+    description:
+      'Notice: This symposium has been rescheduled to accommodate global keynote speakers. No new registrations or seat reservations are being accepted at this time.',
+    eventDate: new Date(now + 50 * dayMs),
+    venue: 'Innovation Pavilion, Hall B, Austin, TX',
+    seatLimit: 50,
+    seatsBooked: 0,
+    organizerId: demoOrganizer._id,
+    status: EVENT_STATUS.CANCELLED,
+    category: 'Technology',
+    seatingType: 'GENERAL_ADMISSION',
+    isPaid: false,
+    ticketPrice: 0,
+    currency: 'INR',
+    bannerUrl: 'https://images.unsplash.com/photo-1485827404703-89b55fcc595e?auto=format&fit=crop&w=1200&q=80',
+    image: {
+      source: 'URL',
+      url: 'https://images.unsplash.com/photo-1485827404703-89b55fcc595e?auto=format&fit=crop&w=1200&q=80',
+      publicId: null
+    }
+  });
+
+  // Event 8: Sold Out Workshop (To showcase sold-out badge & disabled reservation button)
+  const eventSoldOut = await Event.create({
+    title: 'Advanced High-Throughput Node.js Internals (Sold Out)',
+    description:
+      'Exclusive intimate laboratory covering libuv thread pool tuning, V8 heap snapshot analysis, zero-copy buffer operations, and garbage collection profiling under sustained 50k req/s load.',
     eventDate: new Date(now + 7 * dayMs),
-    venue: 'TechHub Accelerator Room 402, Austin, TX',
+    venue: 'TechHub Accelerator Room 402, Chicago, IL',
     seatLimit: 2,
     seatsBooked: 2,
     organizerId: demoOrganizer._id,
     status: EVENT_STATUS.PUBLISHED,
     category: 'Workshop',
-    bannerUrl: 'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&w=1200&q=80'
+    seatingType: 'GENERAL_ADMISSION',
+    isPaid: true,
+    ticketPrice: 499,
+    currency: 'INR',
+    bannerUrl: 'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&w=1200&q=80',
+    image: {
+      source: 'URL',
+      url: 'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&w=1200&q=80',
+      publicId: null
+    }
   });
 
-  // 4. Cancelled Event
-  const eventCancelled = await Event.create({
-    title: 'Autonomous Systems & Robotics Forum (Cancelled)',
-    description: 'Notice: This session has been rescheduled. No new registrations are being accepted at this time.',
-    eventDate: new Date(now + 30 * dayMs),
-    venue: 'Innovation Pavillion, Seattle, WA',
-    seatLimit: 100,
-    seatsBooked: 0,
-    organizerId: demoOrganizer._id,
-    status: EVENT_STATUS.CANCELLED,
-    category: 'Technology',
-    bannerUrl: 'https://images.unsplash.com/photo-1485827404703-89b55fcc595e?auto=format&fit=crop&w=1200&q=80'
-  });
-
-  // 5. Sustainable Energy & Climate Tech Meetup
-  const event3 = await Event.create({
-    title: 'Clean Energy & Climate Innovation Roundtable',
-    description:
-      'Connecting founders, climate scientists, and venture partners building scalable infrastructure for renewable grids and carbon removal technology.',
-    eventDate: new Date(now + 10 * dayMs),
-    venue: 'Greenhouse Commons, Denver, CO',
-    seatLimit: 80,
-    seatsBooked: 0,
-    organizerId: demoOrganizer._id,
-    status: EVENT_STATUS.PUBLISHED,
-    category: 'Sustainability',
-    bannerUrl: 'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1200&q=80'
-  });
-
-  console.log('Creating initial registrations...');
-  // 1. Registration for demoAttendee on event1
-  const reg1 = await Registration.create({
-    eventId: event1._id,
-    attendeeId: demoAttendee._id,
-    status: REGISTRATION_STATUS.CONFIRMED,
-    confirmationEmailSent: true
-  });
-
-  // 2. Registration for demoAttendee2 on event1
-  const reg2 = await Registration.create({
-    eventId: event1._id,
-    attendeeId: demoAttendee2._id,
-    status: REGISTRATION_STATUS.CONFIRMED,
-    confirmationEmailSent: true
-  });
-
-  // 3. Registrations for sold-out event
-  await Registration.create({
+  // Registrations filling eventSoldOut to capacity
+  const regSo1 = await Registration.create({
     eventId: eventSoldOut._id,
     attendeeId: demoAttendee._id,
     status: REGISTRATION_STATUS.CONFIRMED,
-    confirmationEmailSent: true
+    isPaid: true,
+    ticketPrice: 499,
+    currency: 'INR',
+    confirmationEmailSent: true,
+    isRedeemed: false
+  });
+  const bkRefSo1 = `EVT-BK-NDJS-01`;
+  await Booking.create({
+    bookingReference: bkRefSo1,
+    eventId: eventSoldOut._id,
+    attendeeId: demoAttendee._id,
+    registrationId: regSo1._id,
+    ticketCategory: 'WORKSHOP PASS',
+    subtotal: 499,
+    fees: 0,
+    totalAmount: 499,
+    currency: 'INR',
+    status: BOOKING_STATUS.CONFIRMED,
+    ticketToken: generateSignedTicketToken({
+      bookingReference: bkRefSo1,
+      eventId: eventSoldOut._id,
+      attendeeId: demoAttendee._id
+    }),
+    paymentMethod: 'RAZORPAY',
+    confirmedAt: new Date()
   });
 
-  await Registration.create({
+  const regSo2 = await Registration.create({
     eventId: eventSoldOut._id,
     attendeeId: demoAttendee2._id,
     status: REGISTRATION_STATUS.CONFIRMED,
-    confirmationEmailSent: true
+    isPaid: true,
+    ticketPrice: 499,
+    currency: 'INR',
+    confirmationEmailSent: true,
+    isRedeemed: false
+  });
+  const bkRefSo2 = `EVT-BK-NDJS-02`;
+  await Booking.create({
+    bookingReference: bkRefSo2,
+    eventId: eventSoldOut._id,
+    attendeeId: demoAttendee2._id,
+    registrationId: regSo2._id,
+    ticketCategory: 'WORKSHOP PASS',
+    subtotal: 499,
+    fees: 0,
+    totalAmount: 499,
+    currency: 'INR',
+    status: BOOKING_STATUS.CONFIRMED,
+    ticketToken: generateSignedTicketToken({
+      bookingReference: bkRefSo2,
+      eventId: eventSoldOut._id,
+      attendeeId: demoAttendee2._id
+    }),
+    paymentMethod: 'RAZORPAY',
+    confirmedAt: new Date()
   });
 
-  console.log('Creating initial in-app notifications...');
+  // If personal developer account exists, give it a confirmed ticket pass for testing
+  if (devUser) {
+    const devBkRef = `EVT-BK-GTS26-DEV`;
+    const devSeat = await EventSeat.findOne({ eventId: event1._id, seatLabel: 'C3' });
+    if (devSeat) {
+      const devToken = generateSignedTicketToken({
+        bookingReference: devBkRef,
+        eventId: event1._id,
+        attendeeId: devUser._id
+      });
+      const devBk = await Booking.create({
+        bookingReference: devBkRef,
+        eventId: event1._id,
+        attendeeId: devUser._id,
+        seatIds: [devSeat._id],
+        seatLabels: ['C3'],
+        ticketCategory: 'VIP ACCESS',
+        subtotal: 499,
+        fees: 0,
+        totalAmount: 499,
+        currency: 'INR',
+        status: BOOKING_STATUS.CONFIRMED,
+        ticketToken: devToken,
+        paymentMethod: 'RAZORPAY',
+        confirmedAt: new Date()
+      });
+      devSeat.status = SEAT_STATUS.BOOKED;
+      devSeat.bookingId = devBk._id;
+      await devSeat.save();
+
+      const devReg = await Registration.create({
+        eventId: event1._id,
+        attendeeId: devUser._id,
+        status: REGISTRATION_STATUS.CONFIRMED,
+        isPaid: true,
+        ticketPrice: 499,
+        currency: 'INR',
+        confirmationEmailSent: true,
+        isRedeemed: false
+      });
+      devBk.registrationId = devReg._id;
+      await devBk.save();
+
+      // Bump seatsBooked by 1
+      await Event.findByIdAndUpdate(event1._id, { $inc: { seatsBooked: 1 } });
+      console.log(`[${label}] Created developer test pass for: ${devUser.email} (Seat C3)`);
+    }
+  }
+
+  // 4. Create in-app notifications
+  console.log(`[${label}] Creating initial notification feed...`);
   await Notification.create({
     userId: demoAttendee._id,
     type: NOTIFICATION_TYPE.BOOKING_CONFIRMED,
     channel: NOTIFICATION_CHANNEL.IN_APP,
-    title: 'Welcome to Eventora!',
-    message: 'Your seat for "Global Tech Summit 2026" is confirmed. See you there!',
+    title: 'Tickets Confirmed!',
+    message: 'Your seats [A1, A2] for "Global Tech Summit 2026" are confirmed. Check your My Tickets tab for your digital pass & QR code.',
     eventId: event1._id,
     registrationId: reg1._id,
     isRead: false
@@ -187,27 +614,53 @@ export async function seedDatabase() {
     userId: demoOrganizer._id,
     type: NOTIFICATION_TYPE.BOOKING_CONFIRMED,
     channel: NOTIFICATION_CHANNEL.IN_APP,
-    title: 'New RSVP Received',
-    message: 'Alex Rivera confirmed an RSVP for "Global Tech Summit 2026".',
+    title: 'New Booking Received',
+    message: 'Alex Rivera reserved seats [A1, A2] for "Global Tech Summit 2026".',
     eventId: event1._id,
     registrationId: reg1._id,
     isRead: false
   });
 
-  console.log('Seeding completed successfully!');
-  console.log('----------------------------------------------------');
-  console.log('Demo Organizer: organizer@eventora.demo / Organizer@123');
-  console.log('Demo Attendee:  attendee@eventora.demo / Attendee@123');
-  console.log('----------------------------------------------------');
-
-  await disconnectDatabase();
+  console.log(`[${label}] Seeding complete! Total events created: 8.`);
+  await mongoose.disconnect();
+  console.log(`[${label}] Disconnected cleanly from MongoDB.\n`);
 }
 
-if (process.argv[1].endsWith('seed.js')) {
-  seedDatabase()
+export async function run() {
+  const { localUri, remoteUri } = getMongoUris();
+  const args = process.argv.slice(2);
+
+  const shouldSeedLocal = args.includes('--local') || args.includes('--both') || (!args.includes('--remote') && !args.includes('--local'));
+  const shouldSeedRemote = args.includes('--remote') || args.includes('--both') || (!args.includes('--remote') && !args.includes('--local') && remoteUri);
+
+  if (shouldSeedLocal && localUri) {
+    try {
+      await seedTargetDatabase(localUri, 'LOCAL MONGODB');
+    } catch (err) {
+      console.error('[LOCAL MONGODB] Seeding failed:', err.message);
+    }
+  }
+
+  if (shouldSeedRemote && remoteUri) {
+    try {
+      await seedTargetDatabase(remoteUri, 'REMOTE MONGODB');
+    } catch (err) {
+      console.error('[REMOTE MONGODB] Seeding failed:', err.message);
+    }
+  }
+
+  console.log('====================================================');
+  console.log('ALL SEEDING OPERATIONS COMPLETED SUCCESSFULLY');
+  console.log('Demo Organizer: organizer@eventora.demo / Organizer@123');
+  console.log('Demo Attendee:  attendee@eventora.demo  / Attendee@123');
+  console.log('====================================================\n');
+}
+
+if (process.argv[1] && process.argv[1].endsWith('seed.js')) {
+  run()
     .then(() => process.exit(0))
     .catch((err) => {
-      console.error('Seeding error:', err);
+      console.error('Fatal seeding execution error:', err);
       process.exit(1);
     });
 }

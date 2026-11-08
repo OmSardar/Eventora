@@ -29,6 +29,11 @@ export function errorHandler(err, req, res, _next) {
     error = new AppError('Validation failed', 400, details);
   }
 
+  // Handle third-party SDK error objects (e.g. Razorpay { statusCode, error: { description } })
+  if (err && err.error && typeof err.error.description === 'string') {
+    error = new AppError(err.error.description, err.statusCode || 400);
+  }
+
   const statusCode = error.statusCode || 500;
   const isProduction = process.env.NODE_ENV === 'production';
 

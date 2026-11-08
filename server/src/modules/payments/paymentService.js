@@ -139,7 +139,7 @@ export async function createOrderWithSeatHold({
     throw new BadRequestError('Event is sold out. No seats remaining.');
   }
 
-  const idempotencyKey = `ord_${eventId}_${attendeeId}_${Date.now()}`;
+  const idempotencyKey = `rcpt_${eventId.toString().slice(-8)}_${attendeeId.toString().slice(-8)}_${Date.now().toString(36)}`;
 
   // 8. Create Razorpay order via SDK
   const razorpayOrder = await createRazorpayOrder({

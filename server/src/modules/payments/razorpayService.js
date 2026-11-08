@@ -122,14 +122,26 @@ export function getRazorpayClient() {
  */
 export async function createRazorpayOrder({ amountInPaise, receipt, notes = {} }) {
   const client = getRazorpayClient();
-  const order = await client.orders.create({
-    amount: amountInPaise,
-    currency: 'INR',
-    receipt,
-    notes
-  });
+  const safeReceipt = typeof receipt === 'string' && receipt.length > 40
+    ? `rcpt_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 8)}`
+    : receipt;
 
-  return order;
+  try {
+    const order = await client.orders.create({
+      amount: amountInPaise,
+      currency: 'INR',
+      receipt: safeReceipt,
+      notes
+    });
+
+    return order;
+  } catch (err) {
+    logger.error({ err, receipt: safeReceipt }, 'Razorpay orders.create failed');
+    if (err && err.error && err.error.description) {
+      throw new BadRequestError(`Payment provider error: ${err.error.description}`);
+    }
+    throw err;
+  }
 }
 
 /**

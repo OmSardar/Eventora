@@ -668,10 +668,10 @@ export async function switchMfaFactor({ challengeId, factor }) {
 // 4. POST-LOGIN SECURITY AUDIT & NOTIFICATION DISPATCH
 // -------------------------------------------------------------
 
-export async function recordLoginAndNotify({ user, ipAddress, userAgent, authFactor }) {
+export async function recordLoginAndNotify({ user, ipAddress, userAgent, headers = {}, authFactor }) {
   try {
-    const location = getApproximateLocation(ipAddress);
-    const device = parseUserAgent(userAgent);
+    const location = getApproximateLocation(ipAddress, headers);
+    const device = parseUserAgent(userAgent, headers);
 
     const event = await LoginSecurityEvent.create({
       userId: user.id || user._id,
@@ -681,13 +681,17 @@ export async function recordLoginAndNotify({ user, ipAddress, userAgent, authFac
       location: {
         city: location.city,
         region: location.region,
-        country: location.country
+        country: location.country,
+        timezone: location.timezone
       },
       device: {
         browser: device.browser,
         browserVersion: device.browserVersion,
         os: device.os,
-        deviceType: device.deviceType
+        deviceType: device.deviceType,
+        phoneModel: device.phoneModel,
+        vendor: device.vendor,
+        summary: device.summary
       },
       authFactor: authFactor || 'PASSWORD',
       notificationStatus: 'QUEUED'

@@ -20,12 +20,13 @@ describe('Transactional Email Service (Unit Tests)', () => {
   const mockRegistrationId = '666611112222333344445555';
   const appBaseUrl = 'https://eventora.example.com';
 
-  test('buildConfirmationEmailHtml: generates complete, branded HTML email', () => {
+  test('buildConfirmationEmailHtml: generates complete, branded HTML email with responsive overflow protection', () => {
     const html = buildConfirmationEmailHtml({
       attendeeName: 'Alex Mercer',
       event: mockEvent,
       registrationId: mockRegistrationId,
-      appBaseUrl
+      appBaseUrl,
+      seatNumbers: ['Seat A1', 'Seat A2']
     });
 
     assert.ok(html.includes('EVENTORA'), 'Should contain brand title');
@@ -34,6 +35,10 @@ describe('Transactional Email Service (Unit Tests)', () => {
     assert.ok(html.includes(mockEvent.title), 'Should contain event title');
     assert.ok(html.includes(mockEvent.venue), 'Should contain event venue');
     assert.ok(html.includes(mockRegistrationId), 'Should contain booking reference');
+    assert.ok(html.includes('Seat A1, Seat A2'), 'Should contain assigned seats');
+    assert.ok(html.includes('table-layout: fixed'), 'Should enforce fixed table layout to prevent horizontal overflow');
+    assert.ok(html.includes('overflow-wrap: anywhere'), 'Should enforce word-break overflow protection');
+    assert.ok(html.includes('Direct Link:'), 'Should contain styled direct link header');
     assert.ok(html.includes('https://eventora.example.com/attendee/registrations'), 'Should link to registrations page');
   });
 

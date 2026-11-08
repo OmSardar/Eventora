@@ -482,7 +482,8 @@ export async function confirmCapturedPayment({
         sendRegistrationConfirmationEmail({
           registrationId: result.registration._id.toString(),
           attendee: { name: attendeeUser.name, email: attendeeUser.email },
-          event: updatedEvent || event
+          event: updatedEvent || event,
+          seatNumbers: result.booking?.seatLabels || []
         }).catch(() => {});
       }
 

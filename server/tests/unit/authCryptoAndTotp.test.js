@@ -19,7 +19,8 @@ import {
 } from '../../src/infrastructure/security/totpService.js';
 import {
   getApproximateLocation,
-  parseUserAgent
+  parseUserAgent,
+  getClientIp
 } from '../../src/infrastructure/security/deviceGeoService.js';
 
 describe('Auth Cryptography & TOTP Security (Unit Tests)', () => {
@@ -139,5 +140,51 @@ describe('Auth Cryptography & TOTP Security (Unit Tests)', () => {
     assert.equal(parsed.browser, 'Chrome', 'Browser should be identified as Chrome');
     assert.ok(parsed.os.includes('Windows'), 'OS should be identified as Windows');
     assert.equal(parsed.deviceType, 'Desktop', 'Device type should be Desktop');
+  });
+
+  it('9. Exact smartphone model and operating system extraction', () => {
+    // Samsung Galaxy S23 Ultra
+    const uaSamsung = 'Mozilla/5.0 (Linux; Android 14; SM-S918B Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.144 Mobile Safari/537.36';
+    const parsedSamsung = parseUserAgent(uaSamsung);
+    assert.equal(parsedSamsung.phoneModel, 'Samsung Galaxy S23 Ultra');
+    assert.equal(parsedSamsung.os, 'Android 14');
+    assert.equal(parsedSamsung.deviceType, 'Mobile');
+
+    // Google Pixel 8 Pro
+    const uaPixel = 'Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro Build/UD1A.230803.041; wv) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.144 Mobile Safari/537.36';
+    const parsedPixel = parseUserAgent(uaPixel);
+    assert.equal(parsedPixel.phoneModel, 'Google Pixel 8 Pro');
+    assert.equal(parsedPixel.os, 'Android 14');
+
+    // Apple iPhone
+    const uaiPhone = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1';
+    const parsedIphone = parseUserAgent(uaiPhone);
+    assert.equal(parsedIphone.phoneModel, 'Apple iPhone');
+    assert.equal(parsedIphone.os, 'iOS 17.2');
+    assert.equal(parsedIphone.deviceType, 'Mobile');
+  });
+
+  it('10. Edge reverse-proxy location and multi-hop IP extraction', () => {
+    // Vercel edge headers
+    const vercelLocation = getApproximateLocation('203.0.113.195', {
+      'x-vercel-ip-city': 'Kolkata',
+      'x-vercel-ip-country-region': 'WB',
+      'x-vercel-ip-country': 'IN',
+      'x-vercel-ip-timezone': 'Asia/Kolkata'
+    });
+    assert.equal(vercelLocation.city, 'Kolkata');
+    assert.equal(vercelLocation.region, 'WB');
+    assert.equal(vercelLocation.country, 'IN');
+    assert.equal(vercelLocation.timezone, 'Asia/Kolkata');
+
+    // Multi-hop client IP resolution
+    const mockReq = {
+      headers: {
+        'x-forwarded-for': '49.37.150.22, 10.0.0.1, 127.0.0.1',
+        'x-real-ip': '49.37.150.22'
+      }
+    };
+    const extractedIp = getClientIp(mockReq);
+    assert.equal(extractedIp, '49.37.150.22', 'Should resolve first public client IP');
   });
 });

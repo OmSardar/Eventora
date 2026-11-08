@@ -789,7 +789,16 @@ export default function SecuritySettingsPage() {
                         {new Date(ev.loginAt).toLocaleString()}
                       </td>
                       <td className="py-2.5 text-muted-foreground">
-                        {ev.device.browser} {ev.device.browserVersion} on {ev.device.os}
+                        {ev.device.phoneModel ? (
+                          <div>
+                            <span className="font-semibold text-foreground">{ev.device.phoneModel}</span>
+                            <span className="text-[11px] block text-muted-foreground/80">{ev.device.os} • {ev.device.browser} {ev.device.browserVersion}</span>
+                          </div>
+                        ) : ev.device.summary ? (
+                          <span>{ev.device.summary}</span>
+                        ) : (
+                          <span>{ev.device.browser} {ev.device.browserVersion} on {ev.device.os}</span>
+                        )}
                       </td>
                       <td className="py-2.5 text-muted-foreground whitespace-nowrap">
                         {ev.location.city !== "Unknown" ? `${ev.location.city}, ${ev.location.country}` : ev.location.country}

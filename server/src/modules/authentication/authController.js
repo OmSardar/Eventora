@@ -3,6 +3,7 @@ import { User } from '../users/User.js';
 import { getOrCreateCsrfToken } from '../../shared/middleware/securityMiddleware.js';
 import { logAuditEvent } from '../audit/AuditLog.js';
 import { getAppBaseUrl } from '../../infrastructure/email/emailService.js';
+import { getClientIp } from '../../infrastructure/security/deviceGeoService.js';
 
 // Helper to safely establish authenticated session and rotate session ID
 function establishUserSession(req, user, authFactor, callback) {
@@ -26,10 +27,12 @@ function establishUserSession(req, user, authFactor, callback) {
       if (saveErr) return callback(saveErr);
 
       // Asynchronously record login security event and dispatch notification
+      const clientIp = getClientIp(req);
       authService.recordLoginAndNotify({
         user,
-        ipAddress: req.ip,
+        ipAddress: clientIp,
         userAgent: req.headers['user-agent'],
+        headers: req.headers,
         authFactor
       });
 

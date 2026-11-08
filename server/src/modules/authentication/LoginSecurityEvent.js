@@ -25,13 +25,17 @@ const loginSecurityEventSchema = new mongoose.Schema(
     location: {
       city: { type: String, default: 'Unknown' },
       region: { type: String, default: 'Unknown' },
-      country: { type: String, default: 'Unknown' }
+      country: { type: String, default: 'Unknown' },
+      timezone: { type: String, default: 'UTC' }
     },
     device: {
       browser: { type: String, default: 'Unknown' },
       browserVersion: { type: String, default: 'Unknown' },
       os: { type: String, default: 'Unknown' },
-      deviceType: { type: String, default: 'Desktop' }
+      deviceType: { type: String, default: 'Desktop' },
+      phoneModel: { type: String, default: '' },
+      vendor: { type: String, default: '' },
+      summary: { type: String, default: '' }
     },
     authFactor: {
       type: String,

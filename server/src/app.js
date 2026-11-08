@@ -73,7 +73,10 @@ const corsOptions = {
     'Accept',
     'Origin',
     'Cache-Control',
-    'X-Requested-With'
+    'X-Requested-With',
+    'X-Client-Timezone',
+    'X-Client-Platform',
+    'X-Client-Model'
   ],
   exposedHeaders: ['X-Request-Id', 'request-id', 'x-rtb-fingerprint-id'],
   maxAge: 86400

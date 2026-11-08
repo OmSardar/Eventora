@@ -220,7 +220,8 @@ export async function confirmFreeAssignedBooking({
       sendRegistrationConfirmationEmail({
         registrationId: booking.bookingReference,
         attendee: { name: attendeeUser.name, email: attendeeUser.email },
-        event: updatedEvent
+        event: updatedEvent,
+        seatNumbers: booking.seatLabels
       }).catch((emailErr) => {
         logger.error({ err: emailErr?.message }, 'Free seat booking confirmation email delivery failed');
       });

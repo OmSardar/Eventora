@@ -53,9 +53,15 @@ export async function apiClient<T>(
 
   const isFormData = typeof FormData !== "undefined" && data instanceof FormData;
 
+  const clientTimezone =
+    typeof window !== "undefined"
+      ? Intl.DateTimeFormat().resolvedOptions().timeZone
+      : "";
+
   const headers: Record<string, string> = {
     ...(isFormData ? {} : { "Content-Type": "application/json" }),
     Accept: "application/json",
+    ...(clientTimezone ? { "X-Client-Timezone": clientTimezone } : {}),
     ...((customHeaders as Record<string, string>) || {}),
   };
 

@@ -41,12 +41,16 @@ export interface LoginSecurityEventItem {
     city: string;
     region: string;
     country: string;
+    timezone?: string;
   };
   device: {
     browser: string;
     browserVersion: string;
     os: string;
     deviceType: string;
+    phoneModel?: string;
+    vendor?: string;
+    summary?: string;
   };
   authFactor: string;
   notificationStatus: string;

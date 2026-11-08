@@ -15,6 +15,7 @@ import { SeatMap } from "@/components/seating/SeatMap";
 import { ConfirmedTicketModal } from "@/components/seating/ConfirmedTicketModal";
 import {
   AlertCircle,
+  Armchair,
   Calendar,
   CheckCircle,
   Compass,
@@ -208,17 +209,9 @@ export function EventDetailView({ eventId, initialEvent }: EventDetailViewProps)
             </div>
           </div>
 
-          {/* Description Section */}
-          <div className="space-y-3 pt-6 border-t border-border/40">
-            <h3 className="font-bold text-lg text-foreground">About This Event</h3>
-            <div className="text-sm leading-relaxed text-muted-foreground whitespace-pre-line">
-              {event.description}
-            </div>
-          </div>
-
-          {/* Assigned Seating Venue Map (when event has assigned seating configured) */}
+          {/* Assigned Seating Venue Map - BookMyShow Experience (Prominently Placed Above Description) */}
           {event.seatingType === "ASSIGNED_SEATING" && (
-            <div className="pt-6 border-t border-border/40">
+            <div id="seat-map-section" className="pt-2 scroll-mt-24">
               <SeatMap
                 eventId={eventId}
                 eventTitle={event.title}
@@ -237,6 +230,14 @@ export function EventDetailView({ eventId, initialEvent }: EventDetailViewProps)
               />
             </div>
           )}
+
+          {/* Description Section */}
+          <div className="space-y-3 pt-6 border-t border-border/40">
+            <h3 className="font-bold text-lg text-foreground">About This Event</h3>
+            <div className="text-sm leading-relaxed text-muted-foreground whitespace-pre-line">
+              {event.description}
+            </div>
+          </div>
 
           {/* Organizer Card */}
           <div className="rounded-xl border border-border bg-card p-5 space-y-2">
@@ -374,16 +375,30 @@ export function EventDetailView({ eventId, initialEvent }: EventDetailViewProps)
                     </div>
                   ) : isAlreadyRegistered ? (
                     <div className="space-y-3">
-                      <div className="flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-3 text-xs text-emerald-500 font-medium">
-                        <CheckCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
-                        <span>
-                          {isPendingCancellation
-                            ? "Cancellation request pending"
-                            : "You are registered for this event"}
-                        </span>
+                      <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3.5 text-xs text-emerald-600 dark:text-emerald-400 space-y-1.5">
+                        <div className="flex items-center gap-1.5 font-semibold">
+                          <CheckCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
+                          <span>
+                            {isPendingCancellation
+                              ? "Cancellation request pending"
+                              : "You are registered for this event"}
+                          </span>
+                        </div>
+                        {userRegistration?.booking?.seatLabels && userRegistration.booking.seatLabels.length > 0 && (
+                          <div className="pt-1.5 border-t border-emerald-500/20 text-xs text-foreground flex items-center justify-between">
+                            <span className="text-muted-foreground">Reserved Seat(s):</span>
+                            <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded">
+                              {userRegistration.booking.seatLabels.join(", ")}
+                            </span>
+                          </div>
+                        )}
                       </div>
-                      <Button disabled className="w-full h-11 text-xs font-semibold bg-muted text-muted-foreground cursor-not-allowed opacity-60">
-                        {isPendingCancellation ? "Cancellation Pending" : "Already Registered"}
+                      <Button
+                        onClick={() => setShowTicketModal(true)}
+                        className="w-full h-10 text-xs font-semibold gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
+                      >
+                        <Ticket className="h-4 w-4" />
+                        View Ticket Pass
                       </Button>
                       <Link href="/attendee/registrations" className="block">
                         <Button variant="outline" className="w-full text-xs">
@@ -418,6 +433,31 @@ export function EventDetailView({ eventId, initialEvent }: EventDetailViewProps)
                       <Button disabled className="w-full h-11 text-xs font-semibold">
                         Sold Out
                       </Button>
+                    ) : event.seatingType === "ASSIGNED_SEATING" ? (
+                      <div className="space-y-3">
+                        <div className="rounded-xl bg-blue-500/10 border border-blue-500/20 p-3 text-xs text-blue-700 dark:text-blue-300 space-y-1">
+                          <p className="font-semibold flex items-center gap-1.5">
+                            <Armchair className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                            Interactive Seating Required
+                          </p>
+                          <p className="text-[11px] text-muted-foreground leading-relaxed">
+                            Pick your seat(s) directly on the interactive venue map to lock your hold and complete booking.
+                          </p>
+                        </div>
+                        <Button
+                          onClick={() => {
+                            const mapEl = document.getElementById("seat-map-section");
+                            if (mapEl) {
+                              mapEl.scrollIntoView({ behavior: "smooth", block: "start" });
+                            }
+                          }}
+                          className="w-full h-11 text-xs font-semibold gap-1.5 bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
+                          data-testid="select-seats-cta-btn"
+                        >
+                          <Armchair className="h-4 w-4" aria-hidden="true" />
+                          Select Seats on Map
+                        </Button>
+                      </div>
                     ) : event.isPaid && event.ticketPrice ? (
                       <RazorpayCheckoutButton
                         event={event}

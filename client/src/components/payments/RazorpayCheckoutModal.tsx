@@ -19,6 +19,7 @@ interface RazorpayCheckoutProps {
   onError: (err: string) => void;
   disabled?: boolean;
   disabledReason?: string;
+  holdId?: string;
 }
 
 export function RazorpayCheckoutButton({
@@ -28,6 +29,7 @@ export function RazorpayCheckoutButton({
   onError,
   disabled = false,
   disabledReason,
+  holdId,
 }: RazorpayCheckoutProps) {
   const [loading, setLoading] = useState(false);
   const [isSimulating, setIsSimulating] = useState(false);
@@ -72,6 +74,7 @@ export function RazorpayCheckoutButton({
         expiresAt: string;
       }>("/payments/create-order", {
         eventId: event._id || event.id,
+        ...(holdId ? { holdId } : {}),
       });
 
       const orderData = (res as any)?.data || res;

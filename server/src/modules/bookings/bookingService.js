@@ -362,7 +362,7 @@ export async function verifyAndRedeemTicket({ token, scannerUserId = null, markR
     // A. Signed token: search Booking by reference
     if (payload.ref) {
       booking = await Booking.findOne({ bookingReference: payload.ref })
-        .populate('eventId', 'title eventDate venue organizerId')
+        .populate('eventId', 'title eventDate venue organizerId status')
         .populate('attendeeId', 'name email');
     }
 
@@ -372,7 +372,7 @@ export async function verifyAndRedeemTicket({ token, scannerUserId = null, markR
         eventId: new mongoose.Types.ObjectId(payload.evt),
         attendeeId: new mongoose.Types.ObjectId(payload.att)
       })
-        .populate('eventId', 'title eventDate venue organizerId')
+        .populate('eventId', 'title eventDate venue organizerId status')
         .populate('attendeeId', 'name email');
     }
   } else {
@@ -381,19 +381,19 @@ export async function verifyAndRedeemTicket({ token, scannerUserId = null, markR
 
     // Check Booking by reference
     booking = await Booking.findOne({ bookingReference: upperToken })
-      .populate('eventId', 'title eventDate venue organizerId')
+      .populate('eventId', 'title eventDate venue organizerId status')
       .populate('attendeeId', 'name email');
 
     // Check by ObjectId if valid
     if (!booking && mongoose.Types.ObjectId.isValid(cleanToken)) {
       const objId = new mongoose.Types.ObjectId(cleanToken);
       booking = await Booking.findById(objId)
-        .populate('eventId', 'title eventDate venue organizerId')
+        .populate('eventId', 'title eventDate venue organizerId status')
         .populate('attendeeId', 'name email');
 
       if (!booking) {
         registration = await Registration.findById(objId)
-          .populate('eventId', 'title eventDate venue organizerId')
+          .populate('eventId', 'title eventDate venue organizerId status')
           .populate('attendeeId', 'name email');
       }
     }
@@ -403,7 +403,7 @@ export async function verifyAndRedeemTicket({ token, scannerUserId = null, markR
       const hexPrefix = cleanToken.slice(4).toLowerCase();
       if (/^[0-9a-f]{6,8}$/i.test(hexPrefix)) {
         const potentialRegs = await Registration.find()
-          .populate('eventId', 'title eventDate venue organizerId')
+          .populate('eventId', 'title eventDate venue organizerId status')
           .populate('attendeeId', 'name email')
           .sort({ createdAt: -1 })
           .limit(20);
@@ -416,6 +416,14 @@ export async function verifyAndRedeemTicket({ token, scannerUserId = null, markR
 
   // 3. Process Booking admission
   if (booking) {
+    if (booking.eventId?.status === EVENT_STATUS.CANCELLED) {
+      return {
+        isValid: false,
+        reason: 'EVENT_CANCELLED',
+        message: 'This event has been cancelled by the organizer. Admission is not permitted.'
+      };
+    }
+
     if (booking.status !== BOOKING_STATUS.CONFIRMED) {
       return {
         isValid: false,
@@ -438,14 +446,51 @@ export async function verifyAndRedeemTicket({ token, scannerUserId = null, markR
       };
     }
 
-    if (markRedeemed) {
-      booking.isRedeemed = true;
-      booking.redeemedAt = new Date();
-      if (scannerUserId) {
-        booking.redeemedBy = new mongoose.Types.ObjectId(scannerUserId);
+    // Authorization check: only the organizer of this event can admit attendees
+    if (markRedeemed && scannerUserId) {
+      const eventOrganizerId = booking.eventId?.organizerId?._id?.toString() || booking.eventId?.organizerId?.toString();
+      if (eventOrganizerId && eventOrganizerId !== scannerUserId.toString()) {
+        throw new ForbiddenError('You are not authorized to admit attendees for an event you do not organize.');
       }
-      await booking.save();
-      logger.info({ bookingReference: booking.bookingReference }, 'Booking ticket successfully marked redeemed');
+    }
+
+    if (markRedeemed) {
+      const redeemedAt = new Date();
+      // Atomic conditional update guarantees that concurrent scans cannot double-redeem
+      const updatedBooking = await Booking.findOneAndUpdate(
+        {
+          _id: booking._id,
+          isRedeemed: false,
+          status: BOOKING_STATUS.CONFIRMED
+        },
+        {
+          $set: {
+            isRedeemed: true,
+            redeemedAt,
+            ...(scannerUserId ? { redeemedBy: new mongoose.Types.ObjectId(scannerUserId) } : {})
+          }
+        },
+        { new: true }
+      );
+
+      if (!updatedBooking) {
+        const fresh = await Booking.findById(booking._id).lean();
+        return {
+          isValid: false,
+          isAlreadyRedeemed: true,
+          reason: 'ALREADY_REDEEMED',
+          message: `This ticket was already redeemed on ${fresh?.redeemedAt ? new Date(fresh.redeemedAt).toLocaleString() : 'a concurrent scan'}.`,
+          bookingReference: booking.bookingReference,
+          eventTitle: booking.eventId?.title,
+          attendeeName: booking.attendeeId?.name,
+          seats: booking.seatLabels,
+          redeemedAt: fresh?.redeemedAt || redeemedAt
+        };
+      }
+
+      booking.isRedeemed = true;
+      booking.redeemedAt = redeemedAt;
+      logger.info({ bookingReference: booking.bookingReference }, 'Booking ticket atomically marked redeemed');
     }
 
     return {
@@ -464,6 +509,14 @@ export async function verifyAndRedeemTicket({ token, scannerUserId = null, markR
 
   // 4. Process Registration admission
   if (registration) {
+    if (registration.eventId?.status === EVENT_STATUS.CANCELLED) {
+      return {
+        isValid: false,
+        reason: 'EVENT_CANCELLED',
+        message: 'This event has been cancelled by the organizer. Admission is not permitted.'
+      };
+    }
+
     if (registration.status !== REGISTRATION_STATUS.CONFIRMED) {
       return {
         isValid: false,
@@ -488,14 +541,51 @@ export async function verifyAndRedeemTicket({ token, scannerUserId = null, markR
       };
     }
 
-    if (markRedeemed) {
-      registration.isRedeemed = true;
-      registration.redeemedAt = new Date();
-      if (scannerUserId) {
-        registration.redeemedBy = new mongoose.Types.ObjectId(scannerUserId);
+    // Authorization check: only the organizer of this event can admit attendees
+    if (markRedeemed && scannerUserId) {
+      const eventOrganizerId = registration.eventId?.organizerId?._id?.toString() || registration.eventId?.organizerId?.toString();
+      if (eventOrganizerId && eventOrganizerId !== scannerUserId.toString()) {
+        throw new ForbiddenError('You are not authorized to admit attendees for an event you do not organize.');
       }
-      await registration.save();
-      logger.info({ registrationId: registration._id }, 'Registration ticket successfully marked redeemed');
+    }
+
+    if (markRedeemed) {
+      const redeemedAt = new Date();
+      // Atomic conditional update guarantees concurrent safety
+      const updatedRegistration = await Registration.findOneAndUpdate(
+        {
+          _id: registration._id,
+          isRedeemed: false,
+          status: REGISTRATION_STATUS.CONFIRMED
+        },
+        {
+          $set: {
+            isRedeemed: true,
+            redeemedAt,
+            ...(scannerUserId ? { redeemedBy: new mongoose.Types.ObjectId(scannerUserId) } : {})
+          }
+        },
+        { new: true }
+      );
+
+      if (!updatedRegistration) {
+        const fresh = await Registration.findById(registration._id).lean();
+        return {
+          isValid: false,
+          isAlreadyRedeemed: true,
+          reason: 'ALREADY_REDEEMED',
+          message: `This ticket was already redeemed on ${fresh?.redeemedAt ? new Date(fresh.redeemedAt).toLocaleString() : 'a concurrent scan'}.`,
+          bookingReference: regRef,
+          eventTitle: registration.eventId?.title,
+          attendeeName: registration.attendeeId?.name,
+          seats: ['General Admission'],
+          redeemedAt: fresh?.redeemedAt || redeemedAt
+        };
+      }
+
+      registration.isRedeemed = true;
+      registration.redeemedAt = redeemedAt;
+      logger.info({ registrationId: registration._id }, 'Registration ticket atomically marked redeemed');
     }
 
     return {

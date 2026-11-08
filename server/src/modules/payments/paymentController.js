@@ -2,7 +2,7 @@ import * as paymentService from './paymentService.js';
 
 export async function createOrder(req, res, next) {
   try {
-    const { eventId } = req.validatedBody;
+    const { eventId, holdId } = req.validatedBody;
     const attendeeId = req.user.id;
     const ipAddress = req.ip;
     const userAgent = req.headers['user-agent'];
@@ -10,6 +10,7 @@ export async function createOrder(req, res, next) {
     const result = await paymentService.createOrderWithSeatHold({
       eventId,
       attendeeId,
+      holdId,
       ipAddress,
       userAgent
     });

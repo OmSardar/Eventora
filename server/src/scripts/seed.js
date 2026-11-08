@@ -137,8 +137,6 @@ export async function seedTargetDatabase(mongoUri, label = 'Target') {
     role: ROLES.ATTENDEE
   });
 
-  // Check if primary developer/admin account exists in database to give it demo tickets too
-  const devUser = await User.findOne({ email: 'osardar793@gmail.com' });
 
   // 3. Create fresh, realistic seed events (scheduled 7 to 60 days ahead)
   console.log(`[${label}] Seeding 8 fresh, production-ready events...`);
@@ -413,28 +411,40 @@ export async function seedTargetDatabase(mongoUri, label = 'Target') {
     }
   });
 
-  // Event 6: Fintech Infrastructure (General Admission, Paid ₹1499)
-  await Event.create({
+  // Event 6: Fintech Infrastructure (Assigned Seating, Paid ₹1499)
+  const event6 = await Event.create({
     title: 'Fintech Infrastructure & Payment Systems Summit',
     description:
       'Examining idempotent payment ledgers, ISO 20022 messaging, zero-loss double-entry transaction journals, reconciliation automata, and PCI-DSS compliance across distributed banking infrastructure.',
     eventDate: new Date(now + 45 * dayMs),
     venue: 'Financial District Executive Center, Floor 18, Boston, MA',
-    seatLimit: 100,
+    seatLimit: 75,
     seatsBooked: 0,
     organizerId: demoOrganizer._id,
     status: EVENT_STATUS.PUBLISHED,
     category: 'Business',
-    seatingType: 'GENERAL_ADMISSION',
+    seatingType: 'ASSIGNED_SEATING',
     isPaid: true,
     ticketPrice: 1499,
     currency: 'INR',
+    maxTicketsPerBooking: 6,
     bannerUrl: 'https://images.unsplash.com/photo-1559526324-4b87b5e36e44?auto=format&fit=crop&w=1200&q=80',
     image: {
       source: 'URL',
       url: 'https://images.unsplash.com/photo-1559526324-4b87b5e36e44?auto=format&fit=crop&w=1200&q=80',
       publicId: null
     }
+  });
+
+  // Generate 75 seats for Event 6 (5 rows x 15 seats: A1 to E15)
+  await generateEventSeats(event6._id, {
+    generationMode: 'AUTOMATIC',
+    totalSeats: 75,
+    rows: 5,
+    seatsPerRow: 15,
+    startingRowLabel: 'A',
+    category: 'STANDARD',
+    price: 1499
   });
 
   // Event 7: Cancelled Forum (To showcase cancellation state handling)
@@ -547,55 +557,6 @@ export async function seedTargetDatabase(mongoUri, label = 'Target') {
     paymentMethod: 'RAZORPAY',
     confirmedAt: new Date()
   });
-
-  // If personal developer account exists, give it a confirmed ticket pass for testing
-  if (devUser) {
-    const devBkRef = `EVT-BK-GTS26-DEV`;
-    const devSeat = await EventSeat.findOne({ eventId: event1._id, seatLabel: 'C3' });
-    if (devSeat) {
-      const devToken = generateSignedTicketToken({
-        bookingReference: devBkRef,
-        eventId: event1._id,
-        attendeeId: devUser._id
-      });
-      const devBk = await Booking.create({
-        bookingReference: devBkRef,
-        eventId: event1._id,
-        attendeeId: devUser._id,
-        seatIds: [devSeat._id],
-        seatLabels: ['C3'],
-        ticketCategory: 'VIP ACCESS',
-        subtotal: 499,
-        fees: 0,
-        totalAmount: 499,
-        currency: 'INR',
-        status: BOOKING_STATUS.CONFIRMED,
-        ticketToken: devToken,
-        paymentMethod: 'RAZORPAY',
-        confirmedAt: new Date()
-      });
-      devSeat.status = SEAT_STATUS.BOOKED;
-      devSeat.bookingId = devBk._id;
-      await devSeat.save();
-
-      const devReg = await Registration.create({
-        eventId: event1._id,
-        attendeeId: devUser._id,
-        status: REGISTRATION_STATUS.CONFIRMED,
-        isPaid: true,
-        ticketPrice: 499,
-        currency: 'INR',
-        confirmationEmailSent: true,
-        isRedeemed: false
-      });
-      devBk.registrationId = devReg._id;
-      await devBk.save();
-
-      // Bump seatsBooked by 1
-      await Event.findByIdAndUpdate(event1._id, { $inc: { seatsBooked: 1 } });
-      console.log(`[${label}] Created developer test pass for: ${devUser.email} (Seat C3)`);
-    }
-  }
 
   // 4. Create in-app notifications
   console.log(`[${label}] Creating initial notification feed...`);

@@ -3,7 +3,7 @@
 import React, { useState, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { EventSeatItem, SeatHoldItem, User } from "@/types";
+import { EventSeatItem, GetSeatsResponse, LiveSeatInventory, SeatHoldItem, User } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { SeatHoldCountdown } from "./SeatHoldCountdown";
@@ -18,6 +18,11 @@ import {
   RefreshCw,
   ShieldAlert,
   Sparkles,
+  Users,
+  CheckCircle2,
+  Clock,
+  Ban,
+  Layers,
 } from "lucide-react";
 
 interface SeatMapProps {
@@ -51,22 +56,48 @@ export function SeatMap({
   const [isConfirmingFree, setIsConfirmingFree] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Poll seat availability every 15 seconds to reflect real-time holds and bookings
+  // Poll seat availability every 15 seconds to reflect authoritative real-time holds and bookings
   const {
-    data: seatsData,
+    data: seatsResponse,
     isLoading,
     isRefetching,
     refetch,
-  } = useQuery({
+  } = useQuery<GetSeatsResponse>({
     queryKey: ["event-seats", eventId],
     queryFn: async () => {
-      const res = await api.get<{ seats: EventSeatItem[] }>(`/events/${eventId}/seats`);
-      return res?.seats || [];
+      const res = await api.get<GetSeatsResponse>(`/events/${eventId}/seats`);
+      return res;
     },
     refetchInterval: 15000,
   });
 
-  const seats: EventSeatItem[] = useMemo(() => seatsData || [], [seatsData]);
+  const seats: EventSeatItem[] = useMemo(() => seatsResponse?.seats || [], [seatsResponse]);
+
+  // Compute authoritative inventory summary with fallback to calculated values
+  const inventory: LiveSeatInventory = useMemo(() => {
+    if (seatsResponse?.inventory) {
+      return seatsResponse.inventory;
+    }
+    let availableCount = 0;
+    let heldCount = 0;
+    let bookedCount = 0;
+    let blockedCount = 0;
+
+    for (const seat of seats) {
+      if (seat.status === "AVAILABLE") availableCount++;
+      else if (seat.status === "HELD") heldCount++;
+      else if (seat.status === "BOOKED") bookedCount++;
+      else if (seat.status === "BLOCKED") blockedCount++;
+    }
+
+    return {
+      totalCapacity: seats.length,
+      availableCount,
+      heldCount,
+      bookedCount,
+      blockedCount,
+    };
+  }, [seatsResponse, seats]);
 
   // Group seats by Section and Row
   const sections = useMemo(() => {
@@ -143,6 +174,14 @@ export function SeatMap({
         return;
       }
       setSelectedSeatIds((prev) => [...prev, seat.id]);
+    }
+  };
+
+  // Keyboard handler for accessible selection
+  const handleSeatKeyDown = (e: React.KeyboardEvent, seat: EventSeatItem) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      handleSeatClick(seat);
     }
   };
 
@@ -244,17 +283,17 @@ export function SeatMap({
   const getCategoryBadgeClass = (category: string) => {
     switch (category) {
       case "VIP":
-        return "bg-purple-500/10 text-purple-400 border-purple-500/20";
+        return "bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-500/30";
       case "PREMIUM":
-        return "bg-amber-500/10 text-amber-400 border-amber-500/20";
+        return "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30";
       default:
-        return "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
+        return "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30";
     }
   };
 
   return (
-    <div className="space-y-6 rounded-2xl border border-border/80 bg-card p-4 sm:p-6 shadow-sm">
-      {/* Header & Legend */}
+    <div className="space-y-6 rounded-2xl border border-border/80 bg-card p-4 sm:p-6 shadow-sm" data-testid="interactive-seat-map">
+      {/* Header & Controls */}
       <div className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -263,7 +302,7 @@ export function SeatMap({
               <span>Interactive Venue Seat Map</span>
             </h3>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Select your preferred seats. Seats are held atomically for 10 minutes upon reservation.
+              Select your preferred seats. Seats are held atomically for 10 minutes upon proceeding to checkout.
             </p>
           </div>
 
@@ -273,33 +312,100 @@ export function SeatMap({
             onClick={() => refetch()}
             disabled={isRefetching}
             className="h-8 text-xs text-muted-foreground gap-1.5"
+            aria-label="Refresh seat availability map"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${isRefetching ? "animate-spin" : ""}`} />
             <span>Refresh Map</span>
           </Button>
         </div>
 
-        {/* Legend */}
+        {/* Live Seat Inventory Summary Bar (Authoritative Backend State) */}
+        <div className="rounded-xl border border-border/60 bg-muted/30 p-3" data-testid="live-seat-inventory">
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+              <Layers className="h-3.5 w-3.5 text-primary" />
+              Authoritative Live Inventory
+            </span>
+            <span className="text-[10px] text-muted-foreground hidden sm:inline">
+              Total ({inventory.totalCapacity}) = Available ({inventory.availableCount}) + Held ({inventory.heldCount}) + Booked ({inventory.bookedCount}) + Blocked ({inventory.blockedCount})
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
+            {/* Total Capacity */}
+            <div className="flex items-center justify-between rounded-lg border border-border/50 bg-background/80 p-2">
+              <div className="flex items-center gap-1.5 text-muted-foreground">
+                <Users className="h-3.5 w-3.5 text-foreground" />
+                <span className="text-[11px] font-medium">Total:</span>
+              </div>
+              <span className="font-bold text-foreground">{inventory.totalCapacity}</span>
+            </div>
+
+            {/* Available */}
+            <div className="flex items-center justify-between rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-2">
+              <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                <span className="text-[11px] font-medium">Available:</span>
+              </div>
+              <span className="font-bold text-emerald-600 dark:text-emerald-400">{inventory.availableCount}</span>
+            </div>
+
+            {/* Booked */}
+            <div className="flex items-center justify-between rounded-lg border border-red-500/30 bg-red-500/10 p-2">
+              <div className="flex items-center gap-1.5 text-red-600 dark:text-red-400">
+                <Lock className="h-3.5 w-3.5" />
+                <span className="text-[11px] font-medium">Booked:</span>
+              </div>
+              <span className="font-bold text-red-600 dark:text-red-400">{inventory.bookedCount}</span>
+            </div>
+
+            {/* Held (In Checkout) */}
+            <div className="flex items-center justify-between rounded-lg border border-amber-500/30 bg-amber-500/10 p-2">
+              <div className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400">
+                <Clock className="h-3.5 w-3.5" />
+                <span className="text-[11px] font-medium">Held:</span>
+              </div>
+              <span className="font-bold text-amber-600 dark:text-amber-400">{inventory.heldCount}</span>
+            </div>
+
+            {/* Selected by Current Attendee */}
+            <div className="col-span-2 sm:col-span-1 flex items-center justify-between rounded-lg border border-blue-500/40 bg-blue-500/10 p-2">
+              <div className="flex items-center gap-1.5 text-blue-600 dark:text-blue-400">
+                <Armchair className="h-3.5 w-3.5" />
+                <span className="text-[11px] font-medium">Selected:</span>
+              </div>
+              <span className="font-bold text-blue-600 dark:text-blue-400">{selectedSeats.length}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Semantic Accessible Legend */}
         <div className="flex flex-wrap items-center gap-3 text-xs bg-muted/40 p-2.5 rounded-xl border border-border/40">
+          <span className="text-[11px] font-semibold text-muted-foreground mr-1">Legend:</span>
+          {/* Available: Green */}
           <div className="flex items-center gap-1.5">
-            <span className="h-3.5 w-3.5 rounded-full border-2 border-emerald-500 bg-background" />
-            <span className="text-muted-foreground text-[11px]">Available</span>
+            <span className="h-3.5 w-3.5 rounded-md border-2 border-emerald-500 bg-emerald-500/10" aria-hidden="true" />
+            <span className="text-foreground text-[11px] font-medium">Available</span>
           </div>
+          {/* Selected: Blue */}
           <div className="flex items-center gap-1.5">
-            <span className="h-3.5 w-3.5 rounded-full bg-primary" />
-            <span className="text-muted-foreground text-[11px]">Selected</span>
+            <span className="h-3.5 w-3.5 rounded-md bg-blue-600 border border-blue-500 shadow-sm" aria-hidden="true" />
+            <span className="text-foreground text-[11px] font-medium">Selected by You</span>
           </div>
+          {/* Held: Amber */}
           <div className="flex items-center gap-1.5">
-            <span className="h-3.5 w-3.5 rounded-full bg-amber-500 animate-pulse" />
-            <span className="text-muted-foreground text-[11px]">Held (In Checkout)</span>
+            <span className="h-3.5 w-3.5 rounded-md bg-amber-500/20 border border-amber-500/50 animate-pulse" aria-hidden="true" />
+            <span className="text-foreground text-[11px] font-medium">Held (In Checkout)</span>
           </div>
+          {/* Booked: Red */}
           <div className="flex items-center gap-1.5">
-            <span className="h-3.5 w-3.5 rounded-full bg-muted-foreground/30" />
-            <span className="text-muted-foreground text-[11px]">Booked</span>
+            <span className="h-3.5 w-3.5 rounded-md bg-red-500/20 border border-red-500/40" aria-hidden="true" />
+            <span className="text-foreground text-[11px] font-medium">Booked</span>
           </div>
+          {/* Blocked: Grey */}
           <div className="flex items-center gap-1.5">
-            <span className="h-3.5 w-3.5 rounded-full bg-destructive/40" />
-            <span className="text-muted-foreground text-[11px]">Blocked</span>
+            <span className="h-3.5 w-3.5 rounded-md bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700" aria-hidden="true" />
+            <span className="text-muted-foreground text-[11px]">Unavailable / Blocked</span>
           </div>
         </div>
       </div>
@@ -330,13 +436,14 @@ export function SeatMap({
       {isLoading ? (
         <div className="py-16 text-center space-y-3">
           <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
-          <p className="text-xs text-muted-foreground">Loading venue layout and seat availability...</p>
+          <p className="text-xs text-muted-foreground">Loading venue layout and authoritative seat availability...</p>
         </div>
       ) : sections.length === 0 ? (
-        <div className="py-12 text-center space-y-2 border border-dashed rounded-xl border-border/80">
-          <Info className="h-8 w-8 mx-auto text-muted-foreground" />
-          <p className="text-xs text-muted-foreground">
-            No assigned seating layout has been published for this event yet. Standard admission applies.
+        <div className="py-12 text-center space-y-3 border border-dashed rounded-xl border-border/80 bg-muted/20 p-6">
+          <ShieldAlert className="h-8 w-8 mx-auto text-amber-500" />
+          <h4 className="text-sm font-semibold text-foreground">Seating Layout Not Configured</h4>
+          <p className="text-xs text-muted-foreground max-w-md mx-auto">
+            This event is configured for assigned seating, but the venue seating layout has not been generated by the organizer yet. Seating reservations are temporarily unavailable.
           </p>
         </div>
       ) : (
@@ -374,31 +481,51 @@ export function SeatMap({
                         const isBooked = seat.status === "BOOKED";
                         const isBlocked = seat.status === "BLOCKED";
 
-                        let btnClass = "border-emerald-500/60 text-foreground hover:bg-emerald-500/10 hover:border-emerald-500";
+                        // Semantic accessible styles
+                        let btnClass = "border-emerald-500/70 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 dark:border-emerald-500/50 hover:bg-emerald-500/20 hover:scale-105 active:scale-95";
+                        let statusText = "Available";
+                        let disabledReason = "";
 
                         if (isSelected) {
-                          btnClass = "bg-primary text-primary-foreground border-primary shadow-sm scale-105 font-bold";
+                          btnClass = "bg-blue-600 border-blue-500 text-white shadow-md ring-2 ring-blue-400/50 font-bold scale-105";
+                          statusText = "Selected by you";
                         } else if (isHeld) {
-                          btnClass = "bg-amber-500/20 text-amber-500 border-amber-500/40 cursor-not-allowed animate-pulse";
+                          btnClass = "bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/40 cursor-not-allowed animate-pulse";
+                          statusText = "Held by another attendee in checkout";
+                          disabledReason = `Seat ${seat.seatLabel} is currently held in checkout by another attendee.`;
                         } else if (isBooked) {
-                          btnClass = "bg-muted text-muted-foreground/40 border-border/40 cursor-not-allowed line-through";
+                          btnClass = "bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/30 line-through cursor-not-allowed";
+                          statusText = "Booked & confirmed";
+                          disabledReason = `Seat ${seat.seatLabel} has already been booked.`;
                         } else if (isBlocked) {
-                          btnClass = "bg-destructive/10 text-destructive/40 border-destructive/20 cursor-not-allowed";
+                          btnClass = "bg-zinc-200 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 border-zinc-300 dark:border-zinc-700 cursor-not-allowed";
+                          statusText = "Unavailable / Blocked";
+                          disabledReason = `Seat ${seat.seatLabel} is reserved or blocked by the organizer.`;
                         }
+
+                        const accessibleLabel = `Seat ${seat.seatLabel}, Row ${row.rowLabel}, ${seat.category}, ₹${seat.price}. Status: ${statusText}`;
 
                         return (
                           <button
                             key={seat.id}
                             type="button"
                             onClick={() => handleSeatClick(seat)}
+                            onKeyDown={(e) => handleSeatKeyDown(e, seat)}
                             disabled={!isAvailable || !!activeHold}
-                            title={`Seat ${seat.seatLabel} (${seat.category}) - ₹${seat.price} - ${seat.status}`}
-                            className={`h-8 w-8 rounded-lg border text-xs font-mono transition-all flex items-center justify-center shrink-0 ${btnClass}`}
+                            aria-label={accessibleLabel}
+                            aria-pressed={isSelected}
+                            aria-disabled={!isAvailable && !isSelected}
+                            tabIndex={isAvailable || isSelected ? 0 : -1}
+                            title={disabledReason || accessibleLabel}
+                            data-testid={`seat-${seat.seatLabel}`}
+                            className={`h-8 w-8 rounded-lg border text-xs font-mono transition-all flex items-center justify-center shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${btnClass}`}
                           >
                             {isSelected ? (
-                              <Check className="h-3.5 w-3.5" />
+                              <Check className="h-3.5 w-3.5 stroke-[2.5]" aria-hidden="true" />
                             ) : isBooked ? (
-                              <Lock className="h-3 w-3" />
+                              <Lock className="h-3 w-3 stroke-[2]" aria-hidden="true" />
+                            ) : isBlocked ? (
+                              <Ban className="h-3 w-3" aria-hidden="true" />
                             ) : (
                               seat.seatNumber
                             )}
@@ -436,7 +563,7 @@ export function SeatMap({
 
       {/* Booking Action Summary */}
       {selectedSeats.length > 0 && (
-        <div className="rounded-xl bg-muted/60 p-4 border border-border/60 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="rounded-xl bg-muted/60 p-4 border border-border/60 flex flex-col sm:flex-row items-center justify-between gap-4" data-testid="seat-selection-summary">
           <div>
             <div className="text-xs text-muted-foreground">
               Selected ({selectedSeats.length} {selectedSeats.length === 1 ? "seat" : "seats"}):
@@ -454,17 +581,18 @@ export function SeatMap({
               <Button
                 onClick={handleAcquireHold}
                 disabled={isHolding || selectedSeats.length === 0}
-                className="w-full sm:w-auto text-xs font-semibold gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white"
+                className="w-full sm:w-auto text-xs font-semibold gap-1.5 bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
+                data-testid="hold-seats-button"
               >
                 {isHolding ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    Locking Seats (10m)...
+                    <span>Locking Seats (10m)...</span>
                   </>
                 ) : (
                   <>
                     <Sparkles className="h-4 w-4" />
-                    Hold &amp; Proceed to Checkout
+                    <span>Hold &amp; Proceed to Checkout</span>
                   </>
                 )}
               </Button>
@@ -479,6 +607,7 @@ export function SeatMap({
                       isPaid: true,
                     } as any}
                     user={user}
+                    holdId={activeHold.id}
                     onSuccess={() => {
                       setActiveHold(null);
                       setSelectedSeatIds([]);
@@ -491,6 +620,7 @@ export function SeatMap({
                     onClick={handleConfirmFreeBooking}
                     disabled={isConfirmingFree}
                     className="w-full sm:w-auto text-xs font-semibold gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
+                    data-testid="confirm-free-assigned-booking-btn"
                   >
                     {isConfirmingFree ? (
                       <>
@@ -513,4 +643,3 @@ export function SeatMap({
     </div>
   );
 }
-

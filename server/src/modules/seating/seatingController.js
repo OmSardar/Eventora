@@ -4,10 +4,13 @@ import * as bookingService from '../bookings/bookingService.js';
 export async function getSeats(req, res, next) {
   try {
     const { eventId } = req.params;
-    const seats = await seatingService.getEventSeats(eventId);
+    const result = await seatingService.getEventSeats(eventId);
     res.status(200).json({
       success: true,
-      data: { seats }
+      data: {
+        seats: result.seats,
+        inventory: result.inventory
+      }
     });
   } catch (err) {
     next(err);

@@ -43,6 +43,7 @@ import { logger } from '../../infrastructure/logging/logger.js';
 export async function createOrderWithSeatHold({
   eventId,
   attendeeId,
+  holdId,
   ipAddress,
   userAgent
 }) {
@@ -112,13 +113,31 @@ export async function createOrderWithSeatHold({
     throw new ConflictError('You already have an active checkout in progress. Please complete payment or wait for the hold to expire.');
   }
 
-  // Check if attendee has an active SeatHold (from interactive seat map)
-  const activeSeatHold = await SeatHold.findOne({
-    eventId: new mongoose.Types.ObjectId(eventId),
-    attendeeId: new mongoose.Types.ObjectId(attendeeId),
-    status: SEAT_HOLD_STATUS.ACTIVE,
-    expiresAt: { $gt: new Date() }
-  });
+  // Resolve active seat hold if specified or present
+  let activeSeatHold = null;
+  if (holdId && mongoose.Types.ObjectId.isValid(holdId)) {
+    activeSeatHold = await SeatHold.findOne({
+      _id: new mongoose.Types.ObjectId(holdId),
+      eventId: new mongoose.Types.ObjectId(eventId),
+      attendeeId: new mongoose.Types.ObjectId(attendeeId),
+      status: SEAT_HOLD_STATUS.ACTIVE,
+      expiresAt: { $gt: new Date() }
+    });
+  } else {
+    activeSeatHold = await SeatHold.findOne({
+      eventId: new mongoose.Types.ObjectId(eventId),
+      attendeeId: new mongoose.Types.ObjectId(attendeeId),
+      status: SEAT_HOLD_STATUS.ACTIVE,
+      expiresAt: { $gt: new Date() }
+    });
+  }
+
+  // Guard: Assigned seating events strictly require an active seat hold
+  if (event.seatingType === 'ASSIGNED_SEATING' && !activeSeatHold) {
+    throw new BadRequestError('Please select and hold your seats on the interactive seat map before proceeding to payment.', {
+      code: 'ERR_SEATS_NOT_SELECTED'
+    });
+  }
 
   let amountInPaise = Math.round(event.ticketPrice * 100);
   let seatCount = 1;

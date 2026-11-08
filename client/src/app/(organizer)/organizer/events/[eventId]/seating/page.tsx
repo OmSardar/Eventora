@@ -288,19 +288,19 @@ export default function OrganizerSeatingDashboardPage() {
             {/* Legend */}
             <div className="flex flex-wrap items-center gap-3 text-xs">
               <div className="flex items-center gap-1.5">
-                <span className="h-3 w-3 rounded-full border border-emerald-500 bg-emerald-500/20" />
-                <span className="text-[11px] text-muted-foreground">Available</span>
+                <span className="h-3 w-3 rounded-md border border-emerald-500 bg-emerald-500/10" />
+                <span className="text-[11px] text-foreground font-medium">Available</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="h-3 w-3 rounded-full bg-amber-500 animate-pulse" />
-                <span className="text-[11px] text-muted-foreground">Held</span>
+                <span className="h-3 w-3 rounded-md bg-amber-500/20 border border-amber-500/50 animate-pulse" />
+                <span className="text-[11px] text-foreground font-medium">Held</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="h-3 w-3 rounded-full bg-primary" />
-                <span className="text-[11px] text-muted-foreground">Booked</span>
+                <span className="h-3 w-3 rounded-md bg-red-500/20 border border-red-500/40" />
+                <span className="text-[11px] text-foreground font-medium">Booked</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="h-3 w-3 rounded-full bg-destructive/60" />
+                <span className="h-3 w-3 rounded-md bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700" />
                 <span className="text-[11px] text-muted-foreground">Blocked</span>
               </div>
             </div>
@@ -334,18 +334,18 @@ export default function OrganizerSeatingDashboardPage() {
                       <div className="flex flex-wrap items-center gap-2">
                         {row.seats.map((seat) => {
                           const isSelected = selectedSeat?.id === seat.id;
-                          let btnStyle = "border-emerald-500/50 text-foreground bg-emerald-500/10 hover:border-emerald-500";
+                          let btnStyle = "border-emerald-500/60 text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20";
 
                           if (seat.status === "BOOKED") {
-                            btnStyle = "bg-primary text-primary-foreground border-primary";
+                            btnStyle = "bg-red-500/20 text-red-600 dark:text-red-400 border-red-500/40";
                           } else if (seat.status === "HELD") {
-                            btnStyle = "bg-amber-500 text-white border-amber-500 animate-pulse";
+                            btnStyle = "bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/40 animate-pulse";
                           } else if (seat.status === "BLOCKED") {
-                            btnStyle = "bg-destructive/20 text-destructive border-destructive/40";
+                            btnStyle = "bg-zinc-200 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 border-zinc-300 dark:border-zinc-700";
                           }
 
                           if (isSelected) {
-                            btnStyle += " ring-2 ring-primary ring-offset-2 ring-offset-background font-bold scale-110";
+                            btnStyle += " ring-2 ring-blue-500 ring-offset-2 ring-offset-background font-bold scale-110";
                           }
 
                           return (

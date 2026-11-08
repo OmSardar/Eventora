@@ -6,7 +6,12 @@ export const createOrderSchema = z.object({
   eventId: z
     .string({ required_error: 'Event ID is required' })
     .trim()
-    .regex(objectIdRegex, 'Invalid event ID format')
+    .regex(objectIdRegex, 'Invalid event ID format'),
+  holdId: z
+    .string()
+    .trim()
+    .regex(objectIdRegex, 'Invalid hold ID format')
+    .optional()
 });
 
 export const verifyPaymentSchema = z.object({

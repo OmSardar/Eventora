@@ -574,5 +574,175 @@ describe('Interactive Seating, Concurrency & Digital Tickets (Integration)', () 
     assert.equal(doubleAdmitRes.body.data.isValid, false);
     assert.equal(doubleAdmitRes.body.data.isAlreadyRedeemed, true);
   });
+
+  it('15. HTTP CONCURRENCY: Multiple authenticated attendee agents competing simultaneously for the same seat via HTTP pipeline', async () => {
+    // Locate seat D1
+    const seatsRes = await attendeeAgent1.get(`/api/v1/events/${assignedEvent.id}/seats`);
+    const seatD1 = seatsRes.body.data.seats.find((s) => s.seatLabel === 'D1');
+    assert.ok(seatD1, 'Seat D1 must exist');
+    assert.equal(seatD1.status, 'AVAILABLE', 'Seat D1 must initially be available');
+
+    // Fire 2 concurrent HTTP requests through supertest pipeline
+    const [res1, res2] = await Promise.all([
+      attendeeAgent1
+        .post(`/api/v1/events/${assignedEvent.id}/seat-holds`)
+        .set('x-csrf-token', csrfAtt1)
+        .send({ seatIds: [seatD1.id] }),
+      attendeeAgent2
+        .post(`/api/v1/events/${assignedEvent.id}/seat-holds`)
+        .set('x-csrf-token', csrfAtt2)
+        .send({ seatIds: [seatD1.id] })
+    ]);
+
+    const successes = [res1, res2].filter((r) => r.status === 201);
+    const conflicts = [res1, res2].filter((r) => r.status === 409);
+
+    assert.equal(successes.length, 1, 'Exactly one concurrent HTTP request must acquire the seat hold');
+    assert.equal(conflicts.length, 1, 'The competing HTTP request must be rejected with 409 Conflict');
+
+    // Winner verification
+    const winnerData = successes[0].body.data;
+    assert.ok(winnerData.holdId, 'Winner must receive holdId');
+
+    // Database verification
+    const d1Db = await EventSeat.findById(seatD1.id);
+    assert.equal(d1Db.status, SEAT_STATUS.HELD);
+    assert.equal(d1Db.holdId.toString(), winnerData.holdId);
+
+    // Clean up hold
+    await SeatHold.deleteOne({ _id: winnerData.holdId });
+    await EventSeat.findByIdAndUpdate(seatD1.id, {
+      status: SEAT_STATUS.AVAILABLE,
+      holdId: null,
+      heldBy: null,
+      heldUntil: null
+    });
+  });
+
+  it('16. SECURITY: Unauthorized organizer cannot admit or redeem tickets for another organizer\'s event', async () => {
+    // Register another organizer (Organizer B)
+    const organizerBAgent = request.agent(app);
+    const cB = await organizerBAgent.get('/api/v1/auth/csrf');
+    const csrfOrgB = cB.body.data.csrfToken;
+
+    const orgBRes = await organizerBAgent
+      .post('/api/v1/auth/register')
+      .set('x-csrf-token', csrfOrgB)
+      .send({
+        name: 'Rival Organizer',
+        email: 'organizerB@seattest.com',
+        password: 'Password@123',
+        role: 'ORGANIZER'
+      });
+    const organizerBUser = orgBRes.body.data.user;
+    await User.findByIdAndUpdate(organizerBUser.id, { emailVerified: true });
+
+    // Create a fresh unredeemed booking for Organizer A's event
+    const freshBooking = await Booking.create({
+      bookingReference: 'EVT-BK-UNAUTH-01',
+      eventId: assignedEvent._id,
+      attendeeId: new mongoose.Types.ObjectId(attendeeUser1.id),
+      seatIds: [],
+      seatLabels: ['E1'],
+      subtotal: 500,
+      totalAmount: 500,
+      status: 'CONFIRMED',
+      ticketToken: 'dummy_token_unauth_test',
+      isRedeemed: false
+    });
+
+    // Organizer B attempts to admit ticket for Organizer A's event
+    const unauthRes = await organizerBAgent
+      .post('/api/v1/tickets/validate')
+      .set('x-csrf-token', csrfOrgB)
+      .send({ token: 'EVT-BK-UNAUTH-01', markRedeemed: true });
+
+    assert.equal(unauthRes.status, 403, 'Unauthorized organizer must be rejected with 403 Forbidden');
+    assert.ok(unauthRes.body.error.message.includes('not authorized to admit attendees'), 'Must display specific authorization rejection message');
+
+    // Verify ticket was NOT redeemed
+    const checkDb = await Booking.findById(freshBooking._id);
+    assert.equal(checkDb.isRedeemed, false, 'Ticket must remain unredeemed in database');
+
+    await Booking.deleteOne({ _id: freshBooking._id });
+    await User.deleteOne({ _id: organizerBUser.id });
+  });
+
+  it('17. CONCURRENCY: Simultaneous duplicate scan requests cannot admit the attendee twice (Atomic Idempotency)', async () => {
+    const concurrentBooking = await Booking.create({
+      bookingReference: 'EVT-BK-CONCUR-ADMIT',
+      eventId: assignedEvent._id,
+      attendeeId: new mongoose.Types.ObjectId(attendeeUser1.id),
+      seatIds: [],
+      seatLabels: ['F1'],
+      subtotal: 500,
+      totalAmount: 500,
+      status: 'CONFIRMED',
+      ticketToken: 'dummy_token_concur_test',
+      isRedeemed: false
+    });
+
+    // Fire 2 simultaneous admission requests through the authorized organizer agent
+    const [res1, res2] = await Promise.all([
+      organizerAgent
+        .post('/api/v1/tickets/validate')
+        .set('x-csrf-token', csrfOrg)
+        .send({ token: 'EVT-BK-CONCUR-ADMIT', markRedeemed: true }),
+      organizerAgent
+        .post('/api/v1/tickets/validate')
+        .set('x-csrf-token', csrfOrg)
+        .send({ token: 'EVT-BK-CONCUR-ADMIT', markRedeemed: true })
+    ]);
+
+    assert.equal(res1.status, 200);
+    assert.equal(res2.status, 200);
+
+    const admittedResults = [res1.body.data, res2.body.data].filter((d) => d.isValid && d.redeemed);
+    const alreadyRedeemedResults = [res1.body.data, res2.body.data].filter((d) => d.isAlreadyRedeemed);
+
+    assert.equal(admittedResults.length, 1, 'Exactly one concurrent scan must admit the attendee');
+    assert.equal(alreadyRedeemedResults.length, 1, 'Competing scan must be atomically recognized as already redeemed');
+
+    await Booking.deleteOne({ _id: concurrentBooking._id });
+  });
+
+  it('18. SECURITY: Tickets for cancelled events cannot be admitted at check-in', async () => {
+    const cancelledEvent = await Event.create({
+      title: 'Cancelled Test Gathering',
+      description: 'Test event that has been cancelled',
+      eventDate: new Date(Date.now() + 86400000 * 5),
+      venue: 'Cancelled Hall',
+      seatLimit: 50,
+      isPaid: false,
+      ticketPrice: 0,
+      status: 'CANCELLED',
+      organizerId: new mongoose.Types.ObjectId(organizerUser.id)
+    });
+
+    const cancelledBooking = await Booking.create({
+      bookingReference: 'EVT-BK-CANCELLED-EVT',
+      eventId: cancelledEvent._id,
+      attendeeId: new mongoose.Types.ObjectId(attendeeUser1.id),
+      seatIds: [],
+      seatLabels: ['A1'],
+      subtotal: 0,
+      totalAmount: 0,
+      status: 'CONFIRMED',
+      ticketToken: 'dummy_cancelled_event_token',
+      isRedeemed: false
+    });
+
+    const verifyCancelledRes = await organizerAgent
+      .post('/api/v1/tickets/validate')
+      .set('x-csrf-token', csrfOrg)
+      .send({ token: 'EVT-BK-CANCELLED-EVT', markRedeemed: true });
+
+    assert.equal(verifyCancelledRes.status, 200);
+    assert.equal(verifyCancelledRes.body.data.isValid, false);
+    assert.equal(verifyCancelledRes.body.data.reason, 'EVENT_CANCELLED');
+
+    await Booking.deleteOne({ _id: cancelledBooking._id });
+    await Event.deleteOne({ _id: cancelledEvent._id });
+  });
 });
 

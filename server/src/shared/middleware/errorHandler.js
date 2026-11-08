@@ -30,8 +30,14 @@ export function errorHandler(err, req, res, _next) {
   }
 
   // Handle third-party SDK error objects (e.g. Razorpay { statusCode, error: { description } })
-  if (err && err.error && typeof err.error.description === 'string') {
-    error = new AppError(err.error.description, err.statusCode || 400);
+  if (err && (err.error || (err.statusCode && !err.isOperational))) {
+    const description =
+      (typeof err.error === 'object' && err.error?.description) ||
+      (typeof err.error === 'object' && err.error?.message) ||
+      (typeof err.error === 'string' && err.error) ||
+      err.message ||
+      'External service operation failed';
+    error = new AppError(description, err.statusCode || 400);
   }
 
   const statusCode = error.statusCode || 500;
@@ -56,11 +62,16 @@ export function errorHandler(err, req, res, _next) {
     `Request error: ${error.message}`
   );
 
+  const clientMessage =
+    isProduction && statusCode >= 500 && !error.isOperational
+      ? 'An unexpected internal server error occurred'
+      : error.message || 'An unexpected internal server error occurred';
+
   res.status(statusCode).json({
     success: false,
     error: {
       name: error.name || 'Error',
-      message: error.message || 'An unexpected internal server error occurred',
+      message: clientMessage,
       ...(error.details ? { details: error.details } : {}),
       ...(!isProduction && error.stack ? { stack: error.stack } : {})
     }

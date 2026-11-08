@@ -17,9 +17,10 @@
 
 ## 2. Attendee Endpoints
 
-### 2.1 Get Event Seat Map
+### 2.1 Get Event Seat Map & Live Inventory
 - **Method & Path:** `GET /api/v1/events/:eventId/seats`
 - **Auth:** Public or Authenticated
+- **Accounting Invariant:** `totalCapacity = availableCount + heldCount + bookedCount + blockedCount`
 - **Response `200 OK`:**
 ```json
 {
@@ -38,9 +39,17 @@
         "currency": "INR",
         "status": "AVAILABLE",
         "isAccessible": false,
+        "isBlocked": false,
         "heldUntil": null
       }
-    ]
+    ],
+    "inventory": {
+      "totalCapacity": 60,
+      "availableCount": 58,
+      "heldCount": 2,
+      "bookedCount": 0,
+      "blockedCount": 0
+    }
   }
 }
 ```
@@ -145,6 +154,32 @@
     "seats": ["A1", "A2"],
     "attendeeName": "Om Sardar",
     "status": "CONFIRMED"
+  }
+}
+```
+
+### 2.5 Create Checkout Order (Paid Events)
+- **Method & Path:** `POST /api/v1/payments/create-order`
+- **Auth:** Authenticated Attendee (verified email required)
+- **CSRF Protected:** Yes
+- **Guard:** For `ASSIGNED_SEATING` events, `holdId` or an active unexpired `SeatHold` belonging to the attendee is strictly required. Missing hold returns `400 Bad Request` (`ERR_SEATS_NOT_SELECTED`).
+- **Request Body:**
+```json
+{
+  "eventId": "672e3...",
+  "holdId": "672e4..."
+}
+```
+- **Response `201 Created`:**
+```json
+{
+  "success": true,
+  "data": {
+    "orderId": "order_mock_12345",
+    "amount": 150000,
+    "currency": "INR",
+    "keyId": "rzp_test_...",
+    "expiresAt": "2026-11-08T18:00:00.000Z"
   }
 }
 ```

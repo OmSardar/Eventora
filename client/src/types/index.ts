@@ -214,6 +214,19 @@ export interface EventSeatItem {
   heldUntil?: string | null;
 }
 
+export interface LiveSeatInventory {
+  totalCapacity: number;
+  availableCount: number;
+  heldCount: number;
+  bookedCount: number;
+  blockedCount: number;
+}
+
+export interface GetSeatsResponse {
+  seats: EventSeatItem[];
+  inventory?: LiveSeatInventory;
+}
+
 export interface SeatHoldItem {
   id: string;
   eventId: string;

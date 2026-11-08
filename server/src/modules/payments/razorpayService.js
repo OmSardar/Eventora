@@ -137,10 +137,13 @@ export async function createRazorpayOrder({ amountInPaise, receipt, notes = {} }
     return order;
   } catch (err) {
     logger.error({ err, receipt: safeReceipt }, 'Razorpay orders.create failed');
-    if (err && err.error && err.error.description) {
-      throw new BadRequestError(`Payment provider error: ${err.error.description}`);
-    }
-    throw err;
+    const description =
+      err?.error?.description ||
+      err?.error?.message ||
+      err?.message ||
+      (typeof err?.error === 'string' ? err.error : null) ||
+      'Payment gateway was unable to create an order.';
+    throw new BadRequestError(`Payment provider error: ${description}`);
   }
 }
 

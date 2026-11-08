@@ -170,7 +170,9 @@ export async function generateEventSeats(eventId, layoutOptions = null) {
 }
 
 /**
- * Retrieves all seats and real-time availability for an event.
+ * Retrieves all seats and real-time authoritative inventory metrics for an event.
+ * Enforces the strict accounting invariant:
+ * Total configured seats = Available + Actively Held + Booked + Unavailable/Blocked
  */
 export async function getEventSeats(eventId) {
   if (!mongoose.Types.ObjectId.isValid(eventId)) {
@@ -184,20 +186,65 @@ export async function getEventSeats(eventId) {
     .sort({ sectionId: 1, rowLabel: 1, seatNumber: 1 })
     .lean();
 
-  return seats.map((s) => ({
-    id: s._id.toString(),
-    sectionId: s.sectionId,
-    sectionName: s.sectionName,
-    rowLabel: s.rowLabel,
-    seatNumber: s.seatNumber,
-    seatLabel: s.seatLabel,
-    category: s.category,
-    price: s.price,
-    currency: s.currency,
-    status: s.status,
-    isAccessible: s.isAccessible || false,
-    heldUntil: s.heldUntil
-  }));
+  const now = Date.now();
+  let availableCount = 0;
+  let heldCount = 0;
+  let bookedCount = 0;
+  let blockedCount = 0;
+
+  const mappedSeats = seats.map((s) => {
+    let effectiveStatus = s.status;
+
+    if (s.isBlocked || s.status === SEAT_STATUS.BLOCKED) {
+      effectiveStatus = SEAT_STATUS.BLOCKED;
+      blockedCount++;
+    } else if (s.status === SEAT_STATUS.BOOKED) {
+      effectiveStatus = SEAT_STATUS.BOOKED;
+      bookedCount++;
+    } else if (s.status === SEAT_STATUS.HELD) {
+      if (s.heldUntil && new Date(s.heldUntil).getTime() > now) {
+        effectiveStatus = SEAT_STATUS.HELD;
+        heldCount++;
+      } else {
+        effectiveStatus = SEAT_STATUS.AVAILABLE;
+        availableCount++;
+      }
+    } else {
+      effectiveStatus = SEAT_STATUS.AVAILABLE;
+      availableCount++;
+    }
+
+    return {
+      id: s._id.toString(),
+      sectionId: s.sectionId,
+      sectionName: s.sectionName,
+      rowLabel: s.rowLabel,
+      seatNumber: s.seatNumber,
+      seatLabel: s.seatLabel,
+      category: s.category,
+      price: s.price,
+      currency: s.currency,
+      status: effectiveStatus,
+      isAccessible: s.isAccessible || false,
+      isBlocked: s.isBlocked || false,
+      heldUntil: s.heldUntil
+    };
+  });
+
+  const totalCapacity = mappedSeats.length;
+
+  const inventory = {
+    totalCapacity,
+    availableCount,
+    heldCount,
+    bookedCount,
+    blockedCount
+  };
+
+  return {
+    seats: mappedSeats,
+    inventory
+  };
 }
 
 /**
@@ -350,19 +397,21 @@ export async function createSeatHold({ eventId, attendeeId, seatIds, ipAddress, 
 
     // Concurrency guarantee: if even one seat was claimed by a competing request in parallel, abort!
     if (updateRes.modifiedCount !== seatIds.length) {
-      // Compensating rollback for standalone environments (or when replica sets are not active)
-      await SeatHold.deleteOne({ _id: hold._id });
-      await EventSeat.updateMany(
-        { holdId: hold._id },
-        {
-          $set: {
-            status: SEAT_STATUS.AVAILABLE,
-            holdId: null,
-            heldBy: null,
-            heldUntil: null
+      if (!session) {
+        // Compensating rollback for standalone environments (or when replica sets are not active)
+        await SeatHold.deleteOne({ _id: hold._id });
+        await EventSeat.updateMany(
+          { holdId: hold._id },
+          {
+            $set: {
+              status: SEAT_STATUS.AVAILABLE,
+              holdId: null,
+              heldBy: null,
+              heldUntil: null
+            }
           }
-        }
-      );
+        );
+      }
       throw new ConflictError('A concurrent booking conflict occurred. Please select your seats again.', {
         code: 'ERR_CONCURRENT_HOLD_COLLISION'
       });
@@ -374,6 +423,7 @@ export async function createSeatHold({ eventId, attendeeId, seatIds, ipAddress, 
     );
 
     return {
+      id: hold._id.toString(),
       holdId: hold._id.toString(),
       eventId: eventId.toString(),
       seatIds: objectSeatIds.map((id) => id.toString()),

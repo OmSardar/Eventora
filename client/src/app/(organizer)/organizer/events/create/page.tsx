@@ -126,8 +126,11 @@ export default function CreateEventPage() {
       await api.post("/events", payload);
       queryClient.invalidateQueries({ queryKey: ["organizer-events"] });
       queryClient.invalidateQueries({ queryKey: ["events"] });
-      router.push("/organizer/events");
-      router.refresh();
+      if (typeof window !== "undefined") {
+        window.location.href = "/organizer/events";
+      } else {
+        router.push("/organizer/events");
+      }
     } catch (err: unknown) {
       const error = err as Error & { details?: Array<{ field: string; message: string }> };
       const detailMsg = error.details?.map((d) => `${d.field}: ${d.message}`).join(", ");

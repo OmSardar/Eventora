@@ -90,3 +90,18 @@
 ::-webkit-scrollbar-thumb:hover {
   background: hsl(var(--muted-foreground));
 }
+
+@keyframes scannerLine {
+  0% {
+    top: 6%;
+    opacity: 0.2;
+  }
+  50% {
+    top: 92%;
+    opacity: 1;
+  }
+  100% {
+    top: 6%;
+    opacity: 0.2;
+  }
+}

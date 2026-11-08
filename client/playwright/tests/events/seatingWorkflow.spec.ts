@@ -21,12 +21,18 @@ test.describe("Interactive Seat Selection, Hold Countdown & Inventory System", (
     await page.goto("/tickets/verify");
     await expect(page.locator("h1")).toContainText("Digital Ticket Verification");
 
+    // Click toggle to reveal manual token input if collapsed
+    const manualToggle = page.locator("button:has-text('Type / Paste Token Manually')");
+    if (await manualToggle.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await manualToggle.click();
+    }
+
     // Test input with an invalid test token
     const tokenInput = page.locator("input[placeholder*='Paste ticket HMAC token']");
     await expect(tokenInput).toBeVisible();
     await tokenInput.fill("invalid_test_payload.fake_signature");
 
-    const verifyBtn = page.locator("button:has-text('Verify Pass')");
+    const verifyBtn = page.locator("button:has-text('Verify')");
     await verifyBtn.click();
 
     // Expect invalid ticket rejection banner

@@ -148,7 +148,7 @@ export function NotificationBell() {
         <div
           role="dialog"
           aria-label="Notification Feed"
-          className="absolute right-0 mt-2 w-80 sm:w-96 rounded-xl border border-border bg-popover text-popover-foreground shadow-xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150"
+          className="fixed inset-x-3 top-16 sm:absolute sm:inset-x-auto sm:right-0 sm:top-full mt-2 w-auto sm:w-80 md:w-96 rounded-2xl border border-border bg-popover text-popover-foreground shadow-2xl z-[100] overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150 max-h-[80vh] flex flex-col"
           data-testid="notification-popover"
         >
           {/* Header */}

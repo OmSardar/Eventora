@@ -251,9 +251,35 @@ export async function cancelEvent({
   return event;
 }
 
+export const PRIMARY_CITIES = [
+  'Kolkata',
+  'Bengaluru',
+  'Mumbai',
+  'Delhi NCR',
+  'Hyderabad',
+  'Pune',
+  'San Francisco',
+  'New York'
+];
+
+export const CITY_REGEX_MAP = {
+  'Kolkata': 'Kolkata|Calcutta',
+  'Bengaluru': 'Bengaluru|Bangalore',
+  'Mumbai': 'Mumbai|Bombay',
+  'Delhi NCR': 'Delhi|New Delhi|Gurugram|Gurgaon|Noida',
+  'Hyderabad': 'Hyderabad',
+  'Pune': 'Pune',
+  'San Francisco': 'San Francisco|Silicon Valley',
+  'New York': 'New York|NYC|Manhattan|Brooklyn'
+};
+
+const ALL_PRIMARY_CITIES_REGEX = Object.values(CITY_REGEX_MAP).join('|');
+
 export async function getEvents({
   search,
   category,
+  location,
+  sort,
   page = 1,
   limit = 12,
   includePast = false
@@ -270,12 +296,46 @@ export async function getEvents({
     query.category = category;
   }
 
+  // Location / City Filtering
+  if (location && location !== 'All') {
+    const locTrimmed = location.trim();
+    if (locTrimmed.toLowerCase() === 'others') {
+      query.venue = {
+        $not: new RegExp(ALL_PRIMARY_CITIES_REGEX, 'i')
+      };
+    } else if (CITY_REGEX_MAP[locTrimmed]) {
+      query.venue = {
+        $regex: CITY_REGEX_MAP[locTrimmed],
+        $options: 'i'
+      };
+    } else {
+      query.venue = {
+        $regex: locTrimmed,
+        $options: 'i'
+      };
+    }
+  }
+
   if (search && search.trim()) {
     query.$or = [
       { title: { $regex: search.trim(), $options: 'i' } },
       { description: { $regex: search.trim(), $options: 'i' } },
       { venue: { $regex: search.trim(), $options: 'i' } }
     ];
+  }
+
+  // Sort resolution
+  let sortCriteria = { eventDate: 1 };
+  if (sort === 'date_desc' || sort === 'latest') {
+    sortCriteria = { eventDate: -1 };
+  } else if (sort === 'price_asc') {
+    sortCriteria = { ticketPrice: 1, eventDate: 1 };
+  } else if (sort === 'price_desc') {
+    sortCriteria = { ticketPrice: -1, eventDate: 1 };
+  } else if (sort === 'popularity' || sort === 'seats_booked') {
+    sortCriteria = { seatsBooked: -1, eventDate: 1 };
+  } else if (sort === 'title_asc' || sort === 'title') {
+    sortCriteria = { title: 1 };
   }
 
   const pageNum = Math.max(1, parseInt(page, 10) || 1);
@@ -285,7 +345,7 @@ export async function getEvents({
   const [events, total] = await Promise.all([
     Event.find(query)
       .populate('organizerId', 'name email')
-      .sort({ eventDate: 1 })
+      .sort(sortCriteria)
       .skip(skip)
       .limit(limitNum)
       .lean({ virtuals: true }),
@@ -299,7 +359,8 @@ export async function getEvents({
       page: pageNum,
       limit: limitNum,
       totalPages: Math.ceil(total / limitNum)
-    }
+    },
+    primaryCities: PRIMARY_CITIES
   };
 }
 

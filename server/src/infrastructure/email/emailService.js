@@ -2,6 +2,7 @@ import dotenv from 'dotenv';
 import { Resend } from 'resend';
 import { logger } from '../logging/logger.js';
 import { Registration } from '../../modules/registrations/Registration.js';
+import { formatLocationDisplay } from '../security/deviceGeoService.js';
 
 dotenv.config();
 
@@ -248,34 +249,37 @@ export function buildConfirmationEmailHtml({ attendeeName, event, registrationId
       <p>Hi ${attendeeName || 'there'},</p>
       <p>Great news! Your registration for <strong>${event.title}</strong> has been successfully confirmed. We have reserved your seat.</p>
       
-      <div class="info-box" style="background-color: #27272a; border-radius: 8px; padding: 18px 20px; margin: 20px 0; border-left: 4px solid #ffffff; box-sizing: border-box; width: 100%; max-width: 100%; overflow: hidden;">
-        <div style="font-weight: 700; color: #ffffff; font-size: 15px; margin-bottom: 12px; line-height: 1.4; word-break: break-word;">${event.title}</div>
-        
-        <table role="presentation" border="0" cellpadding="0" cellspacing="0" class="info-table" style="width: 100% !important; border-collapse: collapse; table-layout: fixed;">
-          <tr>
-            <td class="info-label" style="width: 130px; font-weight: 600; color: #ffffff; font-size: 13px; padding: 6px 8px 6px 0; vertical-align: top;">Date &amp; Time:</td>
-            <td class="info-value" style="color: #d4d4d8; font-size: 13px; padding: 6px 0; vertical-align: top; word-break: break-word; overflow-wrap: anywhere;">${formattedDate}</td>
-          </tr>
-          <tr>
-            <td class="info-label" style="width: 130px; font-weight: 600; color: #ffffff; font-size: 13px; padding: 6px 8px 6px 0; vertical-align: top;">Venue:</td>
-            <td class="info-value" style="color: #d4d4d8; font-size: 13px; padding: 6px 0; vertical-align: top; word-break: break-word; overflow-wrap: anywhere;">${event.venue}</td>
-          </tr>
-          ${seatsDisplay ? `
-          <tr>
-            <td class="info-label" style="width: 130px; font-weight: 600; color: #10b981; font-size: 13px; padding: 6px 8px 6px 0; vertical-align: top;">Reserved Seats:</td>
-            <td class="info-value" style="color: #ffffff; font-weight: 700; font-size: 13px; padding: 6px 0; vertical-align: top; word-break: break-word; overflow-wrap: anywhere;">${seatsDisplay}</td>
-          </tr>
-          ` : ''}
-          <tr>
-            <td class="info-label" style="width: 130px; font-weight: 600; color: #ffffff; font-size: 13px; padding: 6px 8px 6px 0; vertical-align: top;">Booking Reference:</td>
-            <td class="info-value" style="color: #a1a1aa; font-size: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; letter-spacing: 0.3px; padding: 6px 0; vertical-align: top; word-break: break-all; overflow-wrap: anywhere; word-wrap: break-word;">${registrationId}</td>
-          </tr>
-        </table>
+      <div style="background-color: #222226; border: 1px solid #333338; border-radius: 10px; padding: 18px 16px; margin: 20px 0; box-sizing: border-box; width: 100%;">
+        <div style="font-weight: 700; color: #ffffff; font-size: 16px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid #333338; line-height: 1.35; word-break: break-word;">
+          ${event.title}
+        </div>
+
+        <div style="margin-bottom: 12px;">
+          <div style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: #a1a1aa; margin-bottom: 3px;">Date &amp; Time</div>
+          <div style="font-size: 13px; font-weight: 500; color: #f4f4f5; line-height: 1.4;">${formattedDate}</div>
+        </div>
+
+        <div style="margin-bottom: 12px;">
+          <div style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: #a1a1aa; margin-bottom: 3px;">Venue / Location</div>
+          <div style="font-size: 13px; font-weight: 500; color: #f4f4f5; line-height: 1.4; word-break: break-word;">${event.venue}</div>
+        </div>
+
+        ${seatsDisplay ? `
+        <div style="margin-bottom: 12px;">
+          <div style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: #10b981; margin-bottom: 4px;">Reserved Seats</div>
+          <div style="display: inline-block; background-color: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); color: #10b981; font-weight: 700; font-size: 14px; padding: 4px 10px; border-radius: 6px;">${seatsDisplay}</div>
+        </div>
+        ` : ''}
+
+        <div>
+          <div style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: #a1a1aa; margin-bottom: 4px;">Booking Reference</div>
+          <div style="display: inline-block; background-color: #121214; border: 1px solid #3f3f46; color: #38bdf8; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 13px; font-weight: 700; padding: 6px 12px; border-radius: 6px; letter-spacing: 0.5px; word-break: break-all;">${registrationId}</div>
+        </div>
       </div>
 
-      <div style="margin-top: 18px; padding: 12px 14px; background-color: rgba(255, 255, 255, 0.03); border: 1px solid #27272a; border-radius: 6px; font-size: 11px; color: #71717a; line-height: 1.5; word-break: break-all; overflow-wrap: anywhere;">
+      <div style="margin-top: 18px; padding: 12px 14px; background-color: #18181b; border: 1px solid #27272a; border-radius: 8px; font-size: 11px; color: #71717a; line-height: 1.5; box-sizing: border-box;">
         <span style="color: #a1a1aa; font-weight: 600; display: block; margin-bottom: 4px;">Direct Link:</span>
-        <a href="${ticketsUrl}" style="color: #38bdf8; text-decoration: none; word-break: break-all; overflow-wrap: anywhere;">${ticketsUrl}</a>
+        <a href="${ticketsUrl}" style="color: #38bdf8; text-decoration: underline; word-break: break-all; display: inline-block;">${ticketsUrl}</a>
       </div>
     `,
     actionUrl: ticketsUrl,
@@ -403,16 +407,7 @@ export async function sendLoginNotificationEmail({
     timeZoneName: 'short'
   }).format(dateObj);
 
-  let locationStr = 'Unknown location';
-  if (location?.city && location.city !== 'Unknown') {
-    locationStr = `${location.city}${location.region && location.region !== 'Unknown' ? ', ' + location.region : ''}, ${location.country}`;
-  } else if (location?.country && location.country !== 'Unknown') {
-    locationStr = location.country;
-  }
-  if (location?.timezone && location.timezone !== 'UTC') {
-    locationStr += ` • ${location.timezone}`;
-  }
-
+  const locationStr = formatLocationDisplay(location);
   const deviceDisplay = device?.phoneModel || device?.summary || `${device?.browser || 'Browser'} on ${device?.os || 'OS'}`;
 
   const html = wrapEmailTemplate({
@@ -423,47 +418,52 @@ export async function sendLoginNotificationEmail({
       <p>Hi ${name || 'there'},</p>
       <p>A new sign-in to your Eventora account was recently completed:</p>
       
-      <div class="info-box" style="background-color: #27272a; border-radius: 8px; padding: 18px 20px; margin: 20px 0; border-left: 4px solid #ffffff; box-sizing: border-box; width: 100%; overflow: hidden;">
-        <table role="presentation" border="0" cellpadding="0" cellspacing="0" class="info-table" style="width: 100% !important; border-collapse: collapse; table-layout: fixed;">
-          <tr>
-            <td class="info-label" style="width: 130px; font-weight: 600; color: #ffffff; font-size: 13px; padding: 6px 8px 6px 0; vertical-align: top;">Account:</td>
-            <td class="info-value" style="color: #d4d4d8; font-size: 13px; padding: 6px 0; vertical-align: top; word-break: break-all; overflow-wrap: anywhere;">${email}</td>
-          </tr>
-          <tr>
-            <td class="info-label" style="width: 130px; font-weight: 600; color: #ffffff; font-size: 13px; padding: 6px 8px 6px 0; vertical-align: top;">Time:</td>
-            <td class="info-value" style="color: #d4d4d8; font-size: 13px; padding: 6px 0; vertical-align: top; word-break: break-word; overflow-wrap: anywhere;">${readableLocal} (${utcString})</td>
-          </tr>
-          <tr>
-            <td class="info-label" style="width: 130px; font-weight: 600; color: #ffffff; font-size: 13px; padding: 6px 8px 6px 0; vertical-align: top;">IP Address:</td>
-            <td class="info-value" style="color: #a1a1aa; font-size: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; letter-spacing: 0.3px; padding: 6px 0; vertical-align: top; word-break: break-all; overflow-wrap: anywhere;">${ipAddress || 'Unknown'}</td>
-          </tr>
-          <tr>
-            <td class="info-label" style="width: 130px; font-weight: 600; color: #ffffff; font-size: 13px; padding: 6px 8px 6px 0; vertical-align: top;">Location:</td>
-            <td class="info-value" style="color: #d4d4d8; font-size: 13px; padding: 6px 0; vertical-align: top; word-break: break-word; overflow-wrap: anywhere;">${locationStr}</td>
-          </tr>
-          ${device?.phoneModel ? `
-          <tr>
-            <td class="info-label" style="width: 130px; font-weight: 600; color: #38bdf8; font-size: 13px; padding: 6px 8px 6px 0; vertical-align: top;">Phone / Model:</td>
-            <td class="info-value" style="color: #ffffff; font-weight: 700; font-size: 13px; padding: 6px 0; vertical-align: top; word-break: break-word; overflow-wrap: anywhere;">${device.phoneModel}</td>
-          </tr>
-          ` : ''}
-          <tr>
-            <td class="info-label" style="width: 130px; font-weight: 600; color: #ffffff; font-size: 13px; padding: 6px 8px 6px 0; vertical-align: top;">Operating System:</td>
-            <td class="info-value" style="color: #d4d4d8; font-size: 13px; padding: 6px 0; vertical-align: top; word-break: break-word; overflow-wrap: anywhere;">${device?.os || 'Unknown OS'}</td>
-          </tr>
-          <tr>
-            <td class="info-label" style="width: 130px; font-weight: 600; color: #ffffff; font-size: 13px; padding: 6px 8px 6px 0; vertical-align: top;">Browser:</td>
-            <td class="info-value" style="color: #d4d4d8; font-size: 13px; padding: 6px 0; vertical-align: top; word-break: break-word; overflow-wrap: anywhere;">${device?.browser || 'Browser'} ${device?.browserVersion || ''}</td>
-          </tr>
-          <tr>
-            <td class="info-label" style="width: 130px; font-weight: 600; color: #ffffff; font-size: 13px; padding: 6px 8px 6px 0; vertical-align: top;">Device Type:</td>
-            <td class="info-value" style="color: #d4d4d8; font-size: 13px; padding: 6px 0; vertical-align: top; word-break: break-word; overflow-wrap: anywhere;">${device?.deviceType || 'Desktop'}</td>
-          </tr>
-          <tr>
-            <td class="info-label" style="width: 130px; font-weight: 600; color: #ffffff; font-size: 13px; padding: 6px 8px 6px 0; vertical-align: top;">Auth Method:</td>
-            <td class="info-value" style="color: #d4d4d8; font-size: 13px; padding: 6px 0; vertical-align: top; word-break: break-word; overflow-wrap: anywhere;">${authFactor || 'Password'}</td>
-          </tr>
-        </table>
+      <div style="background-color: #222226; border: 1px solid #333338; border-radius: 10px; padding: 18px 16px; margin: 20px 0; box-sizing: border-box; width: 100%;">
+        <div style="font-weight: 700; color: #ffffff; font-size: 15px; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid #333338; line-height: 1.35;">
+          Sign-In Details
+        </div>
+
+        <div style="margin-bottom: 12px;">
+          <div style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: #a1a1aa; margin-bottom: 3px;">Account</div>
+          <div style="font-size: 13px; color: #f4f4f5; word-break: break-all;">${email}</div>
+        </div>
+
+        <div style="margin-bottom: 12px;">
+          <div style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: #a1a1aa; margin-bottom: 3px;">Time</div>
+          <div style="font-size: 13px; color: #f4f4f5; line-height: 1.4;">${readableLocal} (${utcString})</div>
+        </div>
+
+        <div style="margin-bottom: 12px;">
+          <div style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: #a1a1aa; margin-bottom: 4px;">IP Address</div>
+          <div style="display: inline-block; background-color: #121214; border: 1px solid #3f3f46; color: #38bdf8; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 6px; letter-spacing: 0.3px;">${ipAddress || 'Unknown'}</div>
+        </div>
+
+        <div style="margin-bottom: 12px;">
+          <div style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: #a1a1aa; margin-bottom: 3px;">Location</div>
+          <div style="font-size: 13px; color: #f4f4f5; line-height: 1.4;">${locationStr}</div>
+        </div>
+
+        ${device?.phoneModel ? `
+        <div style="margin-bottom: 12px;">
+          <div style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: #38bdf8; margin-bottom: 3px;">Phone / Device Model</div>
+          <div style="font-size: 13px; font-weight: 700; color: #38bdf8;">${device.phoneModel}</div>
+        </div>
+        ` : ''}
+
+        <div style="margin-bottom: 12px;">
+          <div style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: #a1a1aa; margin-bottom: 3px;">Operating System</div>
+          <div style="font-size: 13px; color: #f4f4f5;">${device?.os || 'Unknown OS'}</div>
+        </div>
+
+        <div style="margin-bottom: 12px;">
+          <div style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: #a1a1aa; margin-bottom: 3px;">Browser</div>
+          <div style="font-size: 13px; color: #f4f4f5;">${device?.browser || 'Browser'} ${device?.browserVersion || ''}</div>
+        </div>
+
+        <div>
+          <div style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: #a1a1aa; margin-bottom: 3px;">Authentication Method</div>
+          <div style="font-size: 13px; color: #10b981; font-weight: 600;">${authFactor || 'Password'}</div>
+        </div>
       </div>
 
       <p style="color: #ef4444; font-size: 13px; font-weight: 500;">
@@ -649,35 +649,38 @@ export async function sendCancellationRefundEmail({
       <p>Hi ${attendeeName || 'there'},</p>
       <p>Your booking for <strong>${event.title}</strong> has been cancelled and your seat has been released.</p>
       
-      <div class="info-box" style="background-color: #27272a; border-radius: 8px; padding: 18px 20px; margin: 20px 0; border-left: 4px solid #ffffff; box-sizing: border-box; width: 100%; overflow: hidden;">
-        <div style="font-weight: 700; color: #ffffff; font-size: 15px; margin-bottom: 12px; line-height: 1.4; word-break: break-word;">${event.title}</div>
-        
-        <table role="presentation" border="0" cellpadding="0" cellspacing="0" class="info-table" style="width: 100% !important; border-collapse: collapse; table-layout: fixed;">
-          <tr>
-            <td class="info-label" style="width: 130px; font-weight: 600; color: #ffffff; font-size: 13px; padding: 6px 8px 6px 0; vertical-align: top;">Date &amp; Time:</td>
-            <td class="info-value" style="color: #d4d4d8; font-size: 13px; padding: 6px 0; vertical-align: top; word-break: break-word; overflow-wrap: anywhere;">${formattedDate}</td>
-          </tr>
-          <tr>
-            <td class="info-label" style="width: 130px; font-weight: 600; color: #ffffff; font-size: 13px; padding: 6px 8px 6px 0; vertical-align: top;">Venue:</td>
-            <td class="info-value" style="color: #d4d4d8; font-size: 13px; padding: 6px 0; vertical-align: top; word-break: break-word; overflow-wrap: anywhere;">${event.venue}</td>
-          </tr>
-          <tr>
-            <td class="info-label" style="width: 130px; font-weight: 600; color: #ffffff; font-size: 13px; padding: 6px 8px 6px 0; vertical-align: top;">Booking Reference:</td>
-            <td class="info-value" style="color: #a1a1aa; font-size: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; letter-spacing: 0.3px; padding: 6px 0; vertical-align: top; word-break: break-all; overflow-wrap: anywhere; word-wrap: break-word;">${registrationId}</td>
-          </tr>
-          ${
-            isPaid && refundAmount > 0
-              ? `<tr>
-                   <td class="info-label" style="width: 130px; font-weight: 600; color: #ffffff; font-size: 13px; padding: 6px 8px 6px 0; vertical-align: top;">Refund Amount:</td>
-                   <td class="info-value" style="color: #10b981; font-weight: 700; font-size: 13px; padding: 6px 0; vertical-align: top; word-break: break-word; overflow-wrap: anywhere;">₹${formattedRefund} ${currency}</td>
-                 </tr>
-                 ${refundId ? `<tr>
-                   <td class="info-label" style="width: 130px; font-weight: 600; color: #ffffff; font-size: 13px; padding: 6px 8px 6px 0; vertical-align: top;">Refund ID:</td>
-                   <td class="info-value" style="color: #a1a1aa; font-size: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; letter-spacing: 0.3px; padding: 6px 0; vertical-align: top; word-break: break-all; overflow-wrap: anywhere;">${refundId}</td>
-                 </tr>` : ''}`
-              : ''
-          }
-        </table>
+      <div style="background-color: #222226; border: 1px solid #333338; border-radius: 10px; padding: 18px 16px; margin: 20px 0; box-sizing: border-box; width: 100%;">
+        <div style="font-weight: 700; color: #ffffff; font-size: 16px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid #333338; line-height: 1.35; word-break: break-word;">
+          ${event.title}
+        </div>
+
+        <div style="margin-bottom: 12px;">
+          <div style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: #a1a1aa; margin-bottom: 3px;">Date &amp; Time</div>
+          <div style="font-size: 13px; font-weight: 500; color: #f4f4f5; line-height: 1.4;">${formattedDate}</div>
+        </div>
+
+        <div style="margin-bottom: 12px;">
+          <div style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: #a1a1aa; margin-bottom: 3px;">Venue / Location</div>
+          <div style="font-size: 13px; font-weight: 500; color: #f4f4f5; line-height: 1.4; word-break: break-word;">${event.venue}</div>
+        </div>
+
+        <div style="margin-bottom: 12px;">
+          <div style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: #a1a1aa; margin-bottom: 4px;">Booking Reference</div>
+          <div style="display: inline-block; background-color: #121214; border: 1px solid #3f3f46; color: #38bdf8; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 13px; font-weight: 700; padding: 6px 12px; border-radius: 6px; letter-spacing: 0.5px; word-break: break-all;">${registrationId}</div>
+        </div>
+
+        ${
+          isPaid && refundAmount > 0
+            ? `<div style="margin-bottom: 12px;">
+                 <div style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: #10b981; margin-bottom: 4px;">Refund Amount</div>
+                 <div style="display: inline-block; background-color: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); color: #10b981; font-weight: 700; font-size: 14px; padding: 4px 10px; border-radius: 6px;">₹${formattedRefund} ${currency}</div>
+               </div>
+               ${refundId ? `<div>
+                 <div style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: #a1a1aa; margin-bottom: 4px;">Refund ID</div>
+                 <div style="display: inline-block; background-color: #121214; border: 1px solid #3f3f46; color: #a1a1aa; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; padding: 4px 10px; border-radius: 6px; word-break: break-all;">${refundId}</div>
+               </div>` : ''}`
+            : ''
+        }
       </div>
 
       ${
@@ -762,24 +765,26 @@ export async function sendPasswordChangedAlertEmail({ email, name, ipAddress, us
       <p>Hi ${name || 'there'},</p>
       <p>This email confirms that the password for your Eventora account (<strong>${email}</strong>) has been successfully updated.</p>
       
-      <div class="info-box" style="background-color: #27272a; border-radius: 8px; padding: 18px 20px; margin: 20px 0; border-left: 4px solid #ffffff; box-sizing: border-box; width: 100%; overflow: hidden;">
-        <div style="font-weight: 700; color: #ffffff; font-size: 15px; margin-bottom: 12px; line-height: 1.4; word-break: break-word;">Security Activity Details</div>
-        
-        <table role="presentation" border="0" cellpadding="0" cellspacing="0" class="info-table" style="width: 100% !important; border-collapse: collapse; table-layout: fixed;">
-          <tr>
-            <td class="info-label" style="width: 130px; font-weight: 600; color: #ffffff; font-size: 13px; padding: 6px 8px 6px 0; vertical-align: top;">Verification Method:</td>
-            <td class="info-value" style="color: #d4d4d8; font-size: 13px; padding: 6px 0; vertical-align: top; word-break: break-word; overflow-wrap: anywhere;">${methodLabel}</td>
-          </tr>
-          <tr>
-            <td class="info-label" style="width: 130px; font-weight: 600; color: #ffffff; font-size: 13px; padding: 6px 8px 6px 0; vertical-align: top;">Timestamp:</td>
-            <td class="info-value" style="color: #d4d4d8; font-size: 13px; padding: 6px 0; vertical-align: top; word-break: break-word; overflow-wrap: anywhere;">${new Date().toUTCString()}</td>
-          </tr>
-          ${ipAddress ? `
-          <tr>
-            <td class="info-label" style="width: 130px; font-weight: 600; color: #ffffff; font-size: 13px; padding: 6px 8px 6px 0; vertical-align: top;">IP Address:</td>
-            <td class="info-value" style="color: #a1a1aa; font-size: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; letter-spacing: 0.3px; padding: 6px 0; vertical-align: top; word-break: break-all; overflow-wrap: anywhere;">${ipAddress}</td>
-          </tr>` : ''}
-        </table>
+      <div style="background-color: #222226; border: 1px solid #333338; border-radius: 10px; padding: 18px 16px; margin: 20px 0; box-sizing: border-box; width: 100%;">
+        <div style="font-weight: 700; color: #ffffff; font-size: 15px; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid #333338; line-height: 1.35;">
+          Security Activity Details
+        </div>
+
+        <div style="margin-bottom: 12px;">
+          <div style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: #a1a1aa; margin-bottom: 3px;">Verification Method</div>
+          <div style="font-size: 13px; color: #f4f4f5; line-height: 1.4;">${methodLabel}</div>
+        </div>
+
+        <div style="margin-bottom: 12px;">
+          <div style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: #a1a1aa; margin-bottom: 3px;">Timestamp</div>
+          <div style="font-size: 13px; color: #f4f4f5; line-height: 1.4;">${new Date().toUTCString()}</div>
+        </div>
+
+        ${ipAddress ? `
+        <div>
+          <div style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: #a1a1aa; margin-bottom: 4px;">IP Address</div>
+          <div style="display: inline-block; background-color: #121214; border: 1px solid #3f3f46; color: #38bdf8; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 6px; letter-spacing: 0.3px;">${ipAddress}</div>
+        </div>` : ''}
       </div>
 
       <p style="color: #ef4444; font-size: 13px;">

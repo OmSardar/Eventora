@@ -139,17 +139,17 @@ export async function seedTargetDatabase(mongoUri, label = 'Target') {
 
 
   // 3. Create fresh, realistic seed events (scheduled 7 to 60 days ahead)
-  console.log(`[${label}] Seeding 8 fresh, production-ready events...`);
+  console.log(`[${label}] Seeding 11 fresh, production-ready events across top hubs...`);
   const now = Date.now();
   const dayMs = 24 * 60 * 60 * 1000;
 
-  // Event 1: Assigned Seating Technology Summit
+  // Event 1: Kolkata — Cloud Native & AI Developer Summit (Assigned Seating, ₹799)
   const event1 = await Event.create({
-    title: 'Global Tech Summit 2026: Distributed Systems & AI Architecture',
+    title: 'Kolkata Cloud Native & AI Developer Summit 2026',
     description:
-      'Join industry pioneers, principal architects, and system engineers for 3 days of deep-dive keynotes, live architectural breakdowns, and collaborative workshops on zero-trust microservices, consensus protocols, and real-time streaming architectures.',
+      'Eastern India\'s premier engineering conference bringing together principal architects, Kubernetes operators, and AI systems researchers for deep-dives into microservices resilience, eBPF telemetry, and sovereign cloud infrastructure.',
     eventDate: new Date(now + 14 * dayMs),
-    venue: 'Metropolitan Convention Center, Hall A, San Francisco, CA',
+    venue: 'Biswa Bangla Convention Centre, New Town, Kolkata',
     seatLimit: 50,
     seatsBooked: 3,
     organizerId: demoOrganizer._id,
@@ -157,13 +157,13 @@ export async function seedTargetDatabase(mongoUri, label = 'Target') {
     category: 'Technology',
     seatingType: 'ASSIGNED_SEATING',
     isPaid: true,
-    ticketPrice: 499,
+    ticketPrice: 799,
     currency: 'INR',
     maxTicketsPerBooking: 6,
-    bannerUrl: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&w=1200&q=80',
+    bannerUrl: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&w=1400&q=85',
     image: {
       source: 'URL',
-      url: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&w=1200&q=80',
+      url: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&w=1400&q=85',
       publicId: null
     }
   });
@@ -176,12 +176,12 @@ export async function seedTargetDatabase(mongoUri, label = 'Target') {
     seatsPerRow: 10,
     startingRowLabel: 'A',
     category: 'STANDARD',
-    price: 499
+    price: 799
   });
 
   // Reserve seats A1, A2 for demoAttendee
   const seatsA1A2 = await EventSeat.find({ eventId: event1._id, seatLabel: { $in: ['A1', 'A2'] } });
-  const bookingRef1 = `EVT-BK-GTS26-01`;
+  const bookingRef1 = `EVT-BK-CCU26-01`;
   const ticketToken1 = generateSignedTicketToken({
     bookingReference: bookingRef1,
     eventId: event1._id,
@@ -195,9 +195,9 @@ export async function seedTargetDatabase(mongoUri, label = 'Target') {
     seatIds: seatsA1A2.map((s) => s._id),
     seatLabels: ['A1', 'A2'],
     ticketCategory: 'STANDARD',
-    subtotal: 998,
+    subtotal: 1598,
     fees: 0,
-    totalAmount: 998,
+    totalAmount: 1598,
     currency: 'INR',
     status: BOOKING_STATUS.CONFIRMED,
     ticketToken: ticketToken1,
@@ -215,7 +215,7 @@ export async function seedTargetDatabase(mongoUri, label = 'Target') {
     attendeeId: demoAttendee._id,
     status: REGISTRATION_STATUS.CONFIRMED,
     isPaid: true,
-    ticketPrice: 499,
+    ticketPrice: 799,
     currency: 'INR',
     confirmationEmailSent: true,
     isRedeemed: false
@@ -226,7 +226,7 @@ export async function seedTargetDatabase(mongoUri, label = 'Target') {
   // Reserve seat B5 for demoAttendee2
   const seatB5 = await EventSeat.findOne({ eventId: event1._id, seatLabel: 'B5' });
   if (seatB5) {
-    const bookingRef2 = `EVT-BK-GTS26-02`;
+    const bookingRef2 = `EVT-BK-CCU26-02`;
     const ticketToken2 = generateSignedTicketToken({
       bookingReference: bookingRef2,
       eventId: event1._id,
@@ -240,9 +240,9 @@ export async function seedTargetDatabase(mongoUri, label = 'Target') {
       seatIds: [seatB5._id],
       seatLabels: ['B5'],
       ticketCategory: 'STANDARD',
-      subtotal: 499,
+      subtotal: 799,
       fees: 0,
-      totalAmount: 499,
+      totalAmount: 799,
       currency: 'INR',
       status: BOOKING_STATUS.CONFIRMED,
       ticketToken: ticketToken2,
@@ -259,7 +259,7 @@ export async function seedTargetDatabase(mongoUri, label = 'Target') {
       attendeeId: demoAttendee2._id,
       status: REGISTRATION_STATUS.CONFIRMED,
       isPaid: true,
-      ticketPrice: 499,
+      ticketPrice: 799,
       currency: 'INR',
       confirmationEmailSent: true,
       isRedeemed: false
@@ -268,96 +268,13 @@ export async function seedTargetDatabase(mongoUri, label = 'Target') {
     await booking2.save();
   }
 
-  // Event 2: Design Symposium (General Admission, Paid ₹299)
-  await Event.create({
-    title: 'Future of Product Design & Spatial Interfaces',
+  // Event 2: Bengaluru — Distributed Systems & Microservices Conclave (Assigned Seating, ₹1299)
+  const event2 = await Event.create({
+    title: 'Bengaluru Distributed Systems & Microservices Conclave',
     description:
-      'A curated symposium of digital product designers, design systems architects, and creative directors exploring minimalism, spatial computing paradigms, tactile micro-interactions, and design craft in an algorithmic era.',
-    eventDate: new Date(now + 21 * dayMs),
-    venue: 'Design Loft Studio, Soho, New York, NY',
-    seatLimit: 80,
-    seatsBooked: 0,
-    organizerId: demoOrganizer._id,
-    status: EVENT_STATUS.PUBLISHED,
-    category: 'Design',
-    seatingType: 'GENERAL_ADMISSION',
-    isPaid: true,
-    ticketPrice: 299,
-    currency: 'INR',
-    bannerUrl: 'https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=1200&q=80',
-    image: {
-      source: 'URL',
-      url: 'https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=1200&q=80',
-      publicId: null
-    }
-  });
-
-  // Event 3: Climate Innovation (General Admission, Free RSVP)
-  const event3 = await Event.create({
-    title: 'Clean Energy & Climate Innovation Roundtable',
-    description:
-      'Connecting venture founders, climate scientists, and infrastructure engineers building scalable decarbonization technologies, decentralized renewable microgrids, and transparent carbon accounting ledgers.',
-    eventDate: new Date(now + 10 * dayMs),
-    venue: 'Greenhouse Commons Pavilion, Denver, CO',
-    seatLimit: 120,
-    seatsBooked: 1,
-    organizerId: demoOrganizer._id,
-    status: EVENT_STATUS.PUBLISHED,
-    category: 'Sustainability',
-    seatingType: 'GENERAL_ADMISSION',
-    isPaid: false,
-    ticketPrice: 0,
-    currency: 'INR',
-    bannerUrl: 'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1200&q=80',
-    image: {
-      source: 'URL',
-      url: 'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1200&q=80',
-      publicId: null
-    }
-  });
-
-  // Free RSVP registration for Alex Rivera
-  const regFree = await Registration.create({
-    eventId: event3._id,
-    attendeeId: demoAttendee._id,
-    status: REGISTRATION_STATUS.CONFIRMED,
-    isPaid: false,
-    ticketPrice: 0,
-    currency: 'INR',
-    confirmationEmailSent: true,
-    isRedeemed: false
-  });
-
-  const bookingRefFree = `EVT-BK-CLN26-01`;
-  const ticketTokenFree = generateSignedTicketToken({
-    bookingReference: bookingRefFree,
-    eventId: event3._id,
-    attendeeId: demoAttendee._id
-  });
-
-  await Booking.create({
-    bookingReference: bookingRefFree,
-    eventId: event3._id,
-    attendeeId: demoAttendee._id,
-    registrationId: regFree._id,
-    ticketCategory: 'FREE RSVP',
-    subtotal: 0,
-    fees: 0,
-    totalAmount: 0,
-    currency: 'INR',
-    status: BOOKING_STATUS.CONFIRMED,
-    ticketToken: ticketTokenFree,
-    paymentMethod: 'FREE',
-    confirmedAt: new Date()
-  });
-
-  // Event 4: AI Agent Engineering (Assigned Seating, Paid ₹999)
-  const event4 = await Event.create({
-    title: 'AI Agent Engineering & LLM Architecture Summit',
-    description:
-      'Comprehensive master summit exploring multi-agent orchestrations, MCP server integrations, deterministic validation loops, context compaction strategies, and production-grade self-healing autonomous workflows.',
-    eventDate: new Date(now + 28 * dayMs),
-    venue: 'Silicon Valley Innovation Campus, Auditorium B, San Jose, CA',
+      'India\'s tech capital convenes top distributed systems engineers to discuss Raft consensus, transactional outbox patterns, zero-downtime MongoDB sharding, and high-throughput event sourcing.',
+    eventDate: new Date(now + 18 * dayMs),
+    venue: 'Sheraton Grand Convention Centre, Whitefield, Bengaluru',
     seatLimit: 60,
     seatsBooked: 0,
     organizerId: demoOrganizer._id,
@@ -365,59 +282,34 @@ export async function seedTargetDatabase(mongoUri, label = 'Target') {
     category: 'Technology',
     seatingType: 'ASSIGNED_SEATING',
     isPaid: true,
-    ticketPrice: 999,
+    ticketPrice: 1299,
     currency: 'INR',
     maxTicketsPerBooking: 6,
-    bannerUrl: 'https://images.unsplash.com/photo-1485827404703-89b55fcc595e?auto=format&fit=crop&w=1200&q=80',
+    bannerUrl: 'https://images.unsplash.com/photo-1475721027785-f74eccf877e2?auto=format&fit=crop&w=1400&q=85',
     image: {
       source: 'URL',
-      url: 'https://images.unsplash.com/photo-1485827404703-89b55fcc595e?auto=format&fit=crop&w=1200&q=80',
+      url: 'https://images.unsplash.com/photo-1475721027785-f74eccf877e2?auto=format&fit=crop&w=1400&q=85',
       publicId: null
     }
   });
 
-  // Generate 60 seats (6 rows x 10 seats: A1 to F10)
-  await generateEventSeats(event4._id, {
+  await generateEventSeats(event2._id, {
     generationMode: 'AUTOMATIC',
     totalSeats: 60,
     rows: 6,
     seatsPerRow: 10,
     startingRowLabel: 'A',
     category: 'STANDARD',
-    price: 999
+    price: 1299
   });
 
-  // Event 5: Next.js 14 App Router (General Admission, Free RSVP)
-  await Event.create({
-    title: 'Next.js 14 App Router & Performance Masterclass',
-    description:
-      'Practical hands-on masterclass focusing on streaming Server Components, Partial Prerendering (PPR), aggressive caching strategies, optimistic mutation state management, and edge runtime optimizations.',
-    eventDate: new Date(now + 35 * dayMs),
-    venue: 'Tech Commons Auditorium, Floor 3, Seattle, WA',
-    seatLimit: 75,
-    seatsBooked: 0,
-    organizerId: demoOrganizer._id,
-    status: EVENT_STATUS.PUBLISHED,
-    category: 'Workshop',
-    seatingType: 'GENERAL_ADMISSION',
-    isPaid: false,
-    ticketPrice: 0,
-    currency: 'INR',
-    bannerUrl: 'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&w=1200&q=80',
-    image: {
-      source: 'URL',
-      url: 'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&w=1200&q=80',
-      publicId: null
-    }
-  });
-
-  // Event 6: Fintech Infrastructure (Assigned Seating, Paid ₹1499)
-  const event6 = await Event.create({
+  // Event 3: Mumbai — Fintech Infrastructure & Payment Systems Summit (Assigned Seating, ₹1499)
+  const event3 = await Event.create({
     title: 'Fintech Infrastructure & Payment Systems Summit',
     description:
       'Examining idempotent payment ledgers, ISO 20022 messaging, zero-loss double-entry transaction journals, reconciliation automata, and PCI-DSS compliance across distributed banking infrastructure.',
-    eventDate: new Date(now + 45 * dayMs),
-    venue: 'Financial District Executive Center, Floor 18, Boston, MA',
+    eventDate: new Date(now + 25 * dayMs),
+    venue: 'Jio World Convention Centre, Bandra Kurla Complex (BKC), Mumbai',
     seatLimit: 75,
     seatsBooked: 0,
     organizerId: demoOrganizer._id,
@@ -428,16 +320,15 @@ export async function seedTargetDatabase(mongoUri, label = 'Target') {
     ticketPrice: 1499,
     currency: 'INR',
     maxTicketsPerBooking: 6,
-    bannerUrl: 'https://images.unsplash.com/photo-1559526324-4b87b5e36e44?auto=format&fit=crop&w=1200&q=80',
+    bannerUrl: 'https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=1400&q=85',
     image: {
       source: 'URL',
-      url: 'https://images.unsplash.com/photo-1559526324-4b87b5e36e44?auto=format&fit=crop&w=1200&q=80',
+      url: 'https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=1400&q=85',
       publicId: null
     }
   });
 
-  // Generate 75 seats for Event 6 (5 rows x 15 seats: A1 to E15)
-  await generateEventSeats(event6._id, {
+  await generateEventSeats(event3._id, {
     generationMode: 'AUTOMATIC',
     totalSeats: 75,
     rows: 5,
@@ -447,7 +338,217 @@ export async function seedTargetDatabase(mongoUri, label = 'Target') {
     price: 1499
   });
 
-  // Event 7: Cancelled Forum (To showcase cancellation state handling)
+  // Event 4: Delhi NCR — Future of Product Design & Spatial Interfaces (Assigned Seating, ₹599)
+  const event4 = await Event.create({
+    title: 'Future of Product Design & Spatial Interfaces',
+    description:
+      'A curated symposium of digital product designers, design systems architects, and creative directors exploring minimalism, spatial computing paradigms, tactile micro-interactions, and design craft in an algorithmic era.',
+    eventDate: new Date(now + 21 * dayMs),
+    venue: 'Cyber Hub Auditorium, DLF Phase 2, Gurugram, Delhi NCR',
+    seatLimit: 50,
+    seatsBooked: 0,
+    organizerId: demoOrganizer._id,
+    status: EVENT_STATUS.PUBLISHED,
+    category: 'Design',
+    seatingType: 'ASSIGNED_SEATING',
+    isPaid: true,
+    ticketPrice: 599,
+    currency: 'INR',
+    maxTicketsPerBooking: 6,
+    bannerUrl: 'https://images.unsplash.com/photo-1505373877841-8d25f7d46678?auto=format&fit=crop&w=1400&q=85',
+    image: {
+      source: 'URL',
+      url: 'https://images.unsplash.com/photo-1505373877841-8d25f7d46678?auto=format&fit=crop&w=1400&q=85',
+      publicId: null
+    }
+  });
+
+  await generateEventSeats(event4._id, {
+    generationMode: 'AUTOMATIC',
+    totalSeats: 50,
+    rows: 5,
+    seatsPerRow: 10,
+    startingRowLabel: 'A',
+    category: 'STANDARD',
+    price: 599
+  });
+
+  // Event 5: Hyderabad — Next-Gen Generative AI & Autonomous Agents (Assigned Seating, ₹999)
+  const event5 = await Event.create({
+    title: 'Generative AI & Autonomous Agents Conclave 2026',
+    description:
+      'Comprehensive master summit exploring multi-agent orchestrations, MCP server integrations, deterministic validation loops, context compaction strategies, and production-grade self-healing autonomous workflows.',
+    eventDate: new Date(now + 28 * dayMs),
+    venue: 'Hyderabad International Convention Centre (HICC), HITEC City, Hyderabad',
+    seatLimit: 60,
+    seatsBooked: 0,
+    organizerId: demoOrganizer._id,
+    status: EVENT_STATUS.PUBLISHED,
+    category: 'Technology',
+    seatingType: 'ASSIGNED_SEATING',
+    isPaid: true,
+    ticketPrice: 999,
+    currency: 'INR',
+    maxTicketsPerBooking: 6,
+    bannerUrl: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=1400&q=85',
+    image: {
+      source: 'URL',
+      url: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=1400&q=85',
+      publicId: null
+    }
+  });
+
+  await generateEventSeats(event5._id, {
+    generationMode: 'AUTOMATIC',
+    totalSeats: 60,
+    rows: 6,
+    seatsPerRow: 10,
+    startingRowLabel: 'A',
+    category: 'STANDARD',
+    price: 999
+  });
+
+  // Event 6: Pune — High-Throughput Node.js & Go Workshop (General Admission, Free RSVP)
+  const event6 = await Event.create({
+    title: 'High-Throughput Node.js & Go Backend Workshop',
+    description:
+      'Practical hands-on workshop focusing on streaming Server Components, non-blocking I/O profiling, memory leak detection, zero-copy socket processing, and sub-10ms response times.',
+    eventDate: new Date(now + 35 * dayMs),
+    venue: 'Kalyani Nagar Tech Commons, Pune',
+    seatLimit: 80,
+    seatsBooked: 1,
+    organizerId: demoOrganizer._id,
+    status: EVENT_STATUS.PUBLISHED,
+    category: 'Workshop',
+    seatingType: 'GENERAL_ADMISSION',
+    isPaid: false,
+    ticketPrice: 0,
+    currency: 'INR',
+    bannerUrl: 'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&w=1400&q=85',
+    image: {
+      source: 'URL',
+      url: 'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&w=1400&q=85',
+      publicId: null
+    }
+  });
+
+  // Free RSVP for demoAttendee
+  const regFree = await Registration.create({
+    eventId: event6._id,
+    attendeeId: demoAttendee._id,
+    status: REGISTRATION_STATUS.CONFIRMED,
+    isPaid: false,
+    ticketPrice: 0,
+    currency: 'INR',
+    confirmationEmailSent: true,
+    isRedeemed: false
+  });
+
+  const bookingRefFree = `EVT-BK-PUN26-01`;
+  await Booking.create({
+    bookingReference: bookingRefFree,
+    eventId: event6._id,
+    attendeeId: demoAttendee._id,
+    registrationId: regFree._id,
+    ticketCategory: 'FREE RSVP',
+    subtotal: 0,
+    fees: 0,
+    totalAmount: 0,
+    currency: 'INR',
+    status: BOOKING_STATUS.CONFIRMED,
+    ticketToken: generateSignedTicketToken({
+      bookingReference: bookingRefFree,
+      eventId: event6._id,
+      attendeeId: demoAttendee._id
+    }),
+    paymentMethod: 'FREE',
+    confirmedAt: new Date()
+  });
+
+  // Event 7: San Francisco — Global Architecture & Consensus Summit (Assigned Seating, ₹1899)
+  const event7 = await Event.create({
+    title: 'Global Tech Summit 2026: Distributed Systems & AI Architecture',
+    description:
+      'Join industry pioneers, principal architects, and system engineers for 3 days of deep-dive keynotes, live architectural breakdowns, and collaborative workshops on zero-trust microservices, consensus protocols, and real-time streaming architectures.',
+    eventDate: new Date(now + 42 * dayMs),
+    venue: 'Metropolitan Convention Center, Hall A, San Francisco, CA',
+    seatLimit: 50,
+    seatsBooked: 0,
+    organizerId: demoOrganizer._id,
+    status: EVENT_STATUS.PUBLISHED,
+    category: 'Technology',
+    seatingType: 'ASSIGNED_SEATING',
+    isPaid: true,
+    ticketPrice: 1899,
+    currency: 'INR',
+    maxTicketsPerBooking: 6,
+    bannerUrl: 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=1400&q=85',
+    image: {
+      source: 'URL',
+      url: 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=1400&q=85',
+      publicId: null
+    }
+  });
+
+  await generateEventSeats(event7._id, {
+    generationMode: 'AUTOMATIC',
+    totalSeats: 50,
+    rows: 5,
+    seatsPerRow: 10,
+    startingRowLabel: 'A',
+    category: 'STANDARD',
+    price: 1899
+  });
+
+  // Event 8: New York — Clean Energy & Climate Innovation Roundtable (General Admission, Free RSVP)
+  await Event.create({
+    title: 'Clean Energy & Climate Innovation Roundtable',
+    description:
+      'Connecting venture founders, climate scientists, and infrastructure engineers building scalable decarbonization technologies, decentralized renewable microgrids, and transparent carbon accounting ledgers.',
+    eventDate: new Date(now + 10 * dayMs),
+    venue: 'Greenhouse Commons Pavilion, Soho, New York, NY',
+    seatLimit: 120,
+    seatsBooked: 0,
+    organizerId: demoOrganizer._id,
+    status: EVENT_STATUS.PUBLISHED,
+    category: 'Sustainability',
+    seatingType: 'GENERAL_ADMISSION',
+    isPaid: false,
+    ticketPrice: 0,
+    currency: 'INR',
+    bannerUrl: 'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1400&q=85',
+    image: {
+      source: 'URL',
+      url: 'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1400&q=85',
+      publicId: null
+    }
+  });
+
+  // Event 9: Others (Goa) — Founders & Creators Beachside Tech Retreat (General Admission, ₹2499)
+  await Event.create({
+    title: 'Founders & Creators Beachside Tech Retreat',
+    description:
+      'Three days of unconference-style workshops, fireside chats, pitch reviews, and wellness sessions with venture founders, indie hackers, and product engineers along the Arabian Sea.',
+    eventDate: new Date(now + 48 * dayMs),
+    venue: 'Grand Hyatt Goa Resort, Bambolim, Goa',
+    seatLimit: 90,
+    seatsBooked: 0,
+    organizerId: demoOrganizer._id,
+    status: EVENT_STATUS.PUBLISHED,
+    category: 'General',
+    seatingType: 'GENERAL_ADMISSION',
+    isPaid: true,
+    ticketPrice: 2499,
+    currency: 'INR',
+    bannerUrl: 'https://images.unsplash.com/photo-1511795409834-ef04bbd61622?auto=format&fit=crop&w=1400&q=85',
+    image: {
+      source: 'URL',
+      url: 'https://images.unsplash.com/photo-1511795409834-ef04bbd61622?auto=format&fit=crop&w=1400&q=85',
+      publicId: null
+    }
+  });
+
+  // Event 10: Cancelled Event — Autonomous Systems & Robotics Forum (Others - Austin)
   await Event.create({
     title: 'Autonomous Systems & Robotics Forum (Cancelled)',
     description:
@@ -463,21 +564,21 @@ export async function seedTargetDatabase(mongoUri, label = 'Target') {
     isPaid: false,
     ticketPrice: 0,
     currency: 'INR',
-    bannerUrl: 'https://images.unsplash.com/photo-1485827404703-89b55fcc595e?auto=format&fit=crop&w=1200&q=80',
+    bannerUrl: 'https://images.unsplash.com/photo-1485827404703-89b55fcc595e?auto=format&fit=crop&w=1400&q=85',
     image: {
       source: 'URL',
-      url: 'https://images.unsplash.com/photo-1485827404703-89b55fcc595e?auto=format&fit=crop&w=1200&q=80',
+      url: 'https://images.unsplash.com/photo-1485827404703-89b55fcc595e?auto=format&fit=crop&w=1400&q=85',
       publicId: null
     }
   });
 
-  // Event 8: Sold Out Workshop (To showcase sold-out badge & disabled reservation button)
+  // Event 11: Sold Out Workshop — Advanced High-Throughput Node.js Internals (Bengaluru)
   const eventSoldOut = await Event.create({
     title: 'Advanced High-Throughput Node.js Internals (Sold Out)',
     description:
       'Exclusive intimate laboratory covering libuv thread pool tuning, V8 heap snapshot analysis, zero-copy buffer operations, and garbage collection profiling under sustained 50k req/s load.',
     eventDate: new Date(now + 7 * dayMs),
-    venue: 'TechHub Accelerator Room 402, Chicago, IL',
+    venue: 'Indiranagar DevLab, 100 Feet Road, Bengaluru',
     seatLimit: 2,
     seatsBooked: 2,
     organizerId: demoOrganizer._id,
@@ -487,10 +588,10 @@ export async function seedTargetDatabase(mongoUri, label = 'Target') {
     isPaid: true,
     ticketPrice: 499,
     currency: 'INR',
-    bannerUrl: 'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&w=1200&q=80',
+    bannerUrl: 'https://images.unsplash.com/photo-1531482615713-2afd69097998?auto=format&fit=crop&w=1400&q=85',
     image: {
       source: 'URL',
-      url: 'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&w=1200&q=80',
+      url: 'https://images.unsplash.com/photo-1531482615713-2afd69097998?auto=format&fit=crop&w=1400&q=85',
       publicId: null
     }
   });
@@ -565,7 +666,7 @@ export async function seedTargetDatabase(mongoUri, label = 'Target') {
     type: NOTIFICATION_TYPE.BOOKING_CONFIRMED,
     channel: NOTIFICATION_CHANNEL.IN_APP,
     title: 'Tickets Confirmed!',
-    message: 'Your seats [A1, A2] for "Global Tech Summit 2026" are confirmed. Check your My Tickets tab for your digital pass & QR code.',
+    message: 'Your seats [A1, A2] for "Kolkata Cloud Native & AI Developer Summit 2026" are confirmed. Check your My Tickets tab for your digital pass & QR code.',
     eventId: event1._id,
     registrationId: reg1._id,
     isRead: false
@@ -576,13 +677,13 @@ export async function seedTargetDatabase(mongoUri, label = 'Target') {
     type: NOTIFICATION_TYPE.BOOKING_CONFIRMED,
     channel: NOTIFICATION_CHANNEL.IN_APP,
     title: 'New Booking Received',
-    message: 'Alex Rivera reserved seats [A1, A2] for "Global Tech Summit 2026".',
+    message: 'Alex Rivera reserved seats [A1, A2] for "Kolkata Cloud Native & AI Developer Summit 2026".',
     eventId: event1._id,
     registrationId: reg1._id,
     isRead: false
   });
 
-  console.log(`[${label}] Seeding complete! Total events created: 8.`);
+  console.log(`[${label}] Seeding complete! Total events created: 11.`);
   await mongoose.disconnect();
   console.log(`[${label}] Disconnected cleanly from MongoDB.\n`);
 }

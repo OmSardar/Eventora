@@ -35,5 +35,15 @@ export const metadata: Metadata = {
 };
 
 export default function EventsPage() {
-  return <EventsBrowseView />;
+  return (
+    <React.Suspense
+      fallback={
+        <div className="container mx-auto max-w-7xl px-4 sm:px-6 py-12">
+          <div className="h-64 rounded-3xl border border-border/40 bg-card/40 animate-pulse" />
+        </div>
+      }
+    >
+      <EventsBrowseView />
+    </React.Suspense>
+  );
 }

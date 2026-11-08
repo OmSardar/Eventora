@@ -157,9 +157,11 @@ const SAMSUNG_MODELS = {
   'SM-S928': 'Samsung Galaxy S24 Ultra',
   'SM-S926': 'Samsung Galaxy S24+',
   'SM-S921': 'Samsung Galaxy S24',
+  'SM-S721': 'Samsung Galaxy S24 FE',
   'SM-S918': 'Samsung Galaxy S23 Ultra',
   'SM-S916': 'Samsung Galaxy S23+',
   'SM-S911': 'Samsung Galaxy S23',
+  'SM-S711': 'Samsung Galaxy S23 FE',
   'SM-S908': 'Samsung Galaxy S22 Ultra',
   'SM-S906': 'Samsung Galaxy S22+',
   'SM-S901': 'Samsung Galaxy S22',
@@ -167,6 +169,8 @@ const SAMSUNG_MODELS = {
   'SM-G996': 'Samsung Galaxy S21+',
   'SM-G991': 'Samsung Galaxy S21',
   'SM-G988': 'Samsung Galaxy S20 Ultra',
+  'SM-F956': 'Samsung Galaxy Z Fold 6',
+  'SM-F741': 'Samsung Galaxy Z Flip 6',
   'SM-F946': 'Samsung Galaxy Z Fold 5',
   'SM-F731': 'Samsung Galaxy Z Flip 5',
   'SM-F936': 'Samsung Galaxy Z Fold 4',
@@ -174,38 +178,170 @@ const SAMSUNG_MODELS = {
   'SM-F926': 'Samsung Galaxy Z Fold 3',
   'SM-F711': 'Samsung Galaxy Z Flip 3',
   'SM-N986': 'Samsung Galaxy Note 20 Ultra',
+  'SM-A556': 'Samsung Galaxy A55 5G',
   'SM-A546': 'Samsung Galaxy A54 5G',
   'SM-A536': 'Samsung Galaxy A53 5G',
+  'SM-A356': 'Samsung Galaxy A35 5G',
   'SM-A346': 'Samsung Galaxy A34 5G',
+  'SM-A156': 'Samsung Galaxy A15 5G',
   'SM-A146': 'Samsung Galaxy A14 5G',
-  'SM-A528': 'Samsung Galaxy A52s 5G'
+  'SM-A528': 'Samsung Galaxy A52s 5G',
+  'SM-M346': 'Samsung Galaxy M34 5G',
+  'SM-M546': 'Samsung Galaxy M54 5G'
 };
 
 const ONEPLUS_MODELS = {
   'CPH2581': 'OnePlus 12',
+  'CPH2573': 'OnePlus 12',
+  'CPH2609': 'OnePlus 12R',
+  'CPH2611': 'OnePlus 12R',
   'CPH2451': 'OnePlus 11',
   'CPH2449': 'OnePlus 11 5G',
+  'CPH2487': 'OnePlus 11R',
   'NE2210': 'OnePlus 10 Pro',
   'NE2213': 'OnePlus 10 Pro',
+  'CPH2415': 'OnePlus 10T',
+  'CPH2493': 'OnePlus Nord 3',
+  'CPH2613': 'OnePlus Nord CE 4',
+  'CPH2551': 'OnePlus Open',
   'IN2020': 'OnePlus 8 Pro',
   'IN2023': 'OnePlus 8 Pro'
 };
 
 const XIAOMI_MODELS = {
   '23127PN0CG': 'Xiaomi 14',
-  '2201116TI': 'Xiaomi 11i 5G',
+  '24030PN60G': 'Xiaomi 14 Ultra',
   '2210132G': 'Xiaomi 13 Pro',
   '2201123G': 'Xiaomi 12',
-  '2201117PG': 'POCO X4 Pro 5G',
+  '2201116TI': 'Xiaomi 11i 5G',
+  '24053PY09G': 'POCO F6',
   '23049PCD8G': 'POCO F5',
-  '22041216G': 'POCO X4 GT'
+  '2311DRK48G': 'POCO X6 Pro 5G',
+  '2311DRK48I': 'POCO X6 Pro 5G',
+  '2201117PG': 'POCO X4 Pro 5G',
+  '22041216G': 'POCO X4 GT',
+  '23076RN4BI': 'Redmi 12 5G',
+  '2312DRA50G': 'Redmi Note 13 Pro+ 5G',
+  '2312CRAD3C': 'Redmi Note 13 5G',
+  '22101316G': 'Redmi Note 12 Pro+ 5G'
+};
+
+const VIVO_IQOO_MODELS = {
+  'V2303': 'Vivo X100 Pro',
+  'V2303A': 'Vivo X100 Pro',
+  'V2324A': 'Vivo X Fold 3 Pro',
+  'V2302A': 'Vivo V30 Pro',
+  'V2318': 'Vivo V30',
+  'I2220': 'iQOO 12 5G',
+  'I2207': 'iQOO Neo 9 Pro',
+  'I2202': 'iQOO 11 5G',
+  'I2018': 'iQOO 7'
+};
+
+const REALME_MODELS = {
+  'RMX3850': 'Realme GT 6',
+  'RMX3851': 'Realme GT Neo 6',
+  'RMX3840': 'Realme 12 Pro+ 5G',
+  'RMX3706': 'Realme GT Neo 5',
+  'RMX3360': 'Realme GT Master Edition'
+};
+
+const MOTOROLA_MODELS = {
+  'XT2343': 'Motorola Moto G84 5G',
+  'XT2401': 'Motorola Edge 50 Pro',
+  'XT2403': 'Motorola Edge 50 Ultra',
+  'XT2301': 'Motorola Edge 40 Pro'
 };
 
 const NOTHING_MODELS = {
   'A063': 'Nothing Phone (1)',
   'A065': 'Nothing Phone (2)',
-  'A142': 'Nothing Phone (2a)'
+  'A142': 'Nothing Phone (2a)',
+  'A142P': 'Nothing Phone (2a) Plus',
+  'A015': 'CMF Phone 1 by Nothing'
 };
+
+export const COUNTRY_NAMES = {
+  IN: 'India',
+  US: 'United States',
+  GB: 'United Kingdom',
+  CA: 'Canada',
+  AU: 'Australia',
+  DE: 'Germany',
+  FR: 'France',
+  SG: 'Singapore',
+  AE: 'United Arab Emirates',
+  JP: 'Japan',
+  NL: 'Netherlands',
+  IE: 'Ireland',
+  SE: 'Sweden',
+  CH: 'Switzerland'
+};
+
+export const REGION_NAMES = {
+  // India
+  WB: 'West Bengal',
+  MH: 'Maharashtra',
+  KA: 'Karnataka',
+  DL: 'Delhi NCR',
+  TN: 'Tamil Nadu',
+  TG: 'Telangana',
+  TS: 'Telangana',
+  AP: 'Andhra Pradesh',
+  GJ: 'Gujarat',
+  UP: 'Uttar Pradesh',
+  RJ: 'Rajasthan',
+  KL: 'Kerala',
+  MP: 'Madhya Pradesh',
+  PB: 'Punjab',
+  HR: 'Haryana',
+  BR: 'Bihar',
+  OD: 'Odisha',
+  OR: 'Odisha',
+  AS: 'Assam',
+  GA: 'Goa',
+  JK: 'Jammu and Kashmir',
+  CH: 'Chandigarh',
+  UT: 'Uttarakhand',
+  JH: 'Jharkhand',
+  CT: 'Chhattisgarh',
+  // US
+  CA: 'California',
+  NY: 'New York',
+  TX: 'Texas',
+  WA: 'Washington',
+  MA: 'Massachusetts',
+  IL: 'Illinois',
+  FL: 'Florida',
+  VA: 'Virginia',
+  GA: 'Georgia',
+  CO: 'Colorado'
+};
+
+/**
+ * Formats structured location info into a clean, human-readable display string.
+ * e.g. "Kolkata, West Bengal, India (Asia/Kolkata)"
+ */
+export function formatLocationDisplay(location) {
+  if (!location) return 'Unknown location';
+  const countryName = COUNTRY_NAMES[location.country] || location.country;
+  const regionName = REGION_NAMES[location.region] || location.region;
+  const parts = [];
+  if (location.city && location.city !== 'Unknown' && location.city !== 'Unknown City') {
+    parts.push(location.city);
+  }
+  if (regionName && regionName !== 'Unknown' && regionName !== 'Unknown Region' && regionName !== parts[0]) {
+    parts.push(regionName);
+  }
+  if (countryName && countryName !== 'Unknown' && countryName !== 'Unknown Country') {
+    parts.push(countryName);
+  }
+  let str = parts.length > 0 ? parts.join(', ') : 'Unknown location';
+  if (location.timezone && location.timezone !== 'UTC') {
+    str += ` (${location.timezone})`;
+  }
+  return str;
+}
 
 /**
  * Resolves a friendly smartphone name from a raw model code and vendor.
@@ -223,11 +359,20 @@ function resolveFriendlyPhoneModel(rawModel, rawVendor) {
   for (const [prefix, name] of Object.entries(XIAOMI_MODELS)) {
     if (cleanModel.includes(prefix)) return name;
   }
+  for (const [prefix, name] of Object.entries(VIVO_IQOO_MODELS)) {
+    if (cleanModel.includes(prefix)) return name;
+  }
+  for (const [prefix, name] of Object.entries(REALME_MODELS)) {
+    if (cleanModel.includes(prefix)) return name;
+  }
+  for (const [prefix, name] of Object.entries(MOTOROLA_MODELS)) {
+    if (cleanModel.includes(prefix)) return name;
+  }
   for (const [prefix, name] of Object.entries(NOTHING_MODELS)) {
     if (cleanModel.includes(prefix)) return name;
   }
 
-  if (/Pixel\s*[0-9]+[a-z]?(\s*Pro)?/i.test(cleanModel)) {
+  if (/Pixel\s*[0-9]+[a-z]?(\s*Pro(\s*XL)?)?/i.test(cleanModel)) {
     return cleanModel.startsWith('Google ') ? cleanModel : `Google ${cleanModel}`;
   }
 

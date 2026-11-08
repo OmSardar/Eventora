@@ -15,6 +15,13 @@ import {
   ShieldCheck,
   Sparkles,
   Zap,
+  MapPin,
+  Armchair,
+  QrCode,
+  Flame,
+  CheckCircle2,
+  Users,
+  Compass,
 } from "lucide-react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
@@ -126,57 +133,249 @@ export function LandingView() {
     <div ref={pageContainerRef} className="flex flex-col min-h-screen">
       {/* Hero Section */}
       <section
-        className="relative overflow-hidden border-b border-border/40 py-20 md:py-28 lg:py-36 bg-gradient-to-b from-background via-card/30 to-background"
+        className="relative overflow-hidden border-b border-border/40 py-20 md:py-28 lg:py-32 bg-gradient-to-b from-background via-card/40 to-background"
       >
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(120,119,198,0.15),rgba(255,255,255,0))] dark:bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(120,119,198,0.08),rgba(0,0,0,0))]" />
+        {/* Ambient Aurora Glow Effects */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 -mt-24 h-96 w-[700px] rounded-full bg-gradient-to-tr from-primary/15 via-emerald-500/10 to-indigo-500/15 blur-3xl pointer-events-none" />
+        <div className="absolute top-1/3 -left-48 h-80 w-80 rounded-full bg-primary/10 blur-3xl pointer-events-none" />
+        <div className="absolute top-1/2 -right-48 h-80 w-80 rounded-full bg-emerald-500/10 blur-3xl pointer-events-none" />
 
         <div className="container relative mx-auto max-w-7xl px-4 sm:px-6 text-center">
-          <div className="hero-element inline-flex items-center gap-2 rounded-full border border-border bg-muted/60 px-3.5 py-1 text-xs font-medium text-foreground backdrop-blur-md mb-6 shadow-sm">
-            <Sparkles className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
-            <span>High-concurrency event RSVP &amp; ticketing</span>
+          <div className="hero-element inline-flex items-center gap-2 rounded-full border border-border/80 bg-background/80 px-4 py-1.5 text-xs font-semibold text-foreground backdrop-blur-md mb-6 shadow-sm">
+            <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-primary font-bold">Eventora 2.0</span>
+            <span className="text-muted-foreground">• Real-Time Seat Allocation across 8+ Hub Cities</span>
           </div>
 
           <h1 className="hero-element mx-auto max-w-4xl text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold tracking-tight text-foreground leading-[1.1] mb-6">
             Exceptional events,{" "}
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-foreground to-foreground/60">
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-foreground via-foreground/90 to-foreground/60">
               zero overbooking.
             </span>
           </h1>
 
-          <p className="hero-element mx-auto max-w-2xl text-base sm:text-lg text-muted-foreground leading-relaxed mb-10">
-            Eventora combines atomic seat reservations, Argon2id encryption, and a modern minimal interface for organizers and attendees.
+          <p className="hero-element mx-auto max-w-2xl text-base sm:text-lg text-muted-foreground leading-relaxed mb-8">
+            Experience BookMyShow-style interactive seat selection, instant 10-minute hold transactions, and fast-gate mobile QR admission—engineered with strict MongoDB ACID invariants.
           </p>
 
-          <div className="hero-element flex flex-col sm:flex-row items-center justify-center gap-4">
+          <div className="hero-element flex flex-col sm:flex-row items-center justify-center gap-4 mb-10">
             <Link href="/events" className="w-full sm:w-auto">
-              <Button size="lg" className="w-full sm:w-auto gap-2 text-base px-8 h-12 shadow-md">
-                Browse Events
+              <Button size="lg" className="w-full sm:w-auto gap-2 text-base px-8 h-12 shadow-lg shadow-primary/15 hover:shadow-primary/25 transition-all">
+                Browse Live Events
                 <ArrowRight className="h-4 w-4" aria-hidden="true" />
               </Button>
             </Link>
             <Link href="/register" className="w-full sm:w-auto">
-              <Button size="lg" variant="outline" className="w-full sm:w-auto text-base px-8 h-12">
+              <Button size="lg" variant="outline" className="w-full sm:w-auto text-base px-8 h-12 hover:bg-card">
                 Host an Event
               </Button>
             </Link>
           </div>
 
+          {/* Quick Hub City Navigation Ribbon */}
+          <div className="hero-element max-w-4xl mx-auto mb-14">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center justify-center gap-1.5">
+              <Compass className="h-3.5 w-3.5 text-primary" />
+              <span>Explore Top Tech &amp; Cultural Hubs</span>
+            </p>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              {[
+                { name: "All Cities", param: "All" },
+                { name: "Kolkata", param: "Kolkata" },
+                { name: "Bengaluru", param: "Bengaluru" },
+                { name: "Mumbai", param: "Mumbai" },
+                { name: "Delhi NCR", param: "Delhi NCR" },
+                { name: "Hyderabad", param: "Hyderabad" },
+                { name: "Pune", param: "Pune" },
+                { name: "San Francisco", param: "San Francisco" },
+                { name: "New York", param: "New York" },
+                { name: "Others", param: "Others" },
+              ].map((c) => (
+                <Link
+                  key={c.param}
+                  href={`/events?location=${encodeURIComponent(c.param)}`}
+                  className="inline-flex items-center gap-1 rounded-full border border-border/70 bg-card/60 hover:bg-card hover:border-primary/50 px-3 py-1 text-xs font-medium text-foreground transition-all hover:scale-105 shadow-xs"
+                >
+                  <MapPin className="h-3 w-3 text-muted-foreground" />
+                  <span>{c.name}</span>
+                </Link>
+              ))}
+            </div>
+          </div>
+
+          {/* Interactive Feature Showcase: Interactive Seat Map & Digital Fast Gate Preview */}
+          <div className="hero-element max-w-4xl mx-auto rounded-3xl border border-border/80 bg-gradient-to-b from-card via-card/90 to-background p-5 sm:p-8 shadow-2xl backdrop-blur-xl relative overflow-hidden text-left mb-14">
+            <div className="absolute top-0 right-0 h-40 w-40 bg-primary/10 rounded-full blur-2xl pointer-events-none" />
+
+            <div className="flex flex-col md:flex-row items-center justify-between gap-6 pb-6 border-b border-border/60">
+              <div>
+                <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-500 uppercase tracking-wider mb-1">
+                  <Armchair className="h-4 w-4" />
+                  Interactive Seating Engine
+                </span>
+                <h3 className="text-lg sm:text-xl font-bold text-foreground">
+                  BookMyShow-Style Visual Seat Selection
+                </h3>
+                <p className="text-xs sm:text-sm text-muted-foreground">
+                  Attendees pick exact seats with live pricing, 10-minute atomic locking, and real-time held seat sync.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <span className="inline-flex items-center gap-1.5 text-xs rounded-lg border border-border bg-background/80 px-2.5 py-1 text-muted-foreground font-mono">
+                  <QrCode className="h-3.5 w-3.5 text-primary" /> Fast Gate QR
+                </span>
+                <span className="inline-flex items-center gap-1.5 text-xs rounded-lg border border-border bg-background/80 px-2.5 py-1 text-emerald-500 font-mono font-medium">
+                  <CheckCircle2 className="h-3.5 w-3.5" /> Zero Double-Booking
+                </span>
+              </div>
+            </div>
+
+            {/* Mini Seat Layout Simulation Preview */}
+            <div className="pt-6 grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
+              {/* Seating Grid Simulation */}
+              <div className="md:col-span-7 bg-background/60 rounded-2xl border border-border/60 p-4 sm:p-5">
+                <div className="text-center pb-3">
+                  <div className="w-48 mx-auto h-1.5 rounded-full bg-gradient-to-r from-transparent via-primary/50 to-transparent mb-1" />
+                  <span className="text-[10px] font-semibold text-muted-foreground tracking-widest uppercase">
+                    Keynote Stage / Screen
+                  </span>
+                </div>
+
+                <div className="space-y-2 pt-2">
+                  {/* Row A - VIP */}
+                  <div className="flex items-center justify-center gap-1.5">
+                    <span className="text-[10px] font-mono text-muted-foreground w-4 text-right">A</span>
+                    {["A1", "A2", "A3", "A4", "A5", "A6"].map((s, i) => {
+                      const isSelected = i === 2;
+                      const isHeld = i === 1;
+                      const isBooked = i === 4;
+                      return (
+                        <div
+                          key={s}
+                          className={`h-7 w-7 rounded-md flex items-center justify-center text-[10px] font-mono font-bold transition-all shadow-xs ${
+                            isSelected
+                              ? "bg-blue-600 text-white ring-2 ring-blue-400 scale-105"
+                              : isHeld
+                              ? "bg-amber-500/20 text-amber-500 border border-amber-500/40"
+                              : isBooked
+                              ? "bg-rose-500/20 text-rose-500 border border-rose-500/30"
+                              : "bg-emerald-500/20 text-emerald-500 border border-emerald-500/40 hover:bg-emerald-500 hover:text-white cursor-pointer"
+                          }`}
+                        >
+                          {s}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Row B - Premium */}
+                  <div className="flex items-center justify-center gap-1.5">
+                    <span className="text-[10px] font-mono text-muted-foreground w-4 text-right">B</span>
+                    {["B1", "B2", "B3", "B4", "B5", "B6"].map((s, i) => {
+                      const isBooked = i === 0 || i === 5;
+                      const isSelected = i === 3;
+                      return (
+                        <div
+                          key={s}
+                          className={`h-7 w-7 rounded-md flex items-center justify-center text-[10px] font-mono font-bold transition-all shadow-xs ${
+                            isSelected
+                              ? "bg-blue-600 text-white ring-2 ring-blue-400 scale-105"
+                              : isBooked
+                              ? "bg-rose-500/20 text-rose-500 border border-rose-500/30"
+                              : "bg-emerald-500/20 text-emerald-500 border border-emerald-500/40 hover:bg-emerald-500 hover:text-white cursor-pointer"
+                          }`}
+                        >
+                          {s}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Row C - Standard */}
+                  <div className="flex items-center justify-center gap-1.5">
+                    <span className="text-[10px] font-mono text-muted-foreground w-4 text-right">C</span>
+                    {["C1", "C2", "C3", "C4", "C5", "C6"].map((s, i) => {
+                      const isBooked = i === 2 || i === 3;
+                      return (
+                        <div
+                          key={s}
+                          className={`h-7 w-7 rounded-md flex items-center justify-center text-[10px] font-mono font-bold transition-all shadow-xs ${
+                            isBooked
+                              ? "bg-rose-500/20 text-rose-500 border border-rose-500/30"
+                              : "bg-emerald-500/20 text-emerald-500 border border-emerald-500/40 hover:bg-emerald-500 hover:text-white cursor-pointer"
+                          }`}
+                        >
+                          {s}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Legend */}
+                <div className="flex flex-wrap items-center justify-center gap-3 pt-4 text-[10px] text-muted-foreground border-t border-border/40 mt-3">
+                  <span className="flex items-center gap-1">
+                    <span className="h-2.5 w-2.5 rounded-xs bg-emerald-500/40 border border-emerald-500" /> Available
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="h-2.5 w-2.5 rounded-xs bg-blue-600" /> Selected
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="h-2.5 w-2.5 rounded-xs bg-amber-500/40 border border-amber-500" /> Held
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="h-2.5 w-2.5 rounded-xs bg-rose-500/30 border border-rose-500" /> Booked
+                  </span>
+                </div>
+              </div>
+
+              {/* Digital Pass / Fast Gate Preview */}
+              <div className="md:col-span-5 bg-background/80 rounded-2xl border border-border/60 p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-foreground">Digital Admission Pass</span>
+                  <span className="text-[10px] font-mono text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full font-semibold">
+                    ● Confirmed
+                  </span>
+                </div>
+
+                <div className="p-3 rounded-xl bg-card border border-border/50 space-y-2">
+                  <div className="text-xs font-bold text-foreground truncate">
+                    Global AI &amp; Cloud Summit 2026
+                  </div>
+                  <div className="text-[10px] text-muted-foreground">
+                    Biswa Bangla Convention Centre, Kolkata
+                  </div>
+                  <div className="flex items-center justify-between text-xs pt-1 border-t border-border/40">
+                    <span className="text-muted-foreground">Seats:</span>
+                    <span className="font-mono font-bold text-primary">A3, B4 (VIP)</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 pt-1 text-[11px] text-muted-foreground">
+                  <div className="h-2 w-2 rounded-full bg-emerald-500" />
+                  <span>Encrypted QR with dynamic nonce token</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Quick Stats Banner */}
-          <div className="hero-element mt-16 grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto pt-8 border-t border-border/40">
-            <div className="p-4">
-              <p className="text-2xl font-bold text-foreground">100%</p>
+          <div className="hero-element grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto pt-6 border-t border-border/40">
+            <div className="p-4 rounded-2xl bg-card/30 border border-border/40">
+              <p className="text-2xl font-black text-foreground">100%</p>
               <p className="text-xs text-muted-foreground">Atomic Guarantee</p>
             </div>
-            <div className="p-4">
-              <p className="text-2xl font-bold text-foreground">&lt; 15ms</p>
-              <p className="text-xs text-muted-foreground">API Latency</p>
+            <div className="p-4 rounded-2xl bg-card/30 border border-border/40">
+              <p className="text-2xl font-black text-foreground">&lt; 15ms</p>
+              <p className="text-xs text-muted-foreground">Hold Transaction Latency</p>
             </div>
-            <div className="p-4">
-              <p className="text-2xl font-bold text-foreground">Argon2id</p>
-              <p className="text-xs text-muted-foreground">Military Security</p>
+            <div className="p-4 rounded-2xl bg-card/30 border border-border/40">
+              <p className="text-2xl font-black text-foreground">Argon2id</p>
+              <p className="text-xs text-muted-foreground">Cryptographic Security</p>
             </div>
-            <div className="p-4">
-              <p className="text-2xl font-bold text-foreground">Zero</p>
+            <div className="p-4 rounded-2xl bg-card/30 border border-border/40">
+              <p className="text-2xl font-black text-foreground">Zero</p>
               <p className="text-xs text-muted-foreground">Overbooking Errors</p>
             </div>
           </div>

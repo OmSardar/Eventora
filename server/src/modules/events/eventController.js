@@ -3,8 +3,15 @@ import * as registrationService from '../registrations/registrationService.js';
 
 export async function getEvents(req, res, next) {
   try {
-    const { search, category, page, limit } = req.query;
-    const result = await eventService.getEvents({ search, category, page, limit });
+    const { search, category, location, city, sort, page, limit } = req.query;
+    const result = await eventService.getEvents({
+      search,
+      category,
+      location: location || city,
+      sort,
+      page,
+      limit
+    });
     res.status(200).json({
       success: true,
       data: result

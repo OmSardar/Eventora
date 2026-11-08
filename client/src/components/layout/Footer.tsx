@@ -1,6 +1,10 @@
+"use client";
+
 import React from "react";
 import Link from "next/link";
 import { BrandLogo } from "@/components/brand/BrandLogo";
+import { openCookiePreferences } from "@/components/shared/CookieConsent";
+import { Cookie } from "lucide-react";
 
 export function Footer() {
   return (
@@ -45,7 +49,7 @@ export function Footer() {
             </h4>
             <ul className="space-y-2 text-xs">
               <li className="text-muted-foreground">Clean Vertical Slices</li>
-              <li className="text-muted-foreground">Argon2id & MongoStore Sessions</li>
+              <li className="text-muted-foreground">Argon2id &amp; MongoStore Sessions</li>
               <li className="text-muted-foreground">Synchronizer CSRF Tokens</li>
               <li className="text-muted-foreground">Atomic Concurrency Reservation</li>
             </ul>
@@ -63,7 +67,15 @@ export function Footer() {
 
         <div className="pt-6 border-t border-border/30 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs">
           <p>© {new Date().getFullYear()} Eventora Inc. All rights reserved.</p>
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-4 sm:gap-6">
+            <button
+              type="button"
+              onClick={openCookiePreferences}
+              className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+            >
+              <Cookie className="h-3.5 w-3.5 text-amber-500" />
+              <span>Cookie Preferences</span>
+            </button>
             <span className="inline-flex items-center gap-1.5 text-xs text-emerald-500 font-mono">
               <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
               API v1 Live

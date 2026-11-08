@@ -5,6 +5,7 @@ import "./globals.css";
 import { Providers } from "./providers";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
+import { CookieConsent } from "@/components/shared/CookieConsent";
 import { siteConfig, siteUrl } from "@/lib/siteConfig";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -94,6 +95,7 @@ export default function RootLayout({
           <Navbar />
           <main className="flex-1 flex flex-col">{children}</main>
           <Footer />
+          <CookieConsent />
         </Providers>
         <Script
           src="https://checkout.razorpay.com/v1/checkout.js"

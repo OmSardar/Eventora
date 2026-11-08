@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { openCookiePreferences } from "@/components/shared/CookieConsent";
 import {
   LayoutDashboard,
   Calendar,
@@ -25,6 +26,7 @@ import {
   ChevronDown,
   User as UserIcon,
   Sparkles,
+  Cookie,
 } from "lucide-react";
 
 export function getInitials(name: string): string {
@@ -203,6 +205,14 @@ export function UserNavDropdown() {
               )}
             </Link>
           </DropdownMenuItem>
+
+          <DropdownMenuItem
+            onClick={openCookiePreferences}
+            className="flex items-center gap-2.5 w-full cursor-pointer py-2"
+          >
+            <Cookie className="h-4 w-4 text-amber-500" />
+            <span>Cookie Preferences</span>
+          </DropdownMenuItem>
         </div>
 
         <DropdownMenuSeparator />
@@ -219,3 +229,4 @@ export function UserNavDropdown() {
     </DropdownMenu>
   );
 }
+

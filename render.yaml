@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: eventora-server-omslabs
+    runtime: node
+    plan: starter
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/v1/health
+    autoDeploy: true

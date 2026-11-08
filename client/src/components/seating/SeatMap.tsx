@@ -66,7 +66,7 @@ export function SeatMap({
     refetchInterval: 15000,
   });
 
-  const seats: EventSeatItem[] = seatsData || [];
+  const seats: EventSeatItem[] = useMemo(() => seatsData || [], [seatsData]);
 
   // Group seats by Section and Row
   const sections = useMemo(() => {

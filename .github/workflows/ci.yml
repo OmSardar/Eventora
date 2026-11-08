@@ -39,6 +39,7 @@ jobs:
           MONGODB_URI: mongodb://localhost:27017/eventora_test
           SESSION_SECRET: ci-test-session-secret-key-min-32-chars!
           ALLOWED_ORIGINS: http://localhost:3000
+          EMAIL_FROM: Eventora <notifications@mail.omslabs.tech>
 
       - name: Lint Frontend Application
         run: npm run lint --prefix client

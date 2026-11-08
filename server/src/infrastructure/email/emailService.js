@@ -76,7 +76,7 @@ export function getAppBaseUrl() {
  * Dispatches an email via Resend or logs in simulation/mock mode.
  */
 async function sendEmail({ to, subject, html, text }) {
-  let fromEmail = process.env.EMAIL_FROM;
+  let fromEmail = process.env.EMAIL_FROM || (process.env.NODE_ENV === 'test' ? 'Eventora <notifications@mail.omslabs.tech>' : null);
   if (!fromEmail) {
     logger.error('EMAIL_FROM is not defined in environment variables.');
     return { success: false, error: 'EMAIL_FROM environment variable missing' };

@@ -614,3 +614,78 @@ export async function sendCancellationRefundEmail({
     text
   });
 }
+
+// -------------------------------------------------------------
+// 9. PASSWORD RESET OTP EMAIL
+// -------------------------------------------------------------
+
+export async function sendPasswordResetOtpEmail({ email, name, otp }) {
+  const html = wrapEmailTemplate({
+    title: `Your Eventora password reset code: ${otp}`,
+    badge: { text: 'Password Reset', type: 'warning' },
+    heading: 'Reset your Eventora password',
+    bodyHtml: `
+      <p>Hi ${name || 'there'},</p>
+      <p>We received a request to reset the password for your Eventora account (<strong>${email}</strong>). Use the six-digit verification code below to proceed:</p>
+      <div class="otp-code">${otp}</div>
+      <p style="font-size: 13px; color: #a1a1aa; text-align: center;">
+        This code is valid for <strong>10 minutes</strong>. If you did not request a password reset, you can safely ignore this email — your account remains secure.
+      </p>
+    `,
+    footerNotes: 'Never share this verification code with anyone. Eventora support will never ask for your code.'
+  });
+
+  const text = `EVENTORA — PASSWORD RESET CODE\n\nHi ${name || 'there'},\n\nYour 6-digit password reset code is: ${otp}\n\nThis code expires in 10 minutes. If you did not request this code, your account remains secure and no action is needed.`;
+
+  return sendEmail({
+    to: email,
+    subject: `Your Eventora password reset code: ${otp}`,
+    html,
+    text
+  });
+}
+
+// -------------------------------------------------------------
+// 10. PASSWORD CHANGED SECURITY ALERT EMAIL
+// -------------------------------------------------------------
+
+export async function sendPasswordChangedAlertEmail({ email, name, ipAddress, userAgent, method = 'CURRENT_PASSWORD' }) {
+  const appBaseUrl = getAppBaseUrl();
+  const securityUrl = `${appBaseUrl}/settings/security`;
+  const methodLabel = method === 'RESET_WITH_OTP'
+    ? 'Forgot Password Verification (Email OTP)'
+    : 'Account Security Settings (Current Password Verified)';
+
+  const html = wrapEmailTemplate({
+    title: 'Your Eventora password has been updated',
+    badge: { text: 'Security Alert', type: 'success' },
+    heading: 'Your password was successfully updated',
+    bodyHtml: `
+      <p>Hi ${name || 'there'},</p>
+      <p>This email confirms that the password for your Eventora account (<strong>${email}</strong>) has been successfully updated.</p>
+      
+      <div class="info-box">
+        <div style="font-weight: 700; color: #fff; margin-bottom: 12px;">Security Activity Details</div>
+        <div class="info-row"><span class="info-label">Verification Method:</span> <span>${methodLabel}</span></div>
+        <div class="info-row"><span class="info-label">Timestamp:</span> <span>${new Date().toUTCString()}</span></div>
+        ${ipAddress ? `<div class="info-row"><span class="info-label">IP Address:</span> <span>${ipAddress}</span></div>` : ''}
+      </div>
+
+      <p style="color: #ef4444; font-size: 13px;">
+        <strong>Didn&apos;t perform this action?</strong> If you did not change your password, someone else may have gained access to your account. Please reset your password immediately or contact Eventora support.
+      </p>
+    `,
+    actionUrl: securityUrl,
+    actionLabel: 'Review Security Settings',
+    footerNotes: 'You received this notification because your account credentials were changed.'
+  });
+
+  const text = `EVENTORA — SECURITY ALERT: PASSWORD UPDATED\n\nHi ${name || 'there'},\n\nThe password for your account (${email}) was recently updated.\nMethod: ${methodLabel}\nTimestamp: ${new Date().toUTCString()}\n${ipAddress ? `IP Address: ${ipAddress}\n` : ''}\nIf you did not make this change, please secure your account immediately: ${securityUrl}`;
+
+  return sendEmail({
+    to: email,
+    subject: 'Your Eventora account password has been updated',
+    html,
+    text
+  });
+}

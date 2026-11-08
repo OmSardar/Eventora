@@ -117,7 +117,7 @@ export default function OrganizerEventsListPage() {
                   </h3>
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                     <Clock className="h-3.5 w-3.5 shrink-0" />
-                    <span>{formatDate(evt.eventDate)}</span>
+                    <span suppressHydrationWarning>{formatDate(evt.eventDate)}</span>
                   </div>
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                     <MapPin className="h-3.5 w-3.5 shrink-0" />

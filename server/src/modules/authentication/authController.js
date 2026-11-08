@@ -457,3 +457,49 @@ export async function regenerateRecoveryCodes(req, res, next) {
     next(error);
   }
 }
+
+export async function forgotPassword(req, res, next) {
+  try {
+    const { email } = req.validatedBody;
+    const result = await authService.requestPasswordResetOtp({
+      email,
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent']
+    });
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function resetPassword(req, res, next) {
+  try {
+    const { email, otp, newPassword } = req.validatedBody;
+    const result = await authService.resetPasswordWithOtp({
+      email,
+      otp,
+      newPassword,
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent']
+    });
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function changePassword(req, res, next) {
+  try {
+    const { currentPassword, newPassword } = req.validatedBody;
+    const result = await authService.changePassword({
+      userId: req.user.id,
+      currentPassword,
+      newPassword,
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent']
+    });
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+}

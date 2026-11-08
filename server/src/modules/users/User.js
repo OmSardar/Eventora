@@ -106,6 +106,23 @@ const userSchema = new mongoose.Schema(
     mfa: {
       type: userMfaSchema,
       default: () => ({})
+    },
+    passwordReset: {
+      otpHash: {
+        type: String,
+        default: null,
+        select: false
+      },
+      expiresAt: {
+        type: Date,
+        default: null,
+        select: false
+      },
+      attempts: {
+        type: Number,
+        default: 0,
+        select: false
+      }
     }
   },
   {
@@ -113,6 +130,7 @@ const userSchema = new mongoose.Schema(
     toJSON: {
       transform(_doc, ret) {
         delete ret.passwordHash;
+        delete ret.passwordReset;
         if (ret.mfa) {
           delete ret.mfa.totpSecretEncrypted;
           delete ret.mfa.recoveryCodes;

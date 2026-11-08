@@ -200,7 +200,7 @@ export function NotificationBell() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-1 mb-0.5">
                       <p className="font-semibold text-foreground truncate">{item.title}</p>
-                      <span className="text-[10px] text-muted-foreground shrink-0">
+                      <span suppressHydrationWarning className="text-[10px] text-muted-foreground shrink-0">
                         {formatTime(item.createdAt)}
                       </span>
                     </div>

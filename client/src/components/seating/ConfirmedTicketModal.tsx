@@ -84,7 +84,7 @@ export function ConfirmedTicketModal({
               <span className="text-muted-foreground flex items-center gap-1 text-[11px]">
                 <Calendar className="h-3 w-3" /> Date &amp; Time
               </span>
-              <p className="font-medium text-foreground">{formatDate(booking.eventDate)}</p>
+              <p suppressHydrationWarning className="font-medium text-foreground">{formatDate(booking.eventDate)}</p>
             </div>
             <div className="space-y-1">
               <span className="text-muted-foreground flex items-center gap-1 text-[11px]">

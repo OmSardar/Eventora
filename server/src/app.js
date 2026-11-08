@@ -75,7 +75,7 @@ const corsOptions = {
     'Cache-Control',
     'X-Requested-With'
   ],
-  exposedHeaders: ['X-Request-Id'],
+  exposedHeaders: ['X-Request-Id', 'request-id', 'x-rtb-fingerprint-id'],
   maxAge: 86400
 };
 

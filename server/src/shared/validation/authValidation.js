@@ -86,3 +86,48 @@ export const disableMfaSchema = z.object({
     errorMap: () => ({ message: 'Factor must be EMAIL_OTP or TOTP' })
   })
 });
+
+export const forgotPasswordRequestSchema = z.object({
+  email: z
+    .string({ required_error: 'Email is required' })
+    .trim()
+    .email('Please provide a valid email address')
+});
+
+export const resetPasswordWithOtpSchema = z.object({
+  email: z
+    .string({ required_error: 'Email is required' })
+    .trim()
+    .email('Please provide a valid email address'),
+  otp: z
+    .string({ required_error: 'Verification code is required' })
+    .trim()
+    .regex(/^\d{6}$/, 'Verification code must be exactly 6 digits'),
+  newPassword: z
+    .string({ required_error: 'New password is required' })
+    .min(8, 'Password must be at least 8 characters')
+    .max(128, 'Password cannot exceed 128 characters')
+    .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
+    .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
+    .regex(/[0-9]/, 'Password must contain at least one number')
+    .regex(/[^A-Za-z0-9]/, 'Password must contain at least one special character')
+});
+
+export const changePasswordSchema = z
+  .object({
+    currentPassword: z
+      .string({ required_error: 'Current password is required' })
+      .min(1, 'Current password is required'),
+    newPassword: z
+      .string({ required_error: 'New password is required' })
+      .min(8, 'Password must be at least 8 characters')
+      .max(128, 'Password cannot exceed 128 characters')
+      .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
+      .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
+      .regex(/[0-9]/, 'Password must contain at least one number')
+      .regex(/[^A-Za-z0-9]/, 'Password must contain at least one special character')
+  })
+  .refine((data) => data.currentPassword !== data.newPassword, {
+    message: 'New password cannot be the same as your current password',
+    path: ['newPassword']
+  });

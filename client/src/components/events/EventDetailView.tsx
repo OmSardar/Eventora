@@ -48,9 +48,9 @@ export function EventDetailView({ eventId, initialEvent }: EventDetailViewProps)
 
   // If attendee logged in, check their registrations to detect if already registered
   const { data: userRegistrationsData, isLoading: registrationsLoading } = useQuery({
-    queryKey: ["my-registrations"],
+    queryKey: ["my-registrations", user?.id],
     queryFn: () => api.get<{ registrations: RegistrationItem[] }>("/registrations/me"),
-    enabled: user?.role === "ATTENDEE",
+    enabled: !!user && user.role === "ATTENDEE",
   });
 
   const event = eventData?.event;
@@ -63,16 +63,34 @@ export function EventDetailView({ eventId, initialEvent }: EventDetailViewProps)
     typeof event.organizerId === "object" &&
     event.organizerId._id === user.id;
 
-  const userRegistration = userRegistrationsData?.registrations?.find((r) => {
+  const registrationsList: RegistrationItem[] =
+    (userRegistrationsData as any)?.registrations ||
+    (userRegistrationsData as any)?.data?.registrations ||
+    (Array.isArray(userRegistrationsData) ? (userRegistrationsData as any) : []);
+
+  const targetEventId = String(event?._id || event?.id || eventId).toLowerCase();
+
+  const userRegistration = registrationsList.find((r) => {
     if (!r.eventId) return false;
     const rEventId = typeof r.eventId === "object" ? (r.eventId._id || r.eventId.id) : r.eventId;
-    return String(rEventId) === String(eventId);
+    return (
+      String(rEventId).toLowerCase() === targetEventId ||
+      String(rEventId).toLowerCase() === String(eventId).toLowerCase()
+    );
   });
 
   const isConfirmedRegistration = userRegistration?.status === "CONFIRMED";
   const isPendingCancellation = userRegistration?.status === "CANCELLATION_REQUESTED";
-  const isCancelledRegistration = userRegistration?.status === "CANCELLED";
-  const isAlreadyRegistered = isConfirmedRegistration || isPendingCancellation;
+  const isCancelledRegistration =
+    userRegistration?.status === "CANCELLED" ||
+    (errorMessage?.toLowerCase().includes("previously cancelled") ?? false) ||
+    (errorMessage?.toLowerCase().includes("cannot re-book") ?? false);
+
+  const isAlreadyRegistered =
+    isConfirmedRegistration ||
+    isPendingCancellation ||
+    (errorMessage?.toLowerCase().includes("already registered") ?? false);
+
   const existingRegistration = isAlreadyRegistered ? userRegistration : undefined;
 
   // Booking mutation
@@ -181,7 +199,7 @@ export function EventDetailView({ eventId, initialEvent }: EventDetailViewProps)
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs text-muted-foreground pt-4 border-t border-border/40">
               <div className="flex items-center gap-2">
                 <Calendar className="h-4 w-4 text-primary shrink-0" aria-hidden="true" />
-                <span>{formatDate(event.eventDate)}</span>
+                <span suppressHydrationWarning>{formatDate(event.eventDate)}</span>
               </div>
               <div className="flex items-center gap-2">
                 <MapPin className="h-4 w-4 text-primary shrink-0" aria-hidden="true" />

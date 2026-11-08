@@ -174,7 +174,7 @@ export function TicketDetailsModal({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-muted-foreground pt-1">
               <div className="flex items-center gap-2">
                 <Calendar className="h-4 w-4 text-primary shrink-0" />
-                <span className="text-foreground font-medium">
+                <span suppressHydrationWarning className="text-foreground font-medium">
                   {event ? formatDate(event.eventDate) : "TBD"}
                 </span>
               </div>
@@ -284,7 +284,7 @@ export function TicketDetailsModal({
 
                   <div>
                     <span className="text-muted-foreground text-[11px] block">Registration Date</span>
-                    <span className="font-medium text-foreground mt-0.5 block">
+                    <span suppressHydrationWarning className="font-medium text-foreground mt-0.5 block">
                       {formatDate(registration.createdAt)}
                     </span>
                   </div>

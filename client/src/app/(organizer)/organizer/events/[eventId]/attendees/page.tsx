@@ -121,7 +121,7 @@ export default function EventAttendeesPage() {
             Attendee Roster
           </Badge>
           <h1 className="text-2xl font-bold text-foreground">{event.title}</h1>
-          <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+          <p suppressHydrationWarning className="text-xs text-muted-foreground flex items-center gap-1.5">
             <Calendar className="h-3.5 w-3.5" />
             {formatDate(event.eventDate)}
           </p>
@@ -211,7 +211,7 @@ export default function EventAttendeesPage() {
                           {att.attendee?.email || "N/A"}
                         </span>
                       </td>
-                      <td className="py-3 px-3 text-muted-foreground">
+                      <td suppressHydrationWarning className="py-3 px-3 text-muted-foreground">
                         {formatDate(att.registeredAt)}
                       </td>
                       <td className="py-3 px-3">

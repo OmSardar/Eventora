@@ -79,7 +79,7 @@ export function EventCard({ event }: EventCardProps) {
       <div className="flex flex-1 flex-col p-5">
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-2">
           <Calendar className="h-3.5 w-3.5 text-primary" />
-          <span>{formatDate(event.eventDate)}</span>
+          <span suppressHydrationWarning>{formatDate(event.eventDate)}</span>
         </div>
 
         <h3 className="font-semibold text-lg leading-snug tracking-tight mb-2 group-hover:text-primary transition-colors line-clamp-2">

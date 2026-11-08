@@ -226,7 +226,7 @@ export default function OrganizerSeatingDashboardPage() {
           </Badge>
         </div>
         <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
-          <span className="flex items-center gap-1.5">
+          <span suppressHydrationWarning className="flex items-center gap-1.5">
             <Calendar className="h-3.5 w-3.5 text-primary" />
             {formatDate(event.eventDate)}
           </span>

@@ -14,7 +14,10 @@ import {
   reauthPasswordSchema,
   confirmEmailOtpSetupSchema,
   confirmTotpSetupSchema,
-  disableMfaSchema
+  disableMfaSchema,
+  forgotPasswordRequestSchema,
+  resetPasswordWithOtpSchema,
+  changePasswordSchema
 } from '../../shared/validation/authValidation.js';
 import {
   authRateLimiter,
@@ -168,6 +171,31 @@ router.post(
   csrfProtection,
   validateBody(reauthPasswordSchema),
   authController.regenerateRecoveryCodes
+);
+
+// Password Management (Forgot Password via Email OTP & Authenticated Password Change)
+router.post(
+  '/forgot-password',
+  authRateLimiter,
+  csrfProtection,
+  validateBody(forgotPasswordRequestSchema),
+  authController.forgotPassword
+);
+
+router.post(
+  '/reset-password',
+  authRateLimiter,
+  csrfProtection,
+  validateBody(resetPasswordWithOtpSchema),
+  authController.resetPassword
+);
+
+router.post(
+  '/change-password',
+  authenticate,
+  csrfProtection,
+  validateBody(changePasswordSchema),
+  authController.changePassword
 );
 
 export default router;

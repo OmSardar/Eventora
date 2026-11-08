@@ -32,7 +32,7 @@ export default function MyRegistrationsPage() {
   const [selectedRegistration, setSelectedRegistration] = useState<RegistrationItem | null>(null);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["my-registrations"],
+    queryKey: ["my-registrations", user?.id],
     queryFn: () => api.get<{ registrations: RegistrationItem[] }>("/registrations/me"),
     enabled: !!user && user.role === "ATTENDEE",
   });
@@ -190,7 +190,7 @@ export default function MyRegistrationsPage() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-muted-foreground pt-1">
                       <div className="flex items-center gap-1.5">
                         <Calendar className="h-3.5 w-3.5 text-primary" />
-                        <span>{formatDate(event.eventDate)}</span>
+                        <span suppressHydrationWarning>{formatDate(event.eventDate)}</span>
                       </div>
                       <div className="flex items-center gap-1.5">
                         <MapPin className="h-3.5 w-3.5 text-primary" />
@@ -198,7 +198,7 @@ export default function MyRegistrationsPage() {
                       </div>
                     </div>
 
-                    <p className="text-[11px] text-muted-foreground pt-1">
+                    <p suppressHydrationWarning className="text-[11px] text-muted-foreground pt-1">
                       Registered on {formatDate(reg.createdAt)}
                     </p>
 

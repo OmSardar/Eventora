@@ -31,7 +31,9 @@ import {
   sendEmailOtpEmail,
   sendMfaEnabledAlertEmail,
   sendMfaDisabledAlertEmail,
-  sendRecoveryCodesRegeneratedAlertEmail
+  sendRecoveryCodesRegeneratedAlertEmail,
+  sendPasswordResetOtpEmail,
+  sendPasswordChangedAlertEmail
 } from '../../infrastructure/email/emailService.js';
 import {
   ConflictError,
@@ -1036,5 +1038,189 @@ export async function regenerateRecoveryCodes({ userId, password, req }) {
     success: true,
     message: 'New recovery codes generated. All previous codes have been invalidated.',
     recoveryCodes: generated.codes
+  };
+}
+
+/**
+ * Initiates forgot password flow by dispatching a 6-digit OTP to the registered email.
+ */
+export async function requestPasswordResetOtp({ email, ipAddress, userAgent }) {
+  const normalizedEmail = email.toLowerCase().trim();
+  const user = await User.findOne({ normalizedEmail }).select('+passwordReset.otpHash +passwordReset.expiresAt +passwordReset.attempts');
+
+  // Anti-enumeration: Return success message even if email doesn't exist
+  if (!user) {
+    logger.info({ email: normalizedEmail }, 'Password reset requested for non-existent email');
+    return {
+      success: true,
+      message: 'If an account exists with that email, a password reset code has been sent.'
+    };
+  }
+
+  // Generate 6-digit cryptographic OTP
+  const otp = generateNumericOtp(6);
+  const otpHash = hashOtp(otp, normalizedEmail);
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+  user.passwordReset = {
+    otpHash,
+    expiresAt,
+    attempts: 0
+  };
+
+  await user.save();
+
+  // Deliver OTP via official email template
+  sendPasswordResetOtpEmail({
+    email: user.email,
+    name: user.name,
+    otp
+  }).catch((err) => {
+    logger.error({ err, userId: user._id }, 'Failed to dispatch password reset OTP email');
+  });
+
+  await logAuditEvent({
+    action: 'PASSWORD_RESET_REQUESTED',
+    actorId: user._id,
+    actorRole: user.role,
+    resourceId: user._id,
+    resourceType: 'User',
+    ipAddress,
+    userAgent,
+    details: { email: normalizedEmail }
+  });
+
+  return {
+    success: true,
+    message: 'If an account exists with that email, a password reset code has been sent.'
+  };
+}
+
+/**
+ * Resets password using verified 6-digit email OTP.
+ */
+export async function resetPasswordWithOtp({ email, otp, newPassword, ipAddress, userAgent }) {
+  const normalizedEmail = email.toLowerCase().trim();
+  const user = await User.findOne({ normalizedEmail }).select(
+    '+passwordHash +passwordReset.otpHash +passwordReset.expiresAt +passwordReset.attempts'
+  );
+
+  if (!user || !user.passwordReset?.otpHash || !user.passwordReset?.expiresAt) {
+    throw new BadRequestError('Invalid or expired password reset request. Please request a new code.');
+  }
+
+  if (new Date() > new Date(user.passwordReset.expiresAt)) {
+    user.passwordReset = undefined;
+    await user.save();
+    throw new BadRequestError('Password reset code has expired. Please request a new code.');
+  }
+
+  // Rate-limiting / brute force protection: Max 5 incorrect OTP attempts
+  if ((user.passwordReset.attempts || 0) >= 5) {
+    user.passwordReset = undefined;
+    await user.save();
+    throw new BadRequestError('Too many incorrect attempts. This reset code has been invalidated. Please request a new code.');
+  }
+
+  const expectedHash = hashOtp(otp.trim(), normalizedEmail);
+  const isOtpValid = timingSafeStringEqual(expectedHash, user.passwordReset.otpHash);
+
+  if (!isOtpValid) {
+    user.passwordReset.attempts = (user.passwordReset.attempts || 0) + 1;
+    await user.save();
+    throw new BadRequestError('Invalid verification code. Please check your email and try again.');
+  }
+
+  // Hash new password using Argon2id
+  const passwordHash = await hashPassword(newPassword);
+  user.passwordHash = passwordHash;
+  user.passwordReset = undefined;
+  await user.save();
+
+  // Send security alert notification email
+  sendPasswordChangedAlertEmail({
+    email: user.email,
+    name: user.name,
+    ipAddress,
+    userAgent,
+    method: 'RESET_WITH_OTP'
+  }).catch((err) => {
+    logger.error({ err, userId: user._id }, 'Failed to dispatch password update alert email');
+  });
+
+  await logAuditEvent({
+    action: 'PASSWORD_RESET_COMPLETED',
+    actorId: user._id,
+    actorRole: user.role,
+    resourceId: user._id,
+    resourceType: 'User',
+    ipAddress,
+    userAgent,
+    details: { method: 'EMAIL_OTP' }
+  });
+
+  return {
+    success: true,
+    message: 'Your password has been reset successfully. Please sign in with your new password.'
+  };
+}
+
+/**
+ * Changes password for authenticated user using current password verification.
+ */
+export async function changePassword({ userId, currentPassword, newPassword, ipAddress, userAgent }) {
+  const user = await User.findById(userId).select('+passwordHash');
+  if (!user) {
+    throw new NotFoundError('User account not found.');
+  }
+
+  const isCurrentValid = await verifyPassword(currentPassword, user.passwordHash);
+  if (!isCurrentValid) {
+    await logAuditEvent({
+      action: 'PASSWORD_CHANGE_FAILED',
+      actorId: user._id,
+      actorRole: user.role,
+      resourceId: user._id,
+      resourceType: 'User',
+      ipAddress,
+      userAgent,
+      details: { reason: 'Incorrect current password' }
+    });
+    throw new UnauthorizedError('Current password is incorrect.');
+  }
+
+  if (currentPassword === newPassword) {
+    throw new BadRequestError('New password cannot be the same as your current password.');
+  }
+
+  const newHash = await hashPassword(newPassword);
+  user.passwordHash = newHash;
+  await user.save();
+
+  // Send security alert notification email
+  sendPasswordChangedAlertEmail({
+    email: user.email,
+    name: user.name,
+    ipAddress,
+    userAgent,
+    method: 'CURRENT_PASSWORD'
+  }).catch((err) => {
+    logger.error({ err, userId: user._id }, 'Failed to dispatch password update alert email');
+  });
+
+  await logAuditEvent({
+    action: 'PASSWORD_CHANGE_SUCCESS',
+    actorId: user._id,
+    actorRole: user.role,
+    resourceId: user._id,
+    resourceType: 'User',
+    ipAddress,
+    userAgent,
+    details: { method: 'CURRENT_PASSWORD' }
+  });
+
+  return {
+    success: true,
+    message: 'Password updated successfully. A confirmation email has been sent to your address.'
   };
 }

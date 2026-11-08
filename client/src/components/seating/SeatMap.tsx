@@ -28,6 +28,8 @@ interface SeatMapProps {
   user: User | null;
   onBookingSuccess: () => void;
   maxSeats?: number;
+  isAlreadyRegistered?: boolean;
+  isCancelledRegistration?: boolean;
 }
 
 export function SeatMap({
@@ -38,12 +40,15 @@ export function SeatMap({
   user,
   onBookingSuccess,
   maxSeats = 6,
+  isAlreadyRegistered = false,
+  isCancelledRegistration = false,
 }: SeatMapProps) {
   const queryClient = useQueryClient();
   const [selectedSeatIds, setSelectedSeatIds] = useState<string[]>([]);
   const [activeHold, setActiveHold] = useState<SeatHoldItem | null>(null);
   const [isHolding, setIsHolding] = useState<boolean>(false);
   const [isReleasing, setIsReleasing] = useState<boolean>(false);
+  const [isConfirmingFree, setIsConfirmingFree] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Poll seat availability every 15 seconds to reflect real-time holds and bookings
@@ -120,6 +125,14 @@ export function SeatMap({
   const handleSeatClick = (seat: EventSeatItem) => {
     if (activeHold) return; // Cannot change selection while hold is active
     if (seat.status !== "AVAILABLE") return;
+    if (isCancelledRegistration) {
+      setErrorMessage("You have previously cancelled your registration for this event and cannot reserve seats.");
+      return;
+    }
+    if (isAlreadyRegistered) {
+      setErrorMessage("You are already registered for this event.");
+      return;
+    }
 
     setErrorMessage(null);
     if (selectedSeatIds.includes(seat.id)) {
@@ -140,13 +153,22 @@ export function SeatMap({
       setErrorMessage("Please sign in to reserve seats.");
       return;
     }
+    if (isCancelledRegistration) {
+      setErrorMessage("You have previously cancelled your registration for this event and cannot reserve seats.");
+      return;
+    }
+    if (isAlreadyRegistered) {
+      setErrorMessage("You are already registered for this event.");
+      return;
+    }
 
     setIsHolding(true);
     setErrorMessage(null);
 
     try {
       const res = await api.post<{
-        id: string;
+        holdId?: string;
+        id?: string;
         eventId: string;
         seatIds: string[];
         seatLabels: string[];
@@ -156,14 +178,41 @@ export function SeatMap({
         seatIds: selectedSeatIds,
       });
 
-      const holdData = (res as any)?.data || res;
-      setActiveHold(holdData);
+      const rawData = (res as any)?.data || res;
+      const normalizedHold: SeatHoldItem = {
+        id: rawData.holdId || rawData.id,
+        eventId: rawData.eventId,
+        seatIds: rawData.seatIds,
+        seatLabels: rawData.seatLabels,
+        totalAmount: rawData.totalAmount,
+        expiresAt: rawData.expiresAt,
+      };
+      setActiveHold(normalizedHold);
       queryClient.invalidateQueries({ queryKey: ["event-seats", eventId] });
     } catch (err: any) {
       setErrorMessage(err?.message || "Failed to reserve seat hold. Some seats may have been taken.");
       queryClient.invalidateQueries({ queryKey: ["event-seats", eventId] });
     } finally {
       setIsHolding(false);
+    }
+  };
+
+  // Confirm free assigned-seating reservation
+  const handleConfirmFreeBooking = async () => {
+    if (!activeHold) return;
+    setIsConfirmingFree(true);
+    setErrorMessage(null);
+    try {
+      await api.post(`/events/${eventId}/bookings/confirm-free`, {
+        holdId: activeHold.id,
+      });
+      setActiveHold(null);
+      setSelectedSeatIds([]);
+      onBookingSuccess();
+    } catch (err: any) {
+      setErrorMessage(err?.message || "Failed to confirm seat reservation");
+    } finally {
+      setIsConfirmingFree(false);
     }
   };
 
@@ -254,6 +303,20 @@ export function SeatMap({
           </div>
         </div>
       </div>
+
+      {isCancelledRegistration && (
+        <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3.5 text-xs text-destructive">
+          <ShieldAlert className="h-4 w-4 shrink-0" />
+          <span>You previously cancelled your registration for this event. Re-booking or holding seats is prohibited.</span>
+        </div>
+      )}
+
+      {isAlreadyRegistered && (
+        <div className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3.5 text-xs text-emerald-500 font-medium">
+          <Check className="h-4 w-4 shrink-0" />
+          <span>You have already registered for this event. Manage your ticket from My Tickets.</span>
+        </div>
+      )}
 
       {/* Stage Visual Indicator */}
       <div className="mx-auto max-w-md text-center">
@@ -425,11 +488,21 @@ export function SeatMap({
                   />
                 ) : (
                   <Button
-                    onClick={onBookingSuccess}
+                    onClick={handleConfirmFreeBooking}
+                    disabled={isConfirmingFree}
                     className="w-full sm:w-auto text-xs font-semibold gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
                   >
-                    <Check className="h-4 w-4" />
-                    Confirm Reserved Booking
+                    {isConfirmingFree ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>Confirming...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Check className="h-4 w-4" />
+                        <span>Confirm Reserved Booking</span>
+                      </>
+                    )}
                   </Button>
                 )}
               </div>

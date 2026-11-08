@@ -79,6 +79,14 @@ const eventSeatSchema = new mongoose.Schema(
       type: Date,
       default: null
     },
+    isAccessible: {
+      type: Boolean,
+      default: false
+    },
+    isBlocked: {
+      type: Boolean,
+      default: false
+    },
     version: {
       type: Number,
       default: 0
@@ -103,6 +111,7 @@ eventSeatSchema.index({ eventId: 1, seatLabel: 1 }, { unique: true });
 eventSeatSchema.index({ eventId: 1, status: 1 });
 eventSeatSchema.index({ eventId: 1, sectionId: 1, rowLabel: 1 });
 eventSeatSchema.index({ holdId: 1, status: 1 });
+eventSeatSchema.index({ bookingId: 1, status: 1 });
 
 export const EventSeat = mongoose.model('EventSeat', eventSeatSchema);
 

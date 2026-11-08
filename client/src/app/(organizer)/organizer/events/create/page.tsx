@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ImageUploadField } from "@/components/shared/ImageUploadField";
+import { SeatingConfigurator, SeatingConfigPayload } from "@/components/seating/SeatingConfigurator";
 import { AlertCircle, ArrowLeft, Sparkles } from "lucide-react";
 
 const createEventSchema = z.object({
@@ -63,6 +64,7 @@ export default function CreateEventPage() {
   const { user, isLoading: authLoading } = useAuth();
   const [serverError, setServerError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [seatingConfig, setSeatingConfig] = useState<SeatingConfigPayload | null>(null);
 
   const {
     register,
@@ -91,7 +93,13 @@ export default function CreateEventPage() {
     setIsSubmitting(true);
     setServerError(null);
     try {
-      const res = await api.post<{ event: { _id: string } }>("/events", data);
+      const payload = {
+        ...data,
+        seatingType: seatingConfig?.seatingType || "ASSIGNED_SEATING",
+        maxTicketsPerBooking: seatingConfig?.maxTicketsPerBooking || 6,
+        seatingConfig: seatingConfig?.seatingType === "ASSIGNED_SEATING" ? seatingConfig : null,
+      };
+      const res = await api.post<{ event: { _id: string } }>("/events", payload);
       router.push(`/events/${res.event._id}`);
     } catch (err: unknown) {
       const error = err as Error & { details?: Array<{ field: string; message: string }> };
@@ -327,6 +335,18 @@ export default function CreateEventPage() {
                 <p className="text-[11px] text-destructive">{errors.description.message}</p>
               )}
             </div>
+
+            {/* Dedicated Seating Configuration Section */}
+            <SeatingConfigurator
+              basePrice={watch("ticketPrice") || 500}
+              seatLimit={watch("seatLimit") || 50}
+              onChange={(cfg) => {
+                setSeatingConfig(cfg);
+                if (cfg.totalSeats) {
+                  setValue("seatLimit", cfg.totalSeats);
+                }
+              }}
+            />
 
             <Button
               type="submit"

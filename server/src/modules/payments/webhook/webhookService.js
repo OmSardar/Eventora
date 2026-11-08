@@ -5,6 +5,7 @@ import { RefundOperation } from '../RefundOperation.js';
 import { Event } from '../../events/Event.js';
 import { Registration } from '../../registrations/Registration.js';
 import { User } from '../../users/User.js';
+import { confirmCapturedPayment } from '../paymentService.js';
 import {
   PAYMENT_STATUS,
   REFUND_STATUS,
@@ -46,64 +47,25 @@ export async function processRazorpayWebhookEvent({ eventId, eventType, payload 
 
         const orderId = paymentEntity.order_id;
         const paymentId = paymentEntity.id;
+        const paymentAmount = paymentEntity.amount;
+        const paymentCurrency = paymentEntity.currency;
+        const paymentMethod = paymentEntity.method;
+
         const payment = await Payment.findOne({ orderId });
-
-        if (
-          payment &&
-          payment.status !== PAYMENT_STATUS.CAPTURED &&
-          payment.status !== PAYMENT_STATUS.REFUND_PENDING &&
-          payment.status !== PAYMENT_STATUS.REFUNDED
-        ) {
-          payment.status = PAYMENT_STATUS.CAPTURED;
-          payment.paymentId = paymentId;
-          payment.method = paymentEntity.method || payment.method;
-          await payment.save();
-
-          const reservation = await SeatReservation.findOne({ orderId });
-          if (reservation) {
-            reservation.status = RESERVATION_STATUS.CONFIRMED;
-            await reservation.save();
-          }
-
-          if (!payment.registrationId) {
-            // Asynchronous fallback: user closed checkout window before /verify callback
-            await Event.findByIdAndUpdate(payment.eventId, { $inc: { seatsBooked: 1 } });
-
-            const registration = await Registration.create({
-              eventId: payment.eventId,
-              attendeeId: payment.attendeeId,
-              paymentId: payment._id,
-              isPaid: true,
-              ticketPrice: payment.amount / 100,
-              currency: payment.currency,
-              status: REGISTRATION_STATUS.CONFIRMED,
-              confirmationEmailSent: false
-            });
-
-            payment.registrationId = registration._id;
-            await payment.save();
-
-            const event = await Event.findById(payment.eventId);
-            const attendeeUser = await User.findById(payment.attendeeId).select('name email');
-
-            if (attendeeUser && attendeeUser.email) {
-              sendRegistrationConfirmationEmail({
-                registrationId: registration._id.toString(),
-                attendee: { name: attendeeUser.name, email: attendeeUser.email },
-                event
-              }).catch(() => {});
-            }
-
-            dispatchNotification({
-              userId: payment.attendeeId,
-              type: NOTIFICATION_TYPE.BOOKING_CONFIRMED,
-              title: 'Booking Confirmed!',
-              message: `Payment confirmed for "${event?.title || 'Event'}". Your seat is reserved.`,
-              eventId: payment.eventId,
-              registrationId: registration._id
-            });
-          }
+        if (!payment) {
+          logger.warn({ orderId, paymentId }, 'Webhook payment.captured received for non-existent Payment record');
+          break;
         }
+
+        // Authoritatively confirm payment, reservations, registration, and physical seat records
+        await confirmCapturedPayment({
+          payment,
+          paymentId,
+          paymentMethod,
+          paymentAmount,
+          paymentCurrency,
+          source: 'WEBHOOK'
+        });
         break;
       }
 

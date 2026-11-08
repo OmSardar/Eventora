@@ -96,6 +96,20 @@ const bookingSchema = new mongoose.Schema(
     ticketToken: {
       type: String,
       default: null
+    },
+    isRedeemed: {
+      type: Boolean,
+      default: false,
+      index: true
+    },
+    redeemedAt: {
+      type: Date,
+      default: null
+    },
+    redeemedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null
     }
   },
   {
@@ -112,6 +126,7 @@ const bookingSchema = new mongoose.Schema(
 
 bookingSchema.index({ eventId: 1, attendeeId: 1, status: 1 });
 bookingSchema.index({ attendeeId: 1, createdAt: -1 });
+bookingSchema.index({ ticketToken: 1 });
 
 export const Booking = mongoose.model('Booking', bookingSchema);
 

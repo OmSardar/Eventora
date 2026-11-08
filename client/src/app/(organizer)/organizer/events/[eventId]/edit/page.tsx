@@ -160,12 +160,19 @@ export default function EditEventPage() {
       </div>
 
       <Card className="border-border/80 shadow-md">
-        <CardHeader>
-          <CardTitle className="text-2xl font-bold">Edit Event Details</CardTitle>
-          <CardDescription className="text-xs">
-            Modify event properties. Note: Seat capacity cannot be reduced below current bookings (
-            {event.seatsBooked} seats booked).
-          </CardDescription>
+        <CardHeader className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+          <div>
+            <CardTitle className="text-2xl font-bold">Edit Event Details</CardTitle>
+            <CardDescription className="text-xs mt-1">
+              Modify event properties. Note: Seat capacity cannot be reduced below current bookings (
+              {event.seatsBooked} seats booked).
+            </CardDescription>
+          </div>
+          <Link href={`/organizer/events/${eventId}/seating`}>
+            <Button variant="outline" size="sm" className="text-xs shrink-0 gap-1.5 border-indigo-500/30 text-indigo-400 hover:bg-indigo-500/10">
+              Manage Seating Inventory &rarr;
+            </Button>
+          </Link>
         </CardHeader>
 
         <CardContent className="space-y-6">

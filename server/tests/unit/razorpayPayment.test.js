@@ -184,5 +184,105 @@ describe('Razorpay Service Unit Tests', () => {
     assert.ok(refunds);
     assert.equal(refunds.entity, 'collection');
   });
+
+  it('strictly rejects simulated signature in production environment', () => {
+    const originalEnv = process.env.NODE_ENV;
+    const originalSecret = process.env.RAZORPAY_KEY_SECRET;
+    try {
+      process.env.NODE_ENV = 'production';
+      process.env.RAZORPAY_KEY_SECRET = 'prod_secret_123';
+
+      const isValid = verifyRazorpaySignature({
+        orderId: 'order_prod_123',
+        paymentId: 'pay_prod_456',
+        signature: 'simulated_test_signature'
+      });
+
+      assert.equal(isValid, false);
+    } finally {
+      process.env.NODE_ENV = originalEnv;
+      process.env.RAZORPAY_KEY_SECRET = originalSecret;
+    }
+  });
+
+  it('strictly rejects mock order IDs in production environment', () => {
+    const originalEnv = process.env.NODE_ENV;
+    const originalSecret = process.env.RAZORPAY_KEY_SECRET;
+    try {
+      process.env.NODE_ENV = 'production';
+      process.env.RAZORPAY_KEY_SECRET = 'prod_secret_123';
+
+      const isValid = verifyRazorpaySignature({
+        orderId: 'order_mock_12345',
+        paymentId: 'pay_prod_456',
+        signature: 'some_real_looking_sig'
+      });
+
+      assert.equal(isValid, false);
+    } finally {
+      process.env.NODE_ENV = originalEnv;
+      process.env.RAZORPAY_KEY_SECRET = originalSecret;
+    }
+  });
+
+  it('strictly fails closed in production when RAZORPAY_KEY_SECRET is missing', () => {
+    const originalEnv = process.env.NODE_ENV;
+    const originalSecret = process.env.RAZORPAY_KEY_SECRET;
+    try {
+      process.env.NODE_ENV = 'production';
+      delete process.env.RAZORPAY_KEY_SECRET;
+
+      const isValid = verifyRazorpaySignature({
+        orderId: 'order_prod_123',
+        paymentId: 'pay_prod_456',
+        signature: 'some_sig'
+      });
+
+      assert.equal(isValid, false);
+    } finally {
+      process.env.NODE_ENV = originalEnv;
+      process.env.RAZORPAY_KEY_SECRET = originalSecret;
+    }
+  });
+
+  it('strictly rejects simulated webhook signature in production environment', () => {
+    const originalEnv = process.env.NODE_ENV;
+    const originalSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
+    try {
+      process.env.NODE_ENV = 'production';
+      process.env.RAZORPAY_WEBHOOK_SECRET = 'prod_webhook_secret_123';
+
+      const isValid = verifyRazorpayWebhookSignature({
+        rawBody: '{"event":"payment.captured"}',
+        signature: 'simulated_webhook_signature'
+      });
+
+      assert.equal(isValid, false);
+    } finally {
+      process.env.NODE_ENV = originalEnv;
+      process.env.RAZORPAY_WEBHOOK_SECRET = originalSecret;
+    }
+  });
+
+  it('strictly throws in production when getRazorpayClient is called without credentials', () => {
+    const originalEnv = process.env.NODE_ENV;
+    const originalKeyId = process.env.RAZORPAY_KEY_ID;
+    const originalSecret = process.env.RAZORPAY_KEY_SECRET;
+    try {
+      process.env.NODE_ENV = 'production';
+      delete process.env.RAZORPAY_KEY_ID;
+      delete process.env.RAZORPAY_KEY_SECRET;
+      _resetRazorpayInstance();
+
+      assert.throws(() => {
+        getRazorpayClient();
+      }, /Credentials missing in production/);
+    } finally {
+      process.env.NODE_ENV = originalEnv;
+      process.env.RAZORPAY_KEY_ID = originalKeyId;
+      process.env.RAZORPAY_KEY_SECRET = originalSecret;
+      _resetRazorpayInstance();
+    }
+  });
 });
 

@@ -20,6 +20,12 @@ const seatReservationSchema = new mongoose.Schema(
       ref: 'Payment',
       default: null
     },
+    holdId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'SeatHold',
+      default: null,
+      index: true
+    },
     orderId: {
       type: String,
       required: [true, 'Order ID is required'],

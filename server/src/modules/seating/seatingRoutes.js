@@ -7,7 +7,9 @@ import { bookingRateLimiter } from '../../shared/middleware/rateLimiter.js';
 import {
   createSeatHoldSchema,
   toggleSeatBlockSchema,
-  generateLayoutSchema
+  generateLayoutSchema,
+  confirmFreeSeatBookingSchema,
+  verifyTicketSchema
 } from './seatingValidation.js';
 
 const router = Router({ mergeParams: true });
@@ -54,5 +56,43 @@ router.patch(
   seatingController.toggleBlock
 );
 
-export default router;
+// 6. Organizer seating inventory dashboard
+router.get(
+  '/:eventId/seating/dashboard',
+  authenticate,
+  requireOrganizer,
+  seatingController.getSeatingDashboard
+);
 
+// 7. Attendee free assigned seat confirmation
+router.post(
+  '/:eventId/bookings/confirm-free',
+  bookingRateLimiter,
+  authenticate,
+  requireVerifiedEmail,
+  csrfProtection,
+  validateBody(confirmFreeSeatBookingSchema),
+  seatingController.confirmFreeBooking
+);
+
+// 8. Digital ticket pass retrieval
+router.get(
+  '/bookings/:bookingId/tickets',
+  authenticate,
+  seatingController.getDigitalTickets
+);
+
+// 9. Public QR ticket verification
+router.get('/tickets/verify', seatingController.verifyTicket);
+
+// 10. Organizer QR ticket admission redemption
+router.post(
+  '/tickets/validate',
+  authenticate,
+  requireOrganizer,
+  csrfProtection,
+  validateBody(verifyTicketSchema),
+  seatingController.verifyTicket
+);
+
+export default router;

@@ -4,6 +4,7 @@ import {
   buildConfirmationEmailHtml,
   buildConfirmationEmailText,
   sendRegistrationConfirmationEmail,
+  sendCancellationRefundEmail,
   getResendClient,
   setResendClient
 } from '../../src/infrastructure/email/emailService.js';
@@ -61,6 +62,34 @@ describe('Transactional Email Service (Unit Tests)', () => {
 
     assert.equal(result.success, false);
     assert.equal(result.error, 'Attendee email address missing');
+  });
+
+  test('sendCancellationRefundEmail: rejects when attendee has no email', async () => {
+    const result = await sendCancellationRefundEmail({
+      attendeeEmail: null,
+      attendeeName: 'No Email User',
+      event: mockEvent,
+      registrationId: mockRegistrationId
+    });
+
+    assert.equal(result.success, false);
+    assert.equal(result.error, 'Attendee email address missing');
+  });
+
+  test('sendCancellationRefundEmail: dispatches simulation cleanly in non-production', async () => {
+    const result = await sendCancellationRefundEmail({
+      attendeeEmail: 'attendee@example.com',
+      attendeeName: 'Alex Mercer',
+      event: mockEvent,
+      registrationId: mockRegistrationId,
+      isPaid: true,
+      refundAmount: 50000,
+      refundId: 'rfnd_test123',
+      currency: 'INR'
+    });
+
+    assert.equal(result.success, true);
+    assert.equal(result.simulated, true);
   });
 
   test('getResendClient: returns null in test environment', () => {

@@ -13,11 +13,17 @@ import { SeatReservation } from '../../src/modules/payments/SeatReservation.js';
 import { WebhookEvent } from '../../src/modules/payments/WebhookEvent.js';
 import { RefundOperation } from '../../src/modules/payments/RefundOperation.js';
 import { reconcilePendingRefunds } from '../../src/modules/payments/paymentService.js';
+import { EventSeat } from '../../src/modules/seating/EventSeat.js';
+import { SeatHold } from '../../src/modules/seating/SeatHold.js';
+import { Booking } from '../../src/modules/bookings/Booking.js';
+import { generateEventSeats, createSeatHold } from '../../src/modules/seating/seatingService.js';
 import {
   PAYMENT_STATUS,
   RESERVATION_STATUS,
   REGISTRATION_STATUS,
-  REFUND_STATUS
+  REFUND_STATUS,
+  SEAT_STATUS,
+  SEAT_HOLD_STATUS
 } from '../../src/shared/constants/status.js';
 
 describe('Razorpay Test Mode Payments & Webhooks (Integration)', () => {
@@ -29,6 +35,7 @@ describe('Razorpay Test Mode Payments & Webhooks (Integration)', () => {
   let attendeeUser;
   let paidEvent;
   let freeEvent;
+  let seatingEvent;
 
   before(async () => {
     process.env.NODE_ENV = 'test';
@@ -44,6 +51,9 @@ describe('Razorpay Test Mode Payments & Webhooks (Integration)', () => {
     await SeatReservation.deleteMany({});
     await Payment.deleteMany({});
     await RefundOperation.deleteMany({});
+    await EventSeat.deleteMany({});
+    await SeatHold.deleteMany({});
+    await Booking.deleteMany({});
 
     organizerAgent = request.agent(app);
     attendeeAgent = request.agent(app);
@@ -109,6 +119,31 @@ describe('Razorpay Test Mode Payments & Webhooks (Integration)', () => {
         ticketPrice: 0
       });
     freeEvent = freeEventRes.body.data?.event || freeEventRes.body.data;
+
+    // Create Assigned Seating Event (₹250) with 10 seats
+    const seatingEventRes = await organizerAgent
+      .post('/api/v1/events')
+      .set('x-csrf-token', csrfOrg)
+      .send({
+        title: 'Payment Integration Event - Seating',
+        description: 'Interactive assigned seating concert.',
+        eventDate: new Date(Date.now() + 86400000 * 7).toISOString(),
+        venue: 'Symphony Hall',
+        seatLimit: 10,
+        category: 'Technology',
+        isPaid: true,
+        ticketPrice: 250,
+        seatingType: 'ASSIGNED_SEATING'
+      });
+    seatingEvent = seatingEventRes.body.data?.event || seatingEventRes.body.data;
+
+    await generateEventSeats(seatingEvent._id, {
+      generationMode: 'AUTOMATIC',
+      totalSeats: 10,
+      rows: 2,
+      seatsPerRow: 5,
+      price: 250
+    });
   });
 
   after(async () => {
@@ -118,6 +153,9 @@ describe('Razorpay Test Mode Payments & Webhooks (Integration)', () => {
     await SeatReservation.deleteMany({});
     await Payment.deleteMany({});
     await RefundOperation.deleteMany({});
+    await EventSeat.deleteMany({});
+    await SeatHold.deleteMany({});
+    await Booking.deleteMany({});
     await disconnectDatabase();
   });
 
@@ -676,5 +714,401 @@ describe('Razorpay Test Mode Payments & Webhooks (Integration)', () => {
 
     const checkEvent = await Event.findById(freeEvent._id);
     assert.equal(checkEvent.seatsBooked, 0); // Must remain 0, never -1!
+  });
+
+  it('17. Authoritative webhook confirms physical seats, converts SeatHold, and creates Booking when frontend callback is skipped', async () => {
+    const seats = await EventSeat.find({ eventId: seatingEvent._id }).sort({ seatLabel: 1 });
+    assert.equal(seats.length, 10);
+    const seatA1 = seats[0];
+    const seatA2 = seats[1];
+
+    // 1. Register a new attendee
+    const seatAttendeeAgent = request.agent(app);
+    const cSeat = await seatAttendeeAgent.get('/api/v1/auth/csrf');
+    const attRegRes = await seatAttendeeAgent
+      .post('/api/v1/auth/register')
+      .set('x-csrf-token', cSeat.body.data.csrfToken)
+      .send({
+        name: 'Seating Webhook Attendee',
+        email: 'seatwhattendee@paytest.com',
+        password: 'SecurePassword@123',
+        role: 'ATTENDEE'
+      });
+    const seatAttendee = attRegRes.body.data.user;
+
+    // 2. Attendee places an interactive hold on A1 and A2
+    const hold = await createSeatHold({
+      eventId: seatingEvent._id,
+      attendeeId: seatAttendee.id,
+      seatIds: [seatA1._id, seatA2._id]
+    });
+    assert.ok(hold);
+    assert.equal(hold.seatLabels.length, 2);
+
+    // 3. Attendee creates Razorpay order
+    const orderRes = await seatAttendeeAgent
+      .post('/api/v1/payments/create-order')
+      .set('x-csrf-token', cSeat.body.data.csrfToken)
+      .send({ eventId: seatingEvent._id });
+
+    assert.equal(orderRes.status, 201);
+    const orderId = orderRes.body.data.orderId;
+    assert.equal(orderRes.body.data.amount, 50000); // 2 seats * 250 * 100 paise
+
+    // Verify payment record has holdId linked
+    const paymentBefore = await Payment.findOne({ orderId });
+    assert.ok(paymentBefore);
+    assert.equal(paymentBefore.holdId?.toString(), hold.holdId);
+
+    // 4. SIMULATE: Attendee closes browser! No client /payments/verify is called.
+    // 5. Razorpay webhook payment.captured arrives
+    const paymentId = `pay_wh_seat_${Date.now()}`;
+    const webhookPayload = {
+      event: 'payment.captured',
+      payload: {
+        payment: {
+          entity: {
+            id: paymentId,
+            order_id: orderId,
+            amount: 50000,
+            currency: 'INR',
+            status: 'captured',
+            method: 'upi'
+          }
+        }
+      }
+    };
+
+    const rawBody = JSON.stringify(webhookPayload);
+    const signature = crypto
+      .createHmac('sha256', process.env.RAZORPAY_WEBHOOK_SECRET)
+      .update(rawBody)
+      .digest('hex');
+
+    const whRes = await request(app)
+      .post('/api/v1/webhooks/razorpay')
+      .set('Content-Type', 'application/json')
+      .set('x-razorpay-signature', signature)
+      .send(rawBody);
+
+    assert.equal(whRes.status, 200);
+
+    // 6. Verify authoritative database transitions
+    const paymentAfter = await Payment.findOne({ orderId });
+    assert.equal(paymentAfter.status, PAYMENT_STATUS.CAPTURED);
+    assert.equal(paymentAfter.paymentId, paymentId);
+    assert.ok(paymentAfter.registrationId);
+
+    const registration = await Registration.findById(paymentAfter.registrationId);
+    assert.ok(registration);
+    assert.equal(registration.status, REGISTRATION_STATUS.CONFIRMED);
+    assert.equal(registration.isPaid, true);
+
+    // Verify SeatHold converted
+    const holdAfter = await SeatHold.findById(hold.holdId);
+    assert.equal(holdAfter.status, SEAT_HOLD_STATUS.CONSUMED);
+
+    // Verify Booking record created with digital tickets
+    const booking = await Booking.findOne({ paymentId: paymentAfter._id });
+    assert.ok(booking);
+    assert.equal(booking.status, 'CONFIRMED');
+    assert.equal(booking.seatIds.length, 2);
+    assert.equal(booking.seatLabels.length, 2);
+    assert.ok(booking.bookingReference);
+    assert.ok(booking.ticketToken);
+
+    // Verify EventSeat records are BOOKED
+    const updatedSeats = await EventSeat.find({ _id: { $in: [seatA1._id, seatA2._id] } });
+    for (const s of updatedSeats) {
+      assert.equal(s.status, SEAT_STATUS.BOOKED);
+      assert.ok(s.bookingId);
+      assert.equal(s.bookingId.toString(), booking._id.toString());
+    }
+  });
+
+  it('18. Duplicate webhook delivery after seat confirmation is strictly idempotent', async () => {
+    const payment = await Payment.findOne({ status: PAYMENT_STATUS.CAPTURED, holdId: { $ne: null } });
+    assert.ok(payment);
+
+    const regCountBefore = await Registration.countDocuments({ paymentId: payment._id });
+    const bookingCountBefore = await Booking.countDocuments({ paymentId: payment._id });
+
+    const duplicatePayload = {
+      event: 'payment.captured',
+      payload: {
+        payment: {
+          entity: {
+            id: payment.paymentId,
+            order_id: payment.orderId,
+            amount: payment.amount,
+            currency: 'INR',
+            status: 'captured',
+            method: 'upi'
+          }
+        }
+      }
+    };
+
+    const rawBody = JSON.stringify(duplicatePayload);
+    const signature = crypto
+      .createHmac('sha256', process.env.RAZORPAY_WEBHOOK_SECRET)
+      .update(rawBody)
+      .digest('hex');
+
+    const res = await request(app)
+      .post('/api/v1/webhooks/razorpay')
+      .set('Content-Type', 'application/json')
+      .set('x-razorpay-signature', signature)
+      .send(rawBody);
+
+    assert.equal(res.status, 200);
+
+    // Verify no new registrations or bookings were created
+    const regCountAfter = await Registration.countDocuments({ paymentId: payment._id });
+    const bookingCountAfter = await Booking.countDocuments({ paymentId: payment._id });
+    assert.equal(regCountAfter, regCountBefore);
+    assert.equal(bookingCountAfter, bookingCountBefore);
+  });
+
+  it('19. Authoritative webhook detects payment amount mismatch and marks payment FAILED without confirming', async () => {
+    // Create new attendee and order
+    const mismatchAgent = request.agent(app);
+    const cMismatch = await mismatchAgent.get('/api/v1/auth/csrf');
+    await mismatchAgent
+      .post('/api/v1/auth/register')
+      .set('x-csrf-token', cMismatch.body.data.csrfToken)
+      .send({
+        name: 'Mismatch Attendee',
+        email: 'mismatch@paytest.com',
+        password: 'SecurePassword@123',
+        role: 'ATTENDEE'
+      });
+
+    const orderRes = await mismatchAgent
+      .post('/api/v1/payments/create-order')
+      .set('x-csrf-token', cMismatch.body.data.csrfToken)
+      .send({ eventId: paidEvent._id });
+
+    const orderId = orderRes.body.data.orderId;
+    const paymentBefore = await Payment.findOne({ orderId });
+    assert.equal(paymentBefore.amount, 49900);
+
+    // Send webhook with tampered amount (e.g. 1000 paise instead of 49900)
+    const tamperedPayload = {
+      event: 'payment.captured',
+      payload: {
+        payment: {
+          entity: {
+            id: `pay_mismatch_${Date.now()}`,
+            order_id: orderId,
+            amount: 1000,
+            currency: 'INR',
+            status: 'captured',
+            method: 'upi'
+          }
+        }
+      }
+    };
+
+    const rawBody = JSON.stringify(tamperedPayload);
+    const signature = crypto
+      .createHmac('sha256', process.env.RAZORPAY_WEBHOOK_SECRET)
+      .update(rawBody)
+      .digest('hex');
+
+    const res = await request(app)
+      .post('/api/v1/webhooks/razorpay')
+      .set('Content-Type', 'application/json')
+      .set('x-razorpay-signature', signature)
+      .send(rawBody);
+
+    assert.equal(res.status, 200);
+
+    // Verify payment was marked FAILED with AMOUNT_MISMATCH
+    const paymentAfter = await Payment.findOne({ orderId });
+    assert.equal(paymentAfter.status, PAYMENT_STATUS.FAILED);
+    assert.equal(paymentAfter.failureDetails.code, 'AMOUNT_MISMATCH');
+    assert.equal(paymentAfter.registrationId, null);
+  });
+
+  it('20. Late webhook capture on expired hold with reassigned seats triggers auto-refund without stealing seat', async () => {
+    const seatA3 = await EventSeat.findOne({ eventId: seatingEvent._id, seatLabel: 'A3' });
+    assert.ok(seatA3);
+
+    // User A holds A3
+    const userAAgent = request.agent(app);
+    const cA = await userAAgent.get('/api/v1/auth/csrf');
+    const uARes = await userAAgent
+      .post('/api/v1/auth/register')
+      .set('x-csrf-token', cA.body.data.csrfToken)
+      .send({
+        name: 'User A',
+        email: 'usera@paytest.com',
+        password: 'SecurePassword@123',
+        role: 'ATTENDEE'
+      });
+    const userA = uARes.body.data.user;
+
+    const holdA = await createSeatHold({
+      eventId: seatingEvent._id,
+      attendeeId: userA.id,
+      seatIds: [seatA3._id]
+    });
+    const orderResA = await userAAgent
+      .post('/api/v1/payments/create-order')
+      .set('x-csrf-token', cA.body.data.csrfToken)
+      .send({ eventId: seatingEvent._id });
+
+    const orderIdA = orderResA.body.data.orderId;
+
+    // Simulate hold A expiring and releasing seat A3 back to AVAILABLE
+    await SeatHold.findByIdAndUpdate(holdA.holdId, {
+      $set: { status: SEAT_HOLD_STATUS.EXPIRED, expiresAt: new Date(Date.now() - 60000) }
+    });
+    await EventSeat.findByIdAndUpdate(seatA3._id, {
+      $set: { status: SEAT_STATUS.AVAILABLE, holdId: null, heldBy: null, heldUntil: null }
+    });
+
+    // User B comes along, holds and confirms seat A3
+    const userBAgent = request.agent(app);
+    const cB = await userBAgent.get('/api/v1/auth/csrf');
+    const uBRes = await userBAgent
+      .post('/api/v1/auth/register')
+      .set('x-csrf-token', cB.body.data.csrfToken)
+      .send({
+        name: 'User B',
+        email: 'userb@paytest.com',
+        password: 'SecurePassword@123',
+        role: 'ATTENDEE'
+      });
+    const userB = uBRes.body.data.user;
+
+    const holdB = await createSeatHold({
+      eventId: seatingEvent._id,
+      attendeeId: userB.id,
+      seatIds: [seatA3._id]
+    });
+    const orderResB = await userBAgent
+      .post('/api/v1/payments/create-order')
+      .set('x-csrf-token', cB.body.data.csrfToken)
+      .send({ eventId: seatingEvent._id });
+
+    // User B verifies and books A3
+    const orderIdB = orderResB.body.data.orderId;
+    const payIdB = `pay_user_b_${Date.now()}`;
+    const sigB = crypto
+      .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+      .update(`${orderIdB}|${payIdB}`)
+      .digest('hex');
+
+    await userBAgent
+      .post('/api/v1/payments/verify')
+      .set('x-csrf-token', cB.body.data.csrfToken)
+      .send({ orderId: orderIdB, paymentId: payIdB, signature: sigB });
+
+    // Verify seat A3 is now securely booked by User B
+    const seatA3Booked = await EventSeat.findById(seatA3._id);
+    assert.equal(seatA3Booked.status, SEAT_STATUS.BOOKED);
+    assert.ok(seatA3Booked.bookingId);
+    const bookingB = await Booking.findById(seatA3Booked.bookingId);
+    assert.ok(bookingB);
+    assert.equal(bookingB.attendeeId.toString(), userB.id.toString());
+
+    // NOW: User A's late webhook payment.captured arrives!
+    const latePayIdA = `pay_late_a_${Date.now()}`;
+    const latePayloadA = {
+      event: 'payment.captured',
+      payload: {
+        payment: {
+          entity: {
+            id: latePayIdA,
+            order_id: orderIdA,
+            amount: 25000,
+            currency: 'INR',
+            status: 'captured',
+            method: 'upi'
+          }
+        }
+      }
+    };
+
+    const rawBodyA = JSON.stringify(latePayloadA);
+    const sigA = crypto
+      .createHmac('sha256', process.env.RAZORPAY_WEBHOOK_SECRET)
+      .update(rawBodyA)
+      .digest('hex');
+
+    const lateRes = await request(app)
+      .post('/api/v1/webhooks/razorpay')
+      .set('Content-Type', 'application/json')
+      .set('x-razorpay-signature', sigA)
+      .send(rawBodyA);
+
+    assert.equal(lateRes.status, 200);
+
+    // Verify User A's payment was NOT confirmed; instead auto-refund was initiated
+    const paymentAAfter = await Payment.findOne({ orderId: orderIdA });
+    assert.equal(paymentAAfter.status, PAYMENT_STATUS.REFUND_PENDING);
+    assert.equal(paymentAAfter.refundStatus, REFUND_STATUS.PENDING);
+    assert.ok(paymentAAfter.refundId);
+    assert.equal(paymentAAfter.registrationId, null);
+
+    // Verify seat A3 is STILL booked by User B (never stolen!)
+    const seatA3Final = await EventSeat.findById(seatA3._id);
+    assert.equal(seatA3Final.status, SEAT_STATUS.BOOKED);
+    assert.equal(seatA3Final.bookingId.toString(), seatA3Booked.bookingId.toString());
+  });
+
+  it('21. POST /api/v1/payments/verify strictly rejects simulated payment signature in production mode', async () => {
+    // 1. Create a genuine pending order for attendee
+    const prodAgent = request.agent(app);
+    const cProd = await prodAgent.get('/api/v1/auth/csrf');
+    const uProdRes = await prodAgent
+      .post('/api/v1/auth/register')
+      .set('x-csrf-token', cProd.body.data.csrfToken)
+      .send({
+        name: 'Prod Test Attendee',
+        email: 'produser@paytest.com',
+        password: 'SecurePassword@123',
+        role: 'ATTENDEE'
+      });
+    const prodUser = uProdRes.body.data.user;
+
+    // Verify email directly in DB and re-login to update session
+    await User.findByIdAndUpdate(prodUser.id, { $set: { emailVerified: true } });
+    await prodAgent
+      .post('/api/v1/auth/login')
+      .set('x-csrf-token', cProd.body.data.csrfToken)
+      .send({
+        email: 'produser@paytest.com',
+        password: 'SecurePassword@123'
+      });
+
+    const ordRes = await prodAgent
+      .post('/api/v1/payments/create-order')
+      .set('x-csrf-token', cProd.body.data.csrfToken)
+      .send({ eventId: paidEvent._id });
+
+    const prodOrderId = ordRes.body.data.orderId;
+
+    const originalEnv = process.env.NODE_ENV;
+    try {
+      process.env.NODE_ENV = 'production';
+
+      const res = await prodAgent
+        .post('/api/v1/payments/verify')
+        .set('x-csrf-token', cProd.body.data.csrfToken)
+        .set('Origin', 'https://eventora.vercel.app')
+        .send({
+          orderId: prodOrderId,
+          paymentId: 'pay_prod_test_456',
+          signature: 'simulated_test_signature'
+        });
+
+      assert.equal(res.status, 400);
+      assert.match(res.body.error.message, /forbidden in production|not permitted in production/);
+    } finally {
+      process.env.NODE_ENV = originalEnv;
+    }
   });
 });

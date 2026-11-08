@@ -37,7 +37,7 @@ export function Navbar() {
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-md">
-      {user && user.emailVerified === false && (
+      {user && user.emailVerified === false && !pathname?.startsWith("/settings/security") && !pathname?.startsWith("/verify-email") && (
         <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-1.5 text-xs text-amber-800 dark:text-amber-300">
           <div className="container mx-auto max-w-7xl flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 truncate">

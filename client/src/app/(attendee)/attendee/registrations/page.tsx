@@ -10,10 +10,13 @@ import { formatDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { TicketDetailsModal } from "@/components/tickets/TicketDetailsModal";
 import {
   AlertCircle,
+  Armchair,
   Calendar,
   ExternalLink,
+  Eye,
   Mail,
   MapPin,
   ShieldAlert,
@@ -26,6 +29,7 @@ export default function MyRegistrationsPage() {
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
+  const [selectedRegistration, setSelectedRegistration] = useState<RegistrationItem | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["my-registrations"],
@@ -124,21 +128,30 @@ export default function MyRegistrationsPage() {
             const isCancelled = reg.status === "CANCELLED";
             const isConfirmed = reg.status === "CONFIRMED";
 
+            const booking = reg.booking;
+            const bookingRef =
+              booking?.bookingReference ||
+              `EVT-${(reg._id || reg.id || "").substring(0, 8).toUpperCase()}`;
+
             return (
-              <Card key={reg._id || reg.id} className="border-border/80 shadow-xs overflow-hidden">
+              <Card
+                key={reg._id || reg.id}
+                onClick={() => setSelectedRegistration(reg)}
+                className="border-border/80 shadow-xs overflow-hidden hover:border-primary/50 transition-all cursor-pointer group hover:shadow-md"
+              >
                 <div className="flex flex-col md:flex-row md:items-center justify-between p-6 gap-6">
                   {/* Left: Event Details */}
-                  <div className="space-y-2 flex-1">
-                    <div className="flex items-center gap-2">
+                  <div className="space-y-2.5 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
                       <Badge
                         variant={
                           isConfirmed
                             ? "success"
                             : isPendingCancellation
                             ? "warning"
-                            : "secondary"
+                            : "destructive"
                         }
-                        className="text-[10px]"
+                        className="text-[10px] uppercase font-bold"
                       >
                         {reg.status}
                       </Badge>
@@ -154,6 +167,15 @@ export default function MyRegistrationsPage() {
                           Free RSVP
                         </Badge>
                       )}
+                      {booking?.seatLabels && booking.seatLabels.length > 0 && (
+                        <Badge variant="secondary" className="text-[10px] font-mono gap-1 text-primary">
+                          <Armchair className="h-3 w-3" />
+                          Seats: {booking.seatLabels.join(", ")}
+                        </Badge>
+                      )}
+                      <span className="font-mono text-[10px] text-muted-foreground bg-muted/60 px-2 py-0.5 rounded">
+                        Ref: {bookingRef}
+                      </span>
                       {reg.confirmationEmailSent && (
                         <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
                           <Mail className="h-3 w-3" /> Email Sent
@@ -161,7 +183,7 @@ export default function MyRegistrationsPage() {
                       )}
                     </div>
 
-                    <h3 className="font-bold text-lg text-foreground leading-snug">
+                    <h3 className="font-bold text-lg text-foreground leading-snug group-hover:text-primary transition-colors">
                       {event.title}
                     </h3>
 
@@ -194,7 +216,19 @@ export default function MyRegistrationsPage() {
                   </div>
 
                   {/* Right: Actions */}
-                  <div className="flex flex-col sm:flex-row md:flex-col items-end gap-2 shrink-0">
+                  <div
+                    className="flex flex-col sm:flex-row md:flex-col items-end gap-2 shrink-0"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={() => setSelectedRegistration(reg)}
+                      className="w-full sm:w-auto text-xs gap-1.5 h-8 font-semibold shadow-xs"
+                    >
+                      <Ticket className="h-3.5 w-3.5" /> View Ticket Pass
+                    </Button>
+
                     <Link href={`/events/${event._id || event.id}`} className="w-full sm:w-auto">
                       <Button variant="outline" size="sm" className="w-full text-xs gap-1.5 h-8">
                         View Event <ExternalLink className="h-3 w-3" />
@@ -216,7 +250,10 @@ export default function MyRegistrationsPage() {
 
                 {/* Inline cancellation prompt */}
                 {cancellingId === (reg._id || reg.id) && (
-                  <div className="bg-muted/40 p-4 border-t border-border space-y-3">
+                  <div
+                    className="bg-muted/40 p-4 border-t border-border space-y-3"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     <p className="text-xs font-semibold text-foreground">
                       Confirm cancellation request for &quot;{event.title}&quot;?
                     </p>
@@ -264,6 +301,14 @@ export default function MyRegistrationsPage() {
           })}
         </div>
       )}
+
+      {/* Interactive Ticket Details Modal */}
+      <TicketDetailsModal
+        isOpen={!!selectedRegistration}
+        registration={selectedRegistration}
+        onClose={() => setSelectedRegistration(null)}
+        onRequestCancellation={(id) => setCancellingId(id)}
+      />
     </div>
   );
 }

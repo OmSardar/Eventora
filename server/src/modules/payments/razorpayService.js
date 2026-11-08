@@ -21,7 +21,6 @@ const mockRazorpayClient = {
     fetch: async (paymentId) => ({
       id: paymentId,
       entity: 'payment',
-      amount: 50000,
       currency: 'INR',
       status: 'captured',
       method: 'upi',
@@ -67,15 +66,29 @@ export function _resetRazorpayInstance() {
  * Rejects live credentials if operating in test mode.
  */
 export function getRazorpayClient() {
-  if (process.env.NODE_ENV === 'test' || process.env.MOCK_PAYMENTS === 'true') {
+  const isProduction = process.env.NODE_ENV === 'production';
+  const key_id = process.env.RAZORPAY_KEY_ID;
+  const key_secret = process.env.RAZORPAY_KEY_SECRET;
+  const mode = (process.env.RAZORPAY_MODE || 'test').toLowerCase();
+
+  // Strict Production Enforcement: Fail closed if credentials are missing
+  if (isProduction) {
+    if (!key_id || !key_secret) {
+      logger.error('CRITICAL: Razorpay credentials (RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET) missing in production.');
+      throw new Error('Payment gateway configuration error: Credentials missing in production.');
+    }
+    if (process.env.MOCK_PAYMENTS === 'true') {
+      logger.error('CRITICAL: MOCK_PAYMENTS=true is strictly forbidden in production.');
+      throw new Error('Security Violation: Mock payment simulator is forbidden in production.');
+    }
+  }
+
+  // Non-production test/mock bypass
+  if (!isProduction && (process.env.NODE_ENV === 'test' || process.env.MOCK_PAYMENTS === 'true')) {
     return mockRazorpayClient;
   }
 
   if (razorpayInstance) return razorpayInstance;
-
-  const key_id = process.env.RAZORPAY_KEY_ID;
-  const key_secret = process.env.RAZORPAY_KEY_SECRET;
-  const mode = (process.env.RAZORPAY_MODE || 'test').toLowerCase();
 
   // Safety check: Never allow live keys while configured in test mode
   if (mode === 'test' && key_id && key_id.startsWith('rzp_live_')) {
@@ -83,6 +96,9 @@ export function getRazorpayClient() {
   }
 
   if (!key_id || !key_secret) {
+    if (isProduction) {
+      throw new Error('Payment gateway credentials missing in production.');
+    }
     logger.warn('Razorpay credentials not fully configured. Using sandbox mock gateway client for testing.');
     return mockRazorpayClient;
   }
@@ -131,8 +147,39 @@ export function verifyRazorpaySignature({ orderId, paymentId, signature }) {
     return false;
   }
 
+  const isProduction = process.env.NODE_ENV === 'production';
+
+  // Strict Production Enforcement: Reject all mock orders and simulated signatures
+  if (isProduction) {
+    if (signature === 'simulated_test_signature' || (typeof orderId === 'string' && orderId.startsWith('order_mock_'))) {
+      logger.error({ orderId }, 'Security Violation: Simulated payment signatures and mock orders are forbidden in production.');
+      return false;
+    }
+
+    const secret = process.env.RAZORPAY_KEY_SECRET;
+    if (!secret) {
+      logger.error('Security Violation: RAZORPAY_KEY_SECRET is not configured in production. Payment verification failed closed.');
+      return false;
+    }
+
+    const expectedSignature = crypto
+      .createHmac('sha256', secret)
+      .update(`${orderId}|${paymentId}`)
+      .digest('hex');
+
+    const expectedBuffer = Buffer.from(expectedSignature, 'utf8');
+    const actualBuffer = Buffer.from(signature, 'utf8');
+
+    if (expectedBuffer.length !== actualBuffer.length) {
+      return false;
+    }
+
+    return crypto.timingSafeEqual(expectedBuffer, actualBuffer);
+  }
+
+  // Non-production test & mock environments
   if (
-    (process.env.NODE_ENV === 'test' || !process.env.RAZORPAY_KEY_SECRET || process.env.MOCK_PAYMENTS === 'true' || orderId.startsWith('order_mock_')) &&
+    (process.env.NODE_ENV === 'test' || !process.env.RAZORPAY_KEY_SECRET || process.env.MOCK_PAYMENTS === 'true' || (typeof orderId === 'string' && orderId.startsWith('order_mock_'))) &&
     signature === 'simulated_test_signature'
   ) {
     return true;
@@ -163,6 +210,37 @@ export function verifyRazorpayWebhookSignature({ rawBody, signature }) {
     return false;
   }
 
+  const isProduction = process.env.NODE_ENV === 'production';
+
+  // Strict Production Enforcement: Reject simulated webhook signatures and require webhook secret
+  if (isProduction) {
+    if (signature === 'simulated_webhook_signature') {
+      logger.error('Security Violation: Simulated webhook signature rejected in production.');
+      return false;
+    }
+
+    const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
+    if (!webhookSecret) {
+      logger.error('Security Violation: RAZORPAY_WEBHOOK_SECRET is not configured in production. Webhook rejected.');
+      return false;
+    }
+
+    const expectedSignature = crypto
+      .createHmac('sha256', webhookSecret)
+      .update(rawBody)
+      .digest('hex');
+
+    const expectedBuffer = Buffer.from(expectedSignature, 'utf8');
+    const actualBuffer = Buffer.from(signature, 'utf8');
+
+    if (expectedBuffer.length !== actualBuffer.length) {
+      return false;
+    }
+
+    return crypto.timingSafeEqual(expectedBuffer, actualBuffer);
+  }
+
+  // Non-production test & mock environments
   if ((process.env.NODE_ENV === 'test' || process.env.MOCK_PAYMENTS === 'true') && signature === 'simulated_webhook_signature') {
     return true;
   }

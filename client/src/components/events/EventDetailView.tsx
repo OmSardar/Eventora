@@ -47,7 +47,7 @@ export function EventDetailView({ eventId, initialEvent }: EventDetailViewProps)
   });
 
   // If attendee logged in, check their registrations to detect if already registered
-  const { data: userRegistrationsData } = useQuery({
+  const { data: userRegistrationsData, isLoading: registrationsLoading } = useQuery({
     queryKey: ["my-registrations"],
     queryFn: () => api.get<{ registrations: RegistrationItem[] }>("/registrations/me"),
     enabled: user?.role === "ATTENDEE",
@@ -63,13 +63,17 @@ export function EventDetailView({ eventId, initialEvent }: EventDetailViewProps)
     typeof event.organizerId === "object" &&
     event.organizerId._id === user.id;
 
-  const existingRegistration = userRegistrationsData?.registrations?.find(
-    (r) =>
-      (typeof r.eventId === "object" ? r.eventId._id === eventId : r.eventId === eventId) &&
-      r.status !== "CANCELLED"
-  );
+  const userRegistration = userRegistrationsData?.registrations?.find((r) => {
+    if (!r.eventId) return false;
+    const rEventId = typeof r.eventId === "object" ? (r.eventId._id || r.eventId.id) : r.eventId;
+    return String(rEventId) === String(eventId);
+  });
 
-  const isAlreadyRegistered = !!existingRegistration;
+  const isConfirmedRegistration = userRegistration?.status === "CONFIRMED";
+  const isPendingCancellation = userRegistration?.status === "CANCELLATION_REQUESTED";
+  const isCancelledRegistration = userRegistration?.status === "CANCELLED";
+  const isAlreadyRegistered = isConfirmedRegistration || isPendingCancellation;
+  const existingRegistration = isAlreadyRegistered ? userRegistration : undefined;
 
   // Booking mutation
   const bookingMutation = useMutation({
@@ -203,6 +207,8 @@ export function EventDetailView({ eventId, initialEvent }: EventDetailViewProps)
                 isPaid={event.isPaid}
                 baseTicketPrice={event.ticketPrice}
                 user={user}
+                isAlreadyRegistered={isAlreadyRegistered}
+                isCancelledRegistration={isCancelledRegistration}
                 onBookingSuccess={() => {
                   setRegistrationSuccess(true);
                   setShowTicketModal(true);
@@ -328,12 +334,39 @@ export function EventDetailView({ eventId, initialEvent }: EventDetailViewProps)
                     <div className="rounded-lg bg-muted p-4 text-center text-xs text-muted-foreground">
                       This event occurred in the past and is no longer accepting RSVPs.
                     </div>
+                  ) : isCancelledRegistration ? (
+                    <div className="space-y-3">
+                      <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3.5 text-xs text-destructive space-y-1">
+                        <div className="flex items-center gap-1.5 font-semibold">
+                          <AlertCircle className="h-4 w-4 shrink-0" />
+                          <span>Registration Previously Cancelled</span>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground leading-normal">
+                          You have cancelled your registration for this event. Re-booking with this account is not permitted.
+                        </p>
+                      </div>
+                      <Button disabled className="w-full h-11 text-xs font-semibold bg-muted text-muted-foreground cursor-not-allowed opacity-60">
+                        Re-Booking Prohibited
+                      </Button>
+                      <Link href="/attendee/registrations" className="block">
+                        <Button variant="outline" className="w-full text-xs">
+                          View Cancelled Ticket
+                        </Button>
+                      </Link>
+                    </div>
                   ) : isAlreadyRegistered ? (
                     <div className="space-y-3">
                       <div className="flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-3 text-xs text-emerald-500 font-medium">
                         <CheckCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
-                        <span>You are registered for this event</span>
+                        <span>
+                          {isPendingCancellation
+                            ? "Cancellation request pending"
+                            : "You are registered for this event"}
+                        </span>
                       </div>
+                      <Button disabled className="w-full h-11 text-xs font-semibold bg-muted text-muted-foreground cursor-not-allowed opacity-60">
+                        {isPendingCancellation ? "Cancellation Pending" : "Already Registered"}
+                      </Button>
                       <Link href="/attendee/registrations" className="block">
                         <Button variant="outline" className="w-full text-xs">
                           Manage Ticket
@@ -359,7 +392,11 @@ export function EventDetailView({ eventId, initialEvent }: EventDetailViewProps)
                       </p>
                     </div>
                   ) : isAttendee ? (
-                    isSoldOut ? (
+                    registrationsLoading ? (
+                      <Button disabled className="w-full h-11 text-xs font-semibold bg-muted text-muted-foreground opacity-60">
+                        Checking Registration Status...
+                      </Button>
+                    ) : isSoldOut ? (
                       <Button disabled className="w-full h-11 text-xs font-semibold">
                         Sold Out
                       </Button>
@@ -367,6 +404,14 @@ export function EventDetailView({ eventId, initialEvent }: EventDetailViewProps)
                       <RazorpayCheckoutButton
                         event={event}
                         user={user}
+                        disabled={isAlreadyRegistered || isCancelledRegistration}
+                        disabledReason={
+                          isCancelledRegistration
+                            ? "Re-Booking Prohibited"
+                            : isAlreadyRegistered
+                            ? "Already Registered"
+                            : undefined
+                        }
                         onSuccess={() => {
                           setRegistrationSuccess(true);
                           setErrorMessage(null);
@@ -378,7 +423,7 @@ export function EventDetailView({ eventId, initialEvent }: EventDetailViewProps)
                     ) : (
                       <Button
                         onClick={() => bookingMutation.mutate()}
-                        disabled={bookingMutation.isPending}
+                        disabled={bookingMutation.isPending || isAlreadyRegistered || isCancelledRegistration}
                         isLoading={bookingMutation.isPending}
                         className="w-full h-11 text-xs font-semibold gap-1.5 shadow-sm"
                         data-testid="confirm-free-rsvp-btn"

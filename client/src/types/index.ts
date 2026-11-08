@@ -99,6 +99,41 @@ export type RegistrationStatus =
   | "CANCELLED"
   | "REJECTED";
 
+export interface PopulatedBookingSeat {
+  seatId: string;
+  seatLabel: string;
+  sectionName?: string;
+  rowLabel?: string;
+  seatNumber?: number;
+  category?: string;
+  price?: number;
+}
+
+export interface PopulatedBooking {
+  _id: string;
+  bookingReference: string;
+  status: string;
+  totalAmount?: number;
+  currency?: string;
+  ticketToken?: string;
+  qrCodePayload?: string;
+  seatLabels?: string[];
+  seats?: PopulatedBookingSeat[];
+}
+
+export interface PopulatedPayment {
+  _id: string;
+  paymentId?: string;
+  orderId?: string;
+  amount: number;
+  currency: string;
+  status: string;
+  method?: string;
+  refundStatus?: string;
+  refundAmount?: number;
+  refundId?: string;
+}
+
 export interface RegistrationItem {
   _id: string;
   id?: string;
@@ -109,7 +144,8 @@ export interface RegistrationItem {
   isPaid?: boolean;
   ticketPrice?: number;
   currency?: string;
-  paymentId?: string;
+  paymentId?: string | PopulatedPayment;
+  booking?: PopulatedBooking | null;
   refundStatus?: string;
   cancellationReason?: string;
   decisionNote?: string;

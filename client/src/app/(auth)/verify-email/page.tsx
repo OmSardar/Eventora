@@ -76,8 +76,12 @@ function VerifyEmailContent() {
     } catch (err: unknown) {
       const error = err as Error;
       const msg = error.message || "";
-      if (msg.toLowerCase().includes("already been used")) {
-        // If the link has already been used, the account is already verified!
+      if (
+        msg.toLowerCase().includes("already been used") ||
+        msg.toLowerCase().includes("already verified") ||
+        msg.toLowerCase().includes("already been verified")
+      ) {
+        // If the link has already been used or verified, the account is active!
         setStatus("SUCCESS");
         if (user) {
           refetchUser();

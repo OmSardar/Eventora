@@ -47,14 +47,29 @@ export function setResendClient(mock) {
  * Resolves the authoritative frontend application base URL.
  */
 export function getAppBaseUrl() {
-  const raw =
-    process.env.APP_BASE_URL ||
-    process.env.CLIENT_URL ||
-    process.env.FRONTEND_URL ||
-    (process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',')[0].trim() : '') ||
-    'http://localhost:3000';
+  if (process.env.APP_BASE_URL) {
+    return process.env.APP_BASE_URL.replace(/\/+$/, '');
+  }
+  if (process.env.CLIENT_URL) {
+    return process.env.CLIENT_URL.replace(/\/+$/, '');
+  }
+  if (process.env.FRONTEND_URL) {
+    return process.env.FRONTEND_URL.replace(/\/+$/, '');
+  }
 
-  return raw.replace(/\/+$/, '');
+  // If ALLOWED_ORIGINS has a production HTTPS URL, prioritize it over localhost
+  if (process.env.ALLOWED_ORIGINS) {
+    const origins = process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean);
+    const httpsOrigin = origins.find((o) => o.startsWith('https://'));
+    if (httpsOrigin) {
+      return httpsOrigin.replace(/\/+$/, '');
+    }
+    if (origins.length > 0) {
+      return origins[0].replace(/\/+$/, '');
+    }
+  }
+
+  return 'http://localhost:3000';
 }
 
 /**
@@ -514,6 +529,87 @@ export async function sendRecoveryCodesRegeneratedAlertEmail({ email, name }) {
   return sendEmail({
     to: email,
     subject: 'Security Alert: MFA recovery codes regenerated',
+    html,
+    text
+  });
+}
+
+// -------------------------------------------------------------
+// 8. CANCELLATION & REFUND CONFIRMATION EMAIL
+// -------------------------------------------------------------
+
+export async function sendCancellationRefundEmail({
+  attendeeEmail,
+  attendeeName,
+  event,
+  registrationId,
+  isPaid = false,
+  refundAmount = 0,
+  refundId = null,
+  currency = 'INR',
+  reason = 'Cancellation requested and approved'
+}) {
+  if (!attendeeEmail) {
+    logger.warn({ registrationId }, 'Cancellation email skipped: Attendee email missing');
+    return { success: false, error: 'Attendee email address missing' };
+  }
+
+  const appBaseUrl = getAppBaseUrl();
+  const formattedDate = formatEventDate(event.eventDate);
+  const formattedRefund = refundAmount > 0 ? (refundAmount / 100).toFixed(2) : '0.00';
+
+  const html = wrapEmailTemplate({
+    title: `Booking Cancelled - ${event.title}`,
+    badge: {
+      text: isPaid && refundAmount > 0 ? 'Booking Cancelled & Refund Initiated' : 'Booking Cancelled',
+      type: 'alert'
+    },
+    heading: 'Your booking has been cancelled',
+    bodyHtml: `
+      <p>Hi ${attendeeName || 'there'},</p>
+      <p>Your booking for <strong>${event.title}</strong> has been cancelled and your seat has been released.</p>
+      
+      <div class="info-box">
+        <div style="font-weight: 700; color: #fff; margin-bottom: 12px;">${event.title}</div>
+        <div class="info-row"><span class="info-label">Date &amp; Time:</span> <span>${formattedDate}</span></div>
+        <div class="info-row"><span class="info-label">Venue:</span> <span>${event.venue}</span></div>
+        <div class="info-row"><span class="info-label">Booking Reference:</span> <span>${registrationId}</span></div>
+        ${
+          isPaid && refundAmount > 0
+            ? `<div class="info-row"><span class="info-label">Refund Amount:</span> <span>₹${formattedRefund} ${currency}</span></div>
+               ${refundId ? `<div class="info-row"><span class="info-label">Refund ID:</span> <span>${refundId}</span></div>` : ''}`
+            : ''
+        }
+      </div>
+
+      ${
+        isPaid && refundAmount > 0
+          ? `<p style="font-size: 13px; color: #a1a1aa; margin-top: 16px;">
+               A full refund of <strong>₹${formattedRefund} ${currency}</strong> has been initiated back to your original payment method. Depending on your bank or payment gateway, this typically appears on your account statement within 5–7 business days.
+             </p>`
+          : ''
+      }
+
+      <p style="font-size: 12px; color: #ef4444; margin-top: 16px; font-weight: 500;">
+        Important: Since this booking was cancelled, you cannot re-book this event with this account.
+      </p>
+    `,
+    actionUrl: `${appBaseUrl}/events`,
+    actionLabel: 'Browse Other Events',
+    footerNotes: 'This transactional notice was dispatched because your Eventora event registration was cancelled.'
+  });
+
+  const text = `EVENTORA — BOOKING CANCELLED\n\nHi ${attendeeName || 'there'},\n\nYour booking for "${event.title}" has been cancelled.\n${
+    isPaid && refundAmount > 0
+      ? `A refund of ₹${formattedRefund} ${currency} has been initiated to your original payment method (Refund ID: ${refundId || 'Pending'}).\n`
+      : ''
+  }\nBooking Reference: ${registrationId}\nEvent Date: ${formattedDate}\nVenue: ${event.venue}\n\nPlease note: Re-booking this event with this account is not permitted.\n\nBrowse other events: ${appBaseUrl}/events\n`;
+
+  return sendEmail({
+    to: attendeeEmail,
+    subject: isPaid && refundAmount > 0
+      ? `Booking Cancelled & Refund Initiated: ${event.title}`
+      : `Booking Cancelled: ${event.title}`,
     html,
     text
   });

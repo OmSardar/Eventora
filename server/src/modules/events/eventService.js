@@ -12,6 +12,7 @@ import {
   deleteCloudinaryAsset
 } from '../../infrastructure/cloudinary/cloudinaryService.js';
 import { validateImageBuffer } from '../../shared/validation/fileValidation.js';
+import { generateEventSeats } from '../seating/seatingService.js';
 import { logger } from '../../infrastructure/logging/logger.js';
 
 export async function createEvent({
@@ -26,6 +27,9 @@ export async function createEvent({
   isPaid,
   ticketPrice,
   currency,
+  seatingType,
+  maxTicketsPerBooking,
+  seatingConfig,
   organizerId,
   ipAddress,
   userAgent
@@ -48,12 +52,22 @@ export async function createEvent({
     organizerId: new mongoose.Types.ObjectId(organizerId),
     status: EVENT_STATUS.PUBLISHED,
     category: category || 'General',
+    seatingType: seatingType || 'GENERAL_ADMISSION',
+    maxTicketsPerBooking: maxTicketsPerBooking ? Number(maxTicketsPerBooking) : 6,
     isPaid: Boolean(isPaid),
     ticketPrice: isPaid ? Number(ticketPrice) || 0 : 0,
     currency: currency || 'INR',
     image: finalImage,
     bannerUrl: bannerUrl || finalImage.url || ''
   });
+
+  if (seatingType === 'ASSIGNED_SEATING') {
+    try {
+      await generateEventSeats(event._id, seatingConfig);
+    } catch (seatErr) {
+      logger.error({ err: seatErr?.message, eventId: event._id }, 'Failed to generate seating layout on event create');
+    }
+  }
 
   await logAuditEvent({
     action: 'EVENT_CREATED',
@@ -117,6 +131,18 @@ export async function updateEvent({
   if (updateData.description !== undefined) event.description = updateData.description;
   if (updateData.venue !== undefined) event.venue = updateData.venue;
   if (updateData.category !== undefined) event.category = updateData.category;
+  if (updateData.maxTicketsPerBooking !== undefined) event.maxTicketsPerBooking = Number(updateData.maxTicketsPerBooking);
+
+  if (updateData.seatingType !== undefined && updateData.seatingType !== event.seatingType) {
+    event.seatingType = updateData.seatingType;
+    if (updateData.seatingType === 'ASSIGNED_SEATING') {
+      try {
+        await generateEventSeats(event._id, updateData.seatingConfig);
+      } catch (seatErr) {
+        logger.error({ err: seatErr?.message, eventId: event._id }, 'Failed to generate seating on event update');
+      }
+    }
+  }
 
   // Protect pricing changes if bookings exist
   if (updateData.isPaid !== undefined || updateData.ticketPrice !== undefined) {

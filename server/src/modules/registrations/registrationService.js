@@ -5,12 +5,16 @@ import { Event } from '../events/Event.js';
 import { User } from '../users/User.js';
 import { Payment } from '../payments/Payment.js';
 import { RefundOperation } from '../payments/RefundOperation.js';
+import { Booking } from '../bookings/Booking.js';
+import { EventSeat } from '../seating/EventSeat.js';
 import {
   EVENT_STATUS,
   REGISTRATION_STATUS,
   NOTIFICATION_TYPE,
   PAYMENT_STATUS,
-  REFUND_STATUS
+  REFUND_STATUS,
+  BOOKING_STATUS,
+  SEAT_STATUS
 } from '../../shared/constants/status.js';
 import { initiateRazorpayRefund } from '../payments/razorpayService.js';
 import {
@@ -21,7 +25,10 @@ import {
 } from '../../shared/errors/AppError.js';
 import { logAuditEvent } from '../audit/AuditLog.js';
 import { dispatchNotification } from '../notifications/notificationService.js';
-import { sendRegistrationConfirmationEmail } from '../../infrastructure/email/emailService.js';
+import {
+  sendRegistrationConfirmationEmail,
+  sendCancellationRefundEmail
+} from '../../infrastructure/email/emailService.js';
 import { logger } from '../../infrastructure/logging/logger.js';
 
 function canUseReplicaSetTransactions() {
@@ -64,13 +71,19 @@ export async function registerForEvent({
     throw new BadRequestError('This is a paid event. Please complete booking through Razorpay checkout.');
   }
 
-  // 5. Check if attendee is already registered
+  // 5. Check if attendee is already registered or previously cancelled
   const existingRegistration = await Registration.findOne({
     eventId: new mongoose.Types.ObjectId(eventId),
     attendeeId: new mongoose.Types.ObjectId(attendeeId)
   });
 
   if (existingRegistration) {
+    if (existingRegistration.status === REGISTRATION_STATUS.CANCELLED) {
+      throw new BadRequestError('You have previously cancelled your registration for this event and cannot re-register.');
+    }
+    if (existingRegistration.status === REGISTRATION_STATUS.CANCELLATION_REQUESTED) {
+      throw new ConflictError('A cancellation request is pending for this event.');
+    }
     throw new ConflictError('You are already registered for this event.');
   }
 
@@ -204,13 +217,77 @@ export async function registerForEvent({
 }
 
 export async function getAttendeeRegistrations(attendeeId) {
-  return Registration.find({ attendeeId: new mongoose.Types.ObjectId(attendeeId) })
+  const registrations = await Registration.find({ attendeeId: new mongoose.Types.ObjectId(attendeeId) })
     .populate({
       path: 'eventId',
       populate: { path: 'organizerId', select: 'name email' }
     })
+    .populate('paymentId')
     .sort({ createdAt: -1 })
     .lean();
+
+  if (!registrations || registrations.length === 0) {
+    return [];
+  }
+
+  const regIds = registrations.map((r) => r._id);
+  const bookings = await Booking.find({
+    $or: [
+      { registrationId: { $in: regIds } },
+      { attendeeId: new mongoose.Types.ObjectId(attendeeId) }
+    ]
+  }).lean();
+
+  const bookingMapByReg = new Map();
+  const bookingMapByEvent = new Map();
+  for (const b of bookings) {
+    if (b.registrationId) {
+      bookingMapByReg.set(b.registrationId.toString(), b);
+    }
+    if (b.eventId) {
+      bookingMapByEvent.set(b.eventId.toString(), b);
+    }
+  }
+
+  const allSeatIds = bookings.flatMap((b) => b.seatIds || []);
+  const seats = allSeatIds.length > 0 ? await EventSeat.find({ _id: { $in: allSeatIds } }).lean() : [];
+  const seatMap = new Map(seats.map((s) => [s._id.toString(), s]));
+
+  const appBaseUrl = process.env.APP_BASE_URL || 'https://eventora-black.vercel.app';
+
+  return registrations.map((reg) => {
+    const eventIdStr = reg.eventId?._id?.toString() || reg.eventId?.toString();
+    const booking = bookingMapByReg.get(reg._id.toString()) || bookingMapByEvent.get(eventIdStr);
+    let populatedBooking = null;
+
+    if (booking) {
+      const bSeats = (booking.seatIds || []).map((id) => seatMap.get(id.toString())).filter(Boolean);
+      populatedBooking = {
+        _id: booking._id.toString(),
+        bookingReference: booking.bookingReference,
+        status: booking.status,
+        totalAmount: booking.totalAmount,
+        currency: booking.currency,
+        ticketToken: booking.ticketToken,
+        qrCodePayload: `${appBaseUrl}/tickets/verify?token=${encodeURIComponent(booking.ticketToken || '')}`,
+        seatLabels: booking.seatLabels || [],
+        seats: bSeats.map((s) => ({
+          seatId: s._id.toString(),
+          seatLabel: s.seatLabel,
+          sectionName: s.sectionName,
+          rowLabel: s.rowLabel,
+          seatNumber: s.seatNumber,
+          category: s.category,
+          price: s.price
+        }))
+      };
+    }
+
+    return {
+      ...reg,
+      booking: populatedBooking
+    };
+  });
 }
 
 export async function getEventAttendees(eventId, organizerId) {
@@ -375,6 +452,33 @@ export async function processCancellationDecision({
         { _id: registration.eventId._id, seatsBooked: { $gt: 0 } },
         { $inc: { seatsBooked: -1 } }
       );
+
+      // Release any assigned physical seats associated with this booking
+      try {
+        const booking = await Booking.findOne({ registrationId: registration._id });
+        if (booking) {
+          booking.status = BOOKING_STATUS.CANCELLED;
+          booking.cancelledAt = new Date();
+          await booking.save();
+
+          await EventSeat.updateMany(
+            { bookingId: booking._id },
+            {
+              $set: {
+                status: SEAT_STATUS.AVAILABLE,
+                bookingId: null,
+                holdId: null,
+                heldBy: null,
+                heldUntil: null,
+                isBlocked: false
+              },
+              $inc: { version: 1 }
+            }
+          );
+        }
+      } catch (seatReleaseErr) {
+        logger.error({ err: seatReleaseErr?.message, registrationId: registration._id }, 'Failed to release physical seats upon cancellation');
+      }
     }
 
     // 2. If paid registration, create durable refund operation and initiate Razorpay refund
@@ -468,6 +572,29 @@ export async function processCancellationDecision({
     }
 
     await registration.save();
+
+    // Send transactional cancellation & refund confirmation email only on cancellation
+    try {
+      const attendee = await User.findById(registration.attendeeId).select('name email');
+      if (attendee?.email) {
+        const paymentDoc = registration.paymentId ? await Payment.findById(registration.paymentId) : null;
+        sendCancellationRefundEmail({
+          attendeeEmail: attendee.email,
+          attendeeName: attendee.name,
+          event: registration.eventId,
+          registrationId: registration._id.toString(),
+          isPaid: registration.isPaid,
+          refundAmount: paymentDoc?.amount || (registration.ticketPrice ? Math.round(registration.ticketPrice * 100) : 0),
+          refundId: paymentDoc?.refundId || null,
+          currency: paymentDoc?.currency || registration.currency || 'INR',
+          reason: note || registration.cancellationReason || 'Cancellation approved by organizer'
+        }).catch((err) => {
+          logger.error({ err: err?.message, registrationId: registration._id }, 'Failed to dispatch cancellation refund email');
+        });
+      }
+    } catch (emailLookupErr) {
+      logger.error({ err: emailLookupErr?.message, registrationId: registration._id }, 'Error looking up attendee for cancellation email');
+    }
 
     dispatchNotification({
       userId: registration.attendeeId,

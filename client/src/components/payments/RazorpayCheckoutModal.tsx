@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { api } from "@/lib/api";
 import { User, EventItem } from "@/types";
 import { Button } from "@/components/ui/button";
-import { CreditCard, Loader2, ShieldCheck } from "lucide-react";
+import { CreditCard, Loader2, ShieldCheck, Lock } from "lucide-react";
 
 declare global {
   interface Window {
@@ -17,6 +17,8 @@ interface RazorpayCheckoutProps {
   user: User | null;
   onSuccess: () => void;
   onError: (err: string) => void;
+  disabled?: boolean;
+  disabledReason?: string;
 }
 
 export function RazorpayCheckoutButton({
@@ -24,6 +26,8 @@ export function RazorpayCheckoutButton({
   user,
   onSuccess,
   onError,
+  disabled = false,
+  disabledReason,
 }: RazorpayCheckoutProps) {
   const [loading, setLoading] = useState(false);
   const [isSimulating, setIsSimulating] = useState(false);
@@ -56,6 +60,7 @@ export function RazorpayCheckoutButton({
   };
 
   const handleInitiatePayment = async () => {
+    if (disabled) return;
     setLoading(true);
     try {
       // 1. Create authoritative checkout order & 10-minute seat hold on backend
@@ -87,6 +92,14 @@ export function RazorpayCheckoutButton({
           : (process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "rzp_test_Y5eWu9yUJZbd1c");
 
       const isGenuineRazorpayOrder = orderData.orderId && !orderData.orderId.startsWith("order_mock_");
+
+      // In sandbox/mock mode without Razorpay credentials, display interactive test simulator
+      if (!isGenuineRazorpayOrder) {
+        setSimulatedOrder(orderData);
+        setIsSimulating(true);
+        setLoading(false);
+        return;
+      }
 
       // 3. Open Razorpay Standard Checkout in Test Mode
       const options: any = {
@@ -128,17 +141,23 @@ export function RazorpayCheckoutButton({
         },
       };
 
-      // Only pass order_id if it's an authentic Razorpay order ID to prevent Razorpay from rejecting mock IDs
       if (isGenuineRazorpayOrder) {
         options.order_id = orderData.orderId;
       }
 
-      const razorpayInstance = new window.Razorpay(options);
-      razorpayInstance.on("payment.failed", function (response: any) {
-        onError(response.error?.description || "Payment failed. Please try again.");
+      try {
+        const razorpayInstance = new window.Razorpay(options);
+        razorpayInstance.on("payment.failed", function (response: any) {
+          onError(response.error?.description || "Payment failed. Please try again.");
+          setLoading(false);
+        });
+        razorpayInstance.open();
+      } catch (sdkError: any) {
+        console.warn("Razorpay checkout invocation error, activating test simulator:", sdkError);
+        setSimulatedOrder(orderData);
+        setIsSimulating(true);
         setLoading(false);
-      });
-      razorpayInstance.open();
+      }
     } catch (err: any) {
       onError(err?.message || "Failed to initiate checkout session.");
       setLoading(false);
@@ -149,14 +168,23 @@ export function RazorpayCheckoutButton({
     <>
       <Button
         onClick={handleInitiatePayment}
-        disabled={loading}
-        className="w-full h-11 text-xs font-semibold gap-2 shadow-sm bg-indigo-600 hover:bg-indigo-700 text-white"
+        disabled={loading || disabled}
+        className={`w-full h-11 text-xs font-semibold gap-2 shadow-sm ${
+          disabled
+            ? "bg-muted text-muted-foreground cursor-not-allowed opacity-60 hover:bg-muted"
+            : "bg-indigo-600 hover:bg-indigo-700 text-white"
+        }`}
         data-testid="pay-and-reserve-btn"
       >
         {loading ? (
           <>
             <Loader2 className="h-4 w-4 animate-spin" />
             Initializing Checkout...
+          </>
+        ) : disabled ? (
+          <>
+            <Lock className="h-4 w-4" />
+            {disabledReason || "Unavailable"}
           </>
         ) : (
           <>

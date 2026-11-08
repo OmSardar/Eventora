@@ -162,5 +162,35 @@ describe('Event & Registration Business Rules (Integration)', () => {
     assert.equal(res.body.data.registrations.length, 1);
     assert.equal(res.body.data.registrations[0].eventId.title, 'Test Suite Event 2026');
   });
+
+  test('Attendee cannot re-register after registration is cancelled', async () => {
+    // 1. Get registration ID
+    const myRegs = await attendeeAgent.get('/api/v1/registrations/me');
+    const registrationId = myRegs.body.data.registrations[0]._id;
+
+    // 2. Request cancellation
+    const cancelReq = await attendeeAgent
+      .post(`/api/v1/registrations/${registrationId}/cancellation-request`)
+      .set('x-csrf-token', attendeeCsrf)
+      .send({ reason: 'Schedule conflict' });
+    assert.equal(cancelReq.status, 200);
+
+    // 3. Organizer approves cancellation
+    const approveReq = await organizerAgent
+      .post(`/api/v1/cancellation-requests/${registrationId}/approve`)
+      .set('x-csrf-token', organizerCsrf)
+      .send({ note: 'Cancellation approved by test organizer' });
+    assert.equal(approveReq.status, 200);
+
+    // 4. Attendee attempts to re-register for the exact same event
+    const reRegisterRes = await attendeeAgent
+      .post(`/api/v1/events/${createdEventId}/registrations`)
+      .set('x-csrf-token', attendeeCsrf)
+      .send();
+
+    assert.equal(reRegisterRes.status, 400);
+    assert.equal(reRegisterRes.body.success, false);
+    assert.match(reRegisterRes.body.error.message, /previously cancelled/i);
+  });
 });
 

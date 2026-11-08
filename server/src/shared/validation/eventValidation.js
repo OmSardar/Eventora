@@ -51,6 +51,9 @@ export const createEventSchema = z.object({
     .optional()
     .default(0),
   currency: z.string().trim().toUpperCase().optional().default('INR'),
+  seatingType: z.enum(['GENERAL_ADMISSION', 'ASSIGNED_SEATING']).optional().default('GENERAL_ADMISSION'),
+  maxTicketsPerBooking: z.coerce.number().min(1).max(10).optional().default(6),
+  seatingConfig: z.any().optional(),
   bannerUrl: z
     .string()
     .trim()
@@ -93,6 +96,9 @@ export const updateEventSchema = z.object({
   isPaid: z.boolean().optional(),
   ticketPrice: z.coerce.number().min(0).optional(),
   currency: z.string().trim().toUpperCase().optional(),
+  seatingType: z.enum(['GENERAL_ADMISSION', 'ASSIGNED_SEATING']).optional(),
+  maxTicketsPerBooking: z.coerce.number().min(1).max(10).optional(),
+  seatingConfig: z.any().optional(),
   bannerUrl: z
     .string()
     .trim()

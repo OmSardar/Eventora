@@ -26,6 +26,12 @@ const paymentSchema = new mongoose.Schema(
       ref: 'SeatReservation',
       default: null
     },
+    holdId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'SeatHold',
+      default: null,
+      index: true
+    },
     orderId: {
       type: String,
       required: [true, 'Razorpay order ID is required'],

@@ -6,9 +6,9 @@ import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/features/authentication/AuthContext";
 import { ThemeToggle } from "./ThemeToggle";
 import { NotificationBell } from "./NotificationBell";
+import { UserNavDropdown } from "./UserNavDropdown";
 import { BrandLogo } from "@/components/brand/BrandLogo";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   Calendar,
   LogOut,
@@ -63,64 +63,68 @@ export function Navbar() {
         </Link>
 
         {/* Desktop Navigation */}
-        <nav className="hidden md:flex items-center gap-6 text-sm font-medium">
+        <nav className="hidden md:flex items-center gap-5 lg:gap-7 text-sm font-medium">
           <Link
             href="/events"
-            className={`transition-colors hover:text-foreground ${
+            className={`whitespace-nowrap transition-colors hover:text-foreground ${
               pathname === "/events" ? "text-foreground font-semibold" : "text-muted-foreground"
             }`}
           >
             Browse Events
           </Link>
 
-          <Link
-            href="/#features"
-            className="transition-colors hover:text-foreground text-muted-foreground"
-          >
-            Features
-          </Link>
+          {!user && (
+            <>
+              <Link
+                href="/#features"
+                className="whitespace-nowrap transition-colors hover:text-foreground text-muted-foreground"
+              >
+                Features
+              </Link>
 
-          <Link
-            href="/#how-it-works"
-            className="transition-colors hover:text-foreground text-muted-foreground"
-          >
-            How It Works
-          </Link>
+              <Link
+                href="/#how-it-works"
+                className="whitespace-nowrap transition-colors hover:text-foreground text-muted-foreground"
+              >
+                How It Works
+              </Link>
+            </>
+          )}
 
           {isOrganizer && (
             <>
               <Link
                 href="/organizer/dashboard"
-                className={`flex items-center gap-1.5 transition-colors hover:text-foreground ${
+                className={`flex items-center gap-1.5 whitespace-nowrap transition-colors hover:text-foreground ${
                   pathname.startsWith("/organizer/dashboard")
                     ? "text-foreground font-semibold"
                     : "text-muted-foreground"
                 }`}
               >
                 <LayoutDashboard className="h-4 w-4" />
-                Dashboard
+                <span>Dashboard</span>
               </Link>
               <Link
                 href="/organizer/events"
-                className={`flex items-center gap-1.5 transition-colors hover:text-foreground ${
+                className={`flex items-center gap-1.5 whitespace-nowrap transition-colors hover:text-foreground ${
                   pathname === "/organizer/events"
                     ? "text-foreground font-semibold"
                     : "text-muted-foreground"
                 }`}
               >
                 <Calendar className="h-4 w-4" />
-                My Events
+                <span>My Events</span>
               </Link>
               <Link
                 href="/tickets/verify"
-                className={`flex items-center gap-1.5 transition-colors hover:text-foreground ${
+                className={`flex items-center gap-1.5 whitespace-nowrap transition-colors hover:text-foreground ${
                   pathname === "/tickets/verify"
                     ? "text-foreground font-semibold"
                     : "text-muted-foreground"
                 }`}
               >
                 <Scan className="h-4 w-4" />
-                Verify Tickets
+                <span>Verify Tickets</span>
               </Link>
             </>
           )}
@@ -128,80 +132,49 @@ export function Navbar() {
           {isAttendee && (
             <Link
               href="/attendee/registrations"
-              className={`flex items-center gap-1.5 transition-colors hover:text-foreground ${
+              className={`flex items-center gap-1.5 whitespace-nowrap transition-colors hover:text-foreground ${
                 pathname === "/attendee/registrations"
                   ? "text-foreground font-semibold"
                   : "text-muted-foreground"
               }`}
             >
               <Ticket className="h-4 w-4" />
-              My Tickets
+              <span>My Tickets</span>
             </Link>
           )}
         </nav>
 
         {/* Action Controls & User Status */}
-        <div className="hidden md:flex items-center gap-3">
-          <ThemeToggle />
-
+        <div className="hidden md:flex items-center gap-2.5 sm:gap-3">
           {user ? (
-            <div className="flex items-center gap-3">
-              <NotificationBell />
-
+            <>
               {isOrganizer && (
                 <Link href="/organizer/events/create">
-                  <Button size="sm" className="gap-1.5">
+                  <Button size="sm" className="gap-1.5 whitespace-nowrap shadow-xs">
                     <PlusCircle className="h-4 w-4" />
-                    Host Event
+                    <span>Host Event</span>
                   </Button>
                 </Link>
               )}
 
-              <Link
-                href="/settings/security"
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                  pathname.startsWith("/settings/security")
-                    ? "bg-primary/10 text-primary font-semibold"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                }`}
-                title="Security & 2FA Settings"
-              >
-                <ShieldCheck className="h-4 w-4" />
-                <span className="hidden lg:inline">Security</span>
-              </Link>
-
-              <div className="flex items-center gap-2 pl-2 border-l border-border">
-                <div className="flex flex-col text-right">
-                  <span className="text-xs font-medium leading-none">{user.name}</span>
-                  <span className="text-[10px] text-muted-foreground uppercase tracking-wider">
-                    {user.role}
-                  </span>
-                </div>
-                <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                  {user.role === "ORGANIZER" ? "Org" : "Att"}
-                </Badge>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handleLogout}
-                  title="Sign out"
-                  className="text-muted-foreground hover:text-destructive"
-                >
-                  <LogOut className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
+              <NotificationBell />
+              <ThemeToggle />
+              <UserNavDropdown />
+            </>
           ) : (
-            <div className="flex items-center gap-2">
+            <>
+              <ThemeToggle />
               <Link href="/login">
-                <Button variant="ghost" size="sm">
+                <Button variant="ghost" size="sm" className="whitespace-nowrap">
                   Sign In
                 </Button>
               </Link>
               <Link href="/register">
-                <Button size="sm">Get Started</Button>
+                <Button size="sm" className="whitespace-nowrap">
+                  Get Started
+                </Button>
               </Link>
-            </div>
+            </>
           )}
         </div>
 

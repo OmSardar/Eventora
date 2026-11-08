@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
@@ -54,12 +54,27 @@ function TicketVerifyContent() {
   const [result, setResult] = useState<TicketVerifyResult | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const verifyToken = async (tokenToVerify: string) => {
-    if (!tokenToVerify.trim()) return;
+  const cleanTokenString = (raw: string) => {
+    let clean = raw.trim();
+    if (clean.includes("token=")) {
+      try {
+        const urlObj = new URL(clean);
+        clean = urlObj.searchParams.get("token") || clean;
+      } catch {
+        const match = clean.match(/token=([^&]+)/);
+        if (match && match[1]) clean = decodeURIComponent(match[1]);
+      }
+    }
+    return clean;
+  };
+
+  const verifyToken = useCallback(async (tokenToVerify: string) => {
+    const token = cleanTokenString(tokenToVerify);
+    if (!token) return;
     setLoading(true);
     setErrorMsg(null);
     try {
-      const res = await api.get<TicketVerifyResult>(`/tickets/verify?token=${encodeURIComponent(tokenToVerify.trim())}`);
+      const res = await api.get<TicketVerifyResult>(`/tickets/verify?token=${encodeURIComponent(token)}`);
       setResult(res);
     } catch (err: any) {
       setErrorMsg(err?.message || "Failed to verify digital ticket");
@@ -71,13 +86,13 @@ function TicketVerifyContent() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     if (tokenParam) {
       verifyToken(tokenParam);
     }
-  }, [tokenParam]);
+  }, [tokenParam, verifyToken]);
 
   const handleManualSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -88,8 +103,9 @@ function TicketVerifyContent() {
 
   // Organizer gate admission
   const handleAdmitAttendee = async () => {
-    if (!tokenInput.trim() && !tokenParam) return;
-    const token = tokenParam || tokenInput.trim();
+    const raw = tokenParam || tokenInput.trim();
+    const token = cleanTokenString(raw);
+    if (!token) return;
     setAdmitting(true);
     try {
       const res = await api.post<TicketVerifyResult>("/tickets/validate", {
@@ -276,6 +292,17 @@ function TicketVerifyContent() {
                       </>
                     )}
                   </Button>
+                </div>
+              )}
+
+              {!isOrganizer && !result.isAlreadyRedeemed && (
+                <div className="rounded-lg bg-muted/60 p-3 text-center text-xs text-muted-foreground border border-border/40 space-y-1">
+                  <p>
+                    Viewing digital pass. Sign in with an <strong>Organizer</strong> account to stamp entry and admit this attendee.
+                  </p>
+                  <Link href="/login" className="font-semibold text-primary underline inline-block">
+                    Sign in as Organizer &rarr;
+                  </Link>
                 </div>
               )}
             </CardContent>

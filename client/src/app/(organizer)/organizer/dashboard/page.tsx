@@ -19,6 +19,7 @@ import {
   ShieldAlert,
   Users,
   AlertTriangle,
+  Scan,
 } from "lucide-react";
 
 export default function OrganizerDashboardPage() {
@@ -108,12 +109,20 @@ export default function OrganizerDashboardPage() {
             Welcome back, {user.name}. Manage your hosted events, monitor RSVPs, and review attendee requests.
           </p>
         </div>
-        <Link href="/organizer/events/create">
-          <Button className="gap-2 text-xs font-semibold h-10 shadow-sm">
-            <PlusCircle className="h-4 w-4" />
-            Host New Event
-          </Button>
-        </Link>
+        <div className="flex items-center gap-2.5">
+          <Link href="/tickets/verify">
+            <Button variant="outline" className="gap-2 text-xs font-semibold h-10 shadow-sm">
+              <Scan className="h-4 w-4 text-primary" />
+              Verify Tickets
+            </Button>
+          </Link>
+          <Link href="/organizer/events/create">
+            <Button className="gap-2 text-xs font-semibold h-10 shadow-sm">
+              <PlusCircle className="h-4 w-4" />
+              Host New Event
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* Metrics Grid */}

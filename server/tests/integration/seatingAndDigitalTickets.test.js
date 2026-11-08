@@ -497,5 +497,82 @@ describe('Interactive Seating, Concurrency & Digital Tickets (Integration)', () 
       assert.equal(c1Db.status, SEAT_STATUS.AVAILABLE, 'Unclaimed seat C1 must not be partially held');
     }
   });
+
+  it('14. QR verification seamlessly handles General Admission registrations and URL-wrapped tokens', async () => {
+    // Create a standalone GA registration (without Booking document)
+    const gaEvent = await Event.create({
+      title: 'Seating Test Event - General Admission',
+      description: 'GA verification test',
+      eventDate: new Date(Date.now() + 86400000 * 5),
+      venue: 'Auditorium Hall',
+      seatLimit: 100,
+      seatsBooked: 1,
+      isPaid: false,
+      ticketPrice: 0,
+      status: 'PUBLISHED',
+      organizerId: new mongoose.Types.ObjectId(organizerUser.id)
+    });
+
+    const gaReg = await Registration.create({
+      eventId: gaEvent._id,
+      attendeeId: new mongoose.Types.ObjectId(attendeeUser2.id),
+      status: 'CONFIRMED'
+    });
+
+    // 1. Verify via attendee registrations listing (populates signed token and qrCodePayload)
+    const myRegsRes = await attendeeAgent2.get('/api/v1/registrations/me');
+    assert.equal(myRegsRes.status, 200);
+    const matched = myRegsRes.body.data.registrations.find(
+      (r) => r._id === gaReg._id.toString()
+    );
+    assert.ok(matched, 'GA registration must appear in attendee list');
+    assert.ok(matched.booking, 'GA registration must have populated booking metadata');
+    assert.ok(matched.booking.ticketToken, 'GA registration must have signed ticket token');
+    assert.ok(matched.booking.qrCodePayload.includes('/tickets/verify?token='));
+
+    // 2. Verify scanning with the full signed token
+    const verifySignedRes = await organizerAgent.get(
+      `/api/v1/tickets/verify?token=${encodeURIComponent(matched.booking.ticketToken)}`
+    );
+    assert.equal(verifySignedRes.status, 200);
+    assert.equal(verifySignedRes.body.data.isValid, true);
+    assert.equal(verifySignedRes.body.data.eventTitle, gaEvent.title);
+    assert.equal(verifySignedRes.body.data.attendeeName, attendeeUser2.name);
+
+    // 3. Verify scanning when full URL is supplied
+    const fullUrl = `https://eventora.omslabs.tech/tickets/verify?token=${encodeURIComponent(matched.booking.ticketToken)}`;
+    const verifyUrlRes = await organizerAgent.get(
+      `/api/v1/tickets/verify?token=${encodeURIComponent(fullUrl)}`
+    );
+    assert.equal(verifyUrlRes.status, 200);
+    assert.equal(verifyUrlRes.body.data.isValid, true);
+
+    // 4. Verify manual lookup via registration ID
+    const verifyIdRes = await organizerAgent.get(
+      `/api/v1/tickets/verify?token=${gaReg._id.toString()}`
+    );
+    assert.equal(verifyIdRes.status, 200);
+    assert.equal(verifyIdRes.body.data.isValid, true);
+
+    // 5. Organizer admits attendee and marks redeemed
+    const admitRes = await organizerAgent
+      .post('/api/v1/tickets/validate')
+      .set('x-csrf-token', csrfOrg)
+      .send({ token: matched.booking.ticketToken, markRedeemed: true });
+
+    assert.equal(admitRes.status, 200);
+    assert.equal(admitRes.body.data.isValid, true);
+    assert.equal(admitRes.body.data.redeemed, true);
+
+    // 6. Double admission attempt is rejected
+    const doubleAdmitRes = await organizerAgent
+      .post('/api/v1/tickets/validate')
+      .set('x-csrf-token', csrfOrg)
+      .send({ token: matched.booking.ticketToken, markRedeemed: true });
+
+    assert.equal(doubleAdmitRes.status, 200);
+    assert.equal(doubleAdmitRes.body.data.isValid, false);
+    assert.equal(doubleAdmitRes.body.data.isAlreadyRedeemed, true);
+  });
 });
 

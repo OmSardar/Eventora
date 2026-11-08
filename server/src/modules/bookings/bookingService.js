@@ -338,70 +338,185 @@ export async function verifyAndRedeemTicket({ token, scannerUserId = null, markR
     throw new BadRequestError('Ticket verification token is required.');
   }
 
-  const payload = verifySignedTicketToken(token);
-  if (!payload) {
-    return {
-      isValid: false,
-      reason: 'INVALID_SIGNATURE',
-      message: 'Ticket token is invalid or has been tampered with.'
-    };
+  // 1. Sanitize token (extract if passed as full URL)
+  let cleanToken = String(token).trim();
+  if (cleanToken.includes('token=')) {
+    try {
+      const urlObj = new URL(cleanToken);
+      cleanToken = urlObj.searchParams.get('token') || cleanToken;
+    } catch (_) {
+      const match = cleanToken.match(/token=([^&]+)/);
+      if (match && match[1]) {
+        cleanToken = decodeURIComponent(match[1]);
+      }
+    }
   }
 
-  const booking = await Booking.findOne({ bookingReference: payload.ref })
-    .populate('eventId', 'title eventDate venue organizerId')
-    .populate('attendeeId', 'name email');
+  // 2. Attempt HMAC cryptographic signature verification
+  const payload = verifySignedTicketToken(cleanToken);
 
-  if (!booking) {
-    return {
-      isValid: false,
-      reason: 'BOOKING_NOT_FOUND',
-      message: 'No booking matching this ticket reference could be found.'
-    };
+  let booking = null;
+  let registration = null;
+
+  if (payload) {
+    // A. Signed token: search Booking by reference
+    if (payload.ref) {
+      booking = await Booking.findOne({ bookingReference: payload.ref })
+        .populate('eventId', 'title eventDate venue organizerId')
+        .populate('attendeeId', 'name email');
+    }
+
+    // B. If not found in Booking, search Registration
+    if (!booking && payload.evt && payload.att) {
+      registration = await Registration.findOne({
+        eventId: new mongoose.Types.ObjectId(payload.evt),
+        attendeeId: new mongoose.Types.ObjectId(payload.att)
+      })
+        .populate('eventId', 'title eventDate venue organizerId')
+        .populate('attendeeId', 'name email');
+    }
+  } else {
+    // C. Non-signed fallback (manual booking reference or direct ID lookup)
+    const upperToken = cleanToken.toUpperCase();
+
+    // Check Booking by reference
+    booking = await Booking.findOne({ bookingReference: upperToken })
+      .populate('eventId', 'title eventDate venue organizerId')
+      .populate('attendeeId', 'name email');
+
+    // Check by ObjectId if valid
+    if (!booking && mongoose.Types.ObjectId.isValid(cleanToken)) {
+      const objId = new mongoose.Types.ObjectId(cleanToken);
+      booking = await Booking.findById(objId)
+        .populate('eventId', 'title eventDate venue organizerId')
+        .populate('attendeeId', 'name email');
+
+      if (!booking) {
+        registration = await Registration.findById(objId)
+          .populate('eventId', 'title eventDate venue organizerId')
+          .populate('attendeeId', 'name email');
+      }
+    }
+
+    // Check Registration by reference prefix (EVT-XXXXXXXX)
+    if (!booking && !registration && upperToken.startsWith('EVT-')) {
+      const hexPrefix = cleanToken.slice(4).toLowerCase();
+      if (/^[0-9a-f]{6,8}$/i.test(hexPrefix)) {
+        const potentialRegs = await Registration.find()
+          .populate('eventId', 'title eventDate venue organizerId')
+          .populate('attendeeId', 'name email')
+          .sort({ createdAt: -1 })
+          .limit(20);
+
+        registration =
+          potentialRegs.find((r) => r._id.toString().toLowerCase().startsWith(hexPrefix)) || null;
+      }
+    }
   }
 
-  if (booking.status !== BOOKING_STATUS.CONFIRMED) {
-    return {
-      isValid: false,
-      reason: 'BOOKING_INACTIVE',
-      message: `Booking is currently ${booking.status}. Admission not permitted.`
-    };
-  }
+  // 3. Process Booking admission
+  if (booking) {
+    if (booking.status !== BOOKING_STATUS.CONFIRMED) {
+      return {
+        isValid: false,
+        reason: 'BOOKING_INACTIVE',
+        message: `Booking is currently ${booking.status}. Admission not permitted.`
+      };
+    }
 
-  if (booking.isRedeemed) {
+    if (booking.isRedeemed) {
+      return {
+        isValid: false,
+        isAlreadyRedeemed: true,
+        reason: 'ALREADY_REDEEMED',
+        message: `This ticket was already redeemed on ${booking.redeemedAt ? new Date(booking.redeemedAt).toLocaleString() : 'a previous scan'}.`,
+        bookingReference: booking.bookingReference,
+        eventTitle: booking.eventId?.title,
+        attendeeName: booking.attendeeId?.name,
+        seats: booking.seatLabels,
+        redeemedAt: booking.redeemedAt
+      };
+    }
+
+    if (markRedeemed) {
+      booking.isRedeemed = true;
+      booking.redeemedAt = new Date();
+      if (scannerUserId) {
+        booking.redeemedBy = new mongoose.Types.ObjectId(scannerUserId);
+      }
+      await booking.save();
+      logger.info({ bookingReference: booking.bookingReference }, 'Booking ticket successfully marked redeemed');
+    }
+
     return {
-      isValid: false,
-      isAlreadyRedeemed: true,
-      reason: 'ALREADY_REDEEMED',
-      message: `This ticket was already redeemed on ${booking.redeemedAt ? new Date(booking.redeemedAt).toLocaleString() : 'a previous scan'}.`,
+      isValid: true,
+      isAlreadyRedeemed: false,
       bookingReference: booking.bookingReference,
       eventTitle: booking.eventId?.title,
+      eventDate: booking.eventId?.eventDate,
+      venue: booking.eventId?.venue,
       attendeeName: booking.attendeeId?.name,
-      seats: booking.seatLabels,
-      redeemedAt: booking.redeemedAt
+      seats: booking.seatLabels && booking.seatLabels.length > 0 ? booking.seatLabels : ['Reserved Admission'],
+      ticketCount: booking.seatLabels?.length || 1,
+      redeemed: markRedeemed
     };
   }
 
-  if (markRedeemed) {
-    booking.isRedeemed = true;
-    booking.redeemedAt = new Date();
-    if (scannerUserId) {
-      booking.redeemedBy = new mongoose.Types.ObjectId(scannerUserId);
+  // 4. Process Registration admission
+  if (registration) {
+    if (registration.status !== REGISTRATION_STATUS.CONFIRMED) {
+      return {
+        isValid: false,
+        reason: 'REGISTRATION_INACTIVE',
+        message: `Registration is currently ${registration.status}. Admission not permitted.`
+      };
     }
-    await booking.save();
-    logger.info({ bookingReference: booking.bookingReference }, 'Ticket successfully marked redeemed');
+
+    const regRef = payload?.ref || `EVT-${registration._id.toString().substring(0, 8).toUpperCase()}`;
+
+    if (registration.isRedeemed) {
+      return {
+        isValid: false,
+        isAlreadyRedeemed: true,
+        reason: 'ALREADY_REDEEMED',
+        message: `This ticket was already redeemed on ${registration.redeemedAt ? new Date(registration.redeemedAt).toLocaleString() : 'a previous scan'}.`,
+        bookingReference: regRef,
+        eventTitle: registration.eventId?.title,
+        attendeeName: registration.attendeeId?.name,
+        seats: ['General Admission'],
+        redeemedAt: registration.redeemedAt
+      };
+    }
+
+    if (markRedeemed) {
+      registration.isRedeemed = true;
+      registration.redeemedAt = new Date();
+      if (scannerUserId) {
+        registration.redeemedBy = new mongoose.Types.ObjectId(scannerUserId);
+      }
+      await registration.save();
+      logger.info({ registrationId: registration._id }, 'Registration ticket successfully marked redeemed');
+    }
+
+    return {
+      isValid: true,
+      isAlreadyRedeemed: false,
+      bookingReference: regRef,
+      eventTitle: registration.eventId?.title,
+      eventDate: registration.eventId?.eventDate,
+      venue: registration.eventId?.venue,
+      attendeeName: registration.attendeeId?.name,
+      seats: ['General Admission'],
+      ticketCount: 1,
+      redeemed: markRedeemed
+    };
   }
 
+  // 5. Neither Booking nor Registration found
   return {
-    isValid: true,
-    isAlreadyRedeemed: false,
-    bookingReference: booking.bookingReference,
-    eventTitle: booking.eventId?.title,
-    eventDate: booking.eventId?.eventDate,
-    venue: booking.eventId?.venue,
-    attendeeName: booking.attendeeId?.name,
-    seats: booking.seatLabels,
-    ticketCount: booking.seatLabels.length,
-    redeemed: markRedeemed
+    isValid: false,
+    reason: payload ? 'BOOKING_NOT_FOUND' : 'INVALID_SIGNATURE',
+    message: 'No valid ticket pass or booking matching this token could be found.'
   };
 }
 

@@ -6,6 +6,7 @@ import { User } from '../users/User.js';
 import { Payment } from '../payments/Payment.js';
 import { RefundOperation } from '../payments/RefundOperation.js';
 import { Booking } from '../bookings/Booking.js';
+import { generateSignedTicketToken } from '../bookings/ticketCrypto.js';
 import { EventSeat } from '../seating/EventSeat.js';
 import {
   EVENT_STATUS,
@@ -280,6 +281,26 @@ export async function getAttendeeRegistrations(attendeeId) {
           category: s.category,
           price: s.price
         }))
+      };
+    } else {
+      const regRef = `EVT-${reg._id.toString().substring(0, 8).toUpperCase()}`;
+      const token = generateSignedTicketToken({
+        bookingReference: regRef,
+        eventId: reg.eventId?._id || reg.eventId,
+        attendeeId: reg.attendeeId
+      });
+      populatedBooking = {
+        _id: reg._id.toString(),
+        bookingReference: regRef,
+        status: reg.status,
+        totalAmount: reg.ticketPrice || 0,
+        currency: reg.currency || 'INR',
+        ticketToken: token,
+        qrCodePayload: `${appBaseUrl}/tickets/verify?token=${encodeURIComponent(token)}`,
+        seatLabels: ['General Admission'],
+        seats: [],
+        isRedeemed: Boolean(reg.isRedeemed),
+        redeemedAt: reg.redeemedAt
       };
     }
 

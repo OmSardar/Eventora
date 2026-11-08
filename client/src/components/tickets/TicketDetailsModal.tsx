@@ -74,10 +74,18 @@ export function TicketDetailsModal({
     booking?.bookingReference ||
     `EVT-${(registration._id || registration.id || "").substring(0, 8).toUpperCase()}`;
 
-  const qrData =
-    booking?.qrCodePayload ||
+  const currentOrigin =
+    typeof window !== "undefined" && window.location.origin
+      ? window.location.origin
+      : "https://eventora.omslabs.tech";
+
+  const tokenValue =
     booking?.ticketToken ||
-    `${typeof window !== "undefined" ? window.location.origin : "https://eventora.omslabs.tech"}/tickets/verify?token=${registration._id || registration.id}`;
+    booking?.bookingReference ||
+    registration._id ||
+    registration.id;
+
+  const qrData = `${currentOrigin}/tickets/verify?token=${encodeURIComponent(tokenValue || "")}`;
 
   const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=4&data=${encodeURIComponent(
     qrData
@@ -260,6 +268,15 @@ export function TicketDetailsModal({
                 <span className="font-mono text-[9px] text-zinc-600 mt-1 font-semibold uppercase tracking-wider">
                   Scan at Entrance
                 </span>
+                <a
+                  href={qrData}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-mono text-[10px] text-indigo-600 hover:underline mt-1 flex items-center gap-1 font-semibold"
+                >
+                  <ExternalLink className="h-3 w-3" />
+                  Verify Pass Link
+                </a>
               </div>
 
               {/* Ticket Meta Details */}

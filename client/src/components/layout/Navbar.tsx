@@ -19,6 +19,7 @@ import {
   LayoutDashboard,
   ShieldCheck,
   AlertTriangle,
+  Scan,
 } from "lucide-react";
 
 export function Navbar() {
@@ -109,6 +110,17 @@ export function Navbar() {
               >
                 <Calendar className="h-4 w-4" />
                 My Events
+              </Link>
+              <Link
+                href="/tickets/verify"
+                className={`flex items-center gap-1.5 transition-colors hover:text-foreground ${
+                  pathname === "/tickets/verify"
+                    ? "text-foreground font-semibold"
+                    : "text-muted-foreground"
+                }`}
+              >
+                <Scan className="h-4 w-4" />
+                Verify Tickets
               </Link>
             </>
           )}
@@ -247,6 +259,13 @@ export function Navbar() {
                 className="block text-sm font-medium py-1.5 text-foreground"
               >
                 My Hosted Events
+              </Link>
+              <Link
+                href="/tickets/verify"
+                onClick={() => setMobileMenuOpen(false)}
+                className="block text-sm font-medium py-1.5 text-foreground"
+              >
+                Scan &amp; Verify Tickets
               </Link>
               <Link
                 href="/organizer/events/create"

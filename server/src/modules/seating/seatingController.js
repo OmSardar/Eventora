@@ -160,7 +160,7 @@ export async function verifyTicket(req, res, next) {
   try {
     const token = req.query?.token || req.body?.token;
     const markRedeemed = req.query?.markRedeemed === 'true' || req.body?.markRedeemed === true;
-    const scannerUserId = req.session?.user?.id || null;
+    const scannerUserId = req.user?.id || req.session?.user?.id || null;
 
     const result = await bookingService.verifyAndRedeemTicket({
       token,

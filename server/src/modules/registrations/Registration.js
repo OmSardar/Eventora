@@ -74,6 +74,20 @@ const registrationSchema = new mongoose.Schema(
     seatReleasedAt: {
       type: Date,
       default: null
+    },
+    isRedeemed: {
+      type: Boolean,
+      default: false,
+      index: true
+    },
+    redeemedAt: {
+      type: Date,
+      default: null
+    },
+    redeemedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null
     }
   },
   {

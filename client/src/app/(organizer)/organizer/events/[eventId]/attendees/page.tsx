@@ -20,6 +20,7 @@ import {
   Search,
   ShieldAlert,
   Users,
+  Scan,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 
@@ -135,6 +136,16 @@ export default function EventAttendeesPage() {
             </span>
           </div>
 
+          <Link href="/tickets/verify">
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-xs gap-1.5 h-9"
+            >
+              <Scan className="h-3.5 w-3.5 text-primary" /> Scan Tickets
+            </Button>
+          </Link>
+
           <Link href={`/organizer/events/${eventId}/seating`}>
             <Button
               size="sm"
@@ -197,6 +208,7 @@ export default function EventAttendeesPage() {
                     <th className="py-3 px-3 font-semibold">Email</th>
                     <th className="py-3 px-3 font-semibold">Registration Date</th>
                     <th className="py-3 px-3 font-semibold">Status</th>
+                    <th className="py-3 px-3 font-semibold text-right">Verification</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/40">
@@ -227,6 +239,14 @@ export default function EventAttendeesPage() {
                         >
                           {att.status}
                         </Badge>
+                      </td>
+                      <td className="py-3 px-3 text-right">
+                        <Link href={`/tickets/verify?token=${att.registrationId}`}>
+                          <Button variant="ghost" size="sm" className="h-7 text-[11px] gap-1 font-medium hover:text-primary">
+                            <Scan className="h-3 w-3" />
+                            Verify Pass
+                          </Button>
+                        </Link>
                       </td>
                     </tr>
                   ))}

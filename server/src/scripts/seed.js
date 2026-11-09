@@ -139,7 +139,7 @@ export async function seedTargetDatabase(mongoUri, label = 'Target') {
 
 
   // 3. Create fresh, realistic seed events (scheduled 7 to 60 days ahead)
-  console.log(`[${label}] Seeding 11 fresh, production-ready events across top hubs...`);
+  console.log(`[${label}] Seeding 15 fresh, production-ready events across top hubs...`);
   const now = Date.now();
   const dayMs = 24 * 60 * 60 * 1000;
 
@@ -659,6 +659,124 @@ export async function seedTargetDatabase(mongoUri, label = 'Target') {
     confirmedAt: new Date()
   });
 
+  // Event 12: Chennai — Web Performance & Edge Computing Meetup (General Admission, Free RSVP)
+  await Event.create({
+    title: 'Chennai Web Performance & Edge Computing Meetup',
+    description:
+      'Join frontend infrastructure engineers and CDN specialists to explore Core Web Vitals optimization, edge computing with Cloudflare Workers, streaming SSR in React 19, and HTTP/3 transport performance.',
+    eventDate: new Date(now + 16 * dayMs),
+    venue: 'Tidel Park Auditorium, Rajiv Gandhi Salai, Taramani, Chennai',
+    seatLimit: 100,
+    seatsBooked: 0,
+    organizerId: demoOrganizer._id,
+    status: EVENT_STATUS.PUBLISHED,
+    category: 'Technology',
+    seatingType: 'GENERAL_ADMISSION',
+    isPaid: false,
+    ticketPrice: 0,
+    currency: 'INR',
+    bannerUrl: 'https://images.unsplash.com/photo-1515187029135-18ee286d815b?auto=format&fit=crop&w=1400&q=85',
+    image: {
+      source: 'URL',
+      url: 'https://images.unsplash.com/photo-1515187029135-18ee286d815b?auto=format&fit=crop&w=1400&q=85',
+      publicId: null
+    }
+  });
+
+  // Event 13: Delhi NCR — Design Systems & Micro-Typography Symposium (Assigned Seating, ₹699)
+  const event13 = await Event.create({
+    title: 'Design Systems & Micro-Typography Symposium',
+    description:
+      'A specialized gathering for product designers and design engineers focusing on design tokens, multi-brand Figma-to-code pipelines, fluid micro-typography, and high-fidelity accessibility compliance (WCAG 2.2 AAA).',
+    eventDate: new Date(now + 23 * dayMs),
+    venue: 'India Habitat Centre, Lodhi Road, New Delhi',
+    seatLimit: 50,
+    seatsBooked: 0,
+    organizerId: demoOrganizer._id,
+    status: EVENT_STATUS.PUBLISHED,
+    category: 'Design',
+    seatingType: 'ASSIGNED_SEATING',
+    isPaid: true,
+    ticketPrice: 699,
+    currency: 'INR',
+    maxTicketsPerBooking: 6,
+    bannerUrl: 'https://images.unsplash.com/photo-1507238691740-187a5b1d37b8?auto=format&fit=crop&w=1400&q=85',
+    image: {
+      source: 'URL',
+      url: 'https://images.unsplash.com/photo-1507238691740-187a5b1d37b8?auto=format&fit=crop&w=1400&q=85',
+      publicId: null
+    }
+  });
+
+  await generateEventSeats(event13._id, {
+    generationMode: 'AUTOMATIC',
+    totalSeats: 50,
+    rows: 5,
+    seatsPerRow: 10,
+    startingRowLabel: 'A',
+    category: 'STANDARD',
+    price: 699
+  });
+
+  // Event 14: Mumbai — SaaS Founders Capital & Growth Summit 2026 (Assigned Seating, ₹1999)
+  const event14 = await Event.create({
+    title: 'SaaS Founders Capital & Growth Summit 2026',
+    description:
+      'Elite gathering of B2B SaaS executives, series A/B founders, and growth equity investors tackling enterprise PLG playbooks, net dollar retention, outbound sales automation, and secondary share liquidity.',
+    eventDate: new Date(now + 31 * dayMs),
+    venue: 'JW Marriott Sahar, International Airport Zone, Mumbai',
+    seatLimit: 60,
+    seatsBooked: 0,
+    organizerId: demoOrganizer._id,
+    status: EVENT_STATUS.PUBLISHED,
+    category: 'Business',
+    seatingType: 'ASSIGNED_SEATING',
+    isPaid: true,
+    ticketPrice: 1999,
+    currency: 'INR',
+    maxTicketsPerBooking: 6,
+    bannerUrl: 'https://images.unsplash.com/photo-1551836022-d5d88e9218df?auto=format&fit=crop&w=1400&q=85',
+    image: {
+      source: 'URL',
+      url: 'https://images.unsplash.com/photo-1551836022-d5d88e9218df?auto=format&fit=crop&w=1400&q=85',
+      publicId: null
+    }
+  });
+
+  await generateEventSeats(event14._id, {
+    generationMode: 'AUTOMATIC',
+    totalSeats: 60,
+    rows: 6,
+    seatsPerRow: 10,
+    startingRowLabel: 'A',
+    category: 'STANDARD',
+    price: 1999
+  });
+
+  // Event 15: Bengaluru — Electronic Music & Creative Coding Expo (General Admission, ₹899)
+  await Event.create({
+    title: 'Electronic Music & Creative Coding Expo',
+    description:
+      'An immersive nocturnal showcase exploring generative modular synthesis, live algorithmic audiovisual performance in Max/MSP & Hydra, WebAudio API spatial audio, and indie electronic artist showcases.',
+    eventDate: new Date(now + 38 * dayMs),
+    venue: 'The Humming Tree Cultural Arena, Indiranagar, Bengaluru',
+    seatLimit: 150,
+    seatsBooked: 0,
+    organizerId: demoOrganizer._id,
+    status: EVENT_STATUS.PUBLISHED,
+    category: 'Music',
+    seatingType: 'GENERAL_ADMISSION',
+    isPaid: true,
+    ticketPrice: 899,
+    currency: 'INR',
+    bannerUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=1400&q=85',
+    image: {
+      source: 'URL',
+      url: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=1400&q=85',
+      publicId: null
+    }
+  });
+
   // 4. Create in-app notifications
   console.log(`[${label}] Creating initial notification feed...`);
   await Notification.create({
@@ -683,7 +801,7 @@ export async function seedTargetDatabase(mongoUri, label = 'Target') {
     isRead: false
   });
 
-  console.log(`[${label}] Seeding complete! Total events created: 11.`);
+  console.log(`[${label}] Seeding complete! Total events created: 15.`);
   await mongoose.disconnect();
   console.log(`[${label}] Disconnected cleanly from MongoDB.\n`);
 }

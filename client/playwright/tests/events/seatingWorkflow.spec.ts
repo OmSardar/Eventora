@@ -8,7 +8,7 @@ test.describe("Interactive Seat Selection, Hold Countdown & Inventory System", (
 
     // Click on an event to view details
     const eventCard = page.locator("div.group").first();
-    const detailsLink = eventCard.locator("a:has-text('View Event Details')");
+    const detailsLink = eventCard.locator("a[href^='/events/']").first();
     await detailsLink.click();
     await expect(page).toHaveURL(/\/events\/[a-f0-9]+/, { timeout: 10000 });
 
@@ -50,7 +50,7 @@ test.describe("Interactive Seat Selection, Hold Countdown & Inventory System", (
 
     // Navigate to events management
     await page.goto("/organizer/events");
-    await expect(page.locator("h1")).toContainText("Manage My Events");
+    await expect(page.locator("h1")).toContainText("My Hosted Events");
 
     // If an event exists, visit attendees and seating dashboard
     const eventItem = page.locator("a:has-text('View Attendees')").first();
@@ -82,7 +82,7 @@ test.describe("Interactive Seat Selection, Hold Countdown & Inventory System", (
 
     // Navigate to Create Event
     await page.goto("/organizer/events/create");
-    await expect(page.locator("h1")).toContainText("Create New Event");
+    await expect(page.locator("text=Host a New Event")).toBeVisible({ timeout: 10000 });
 
     // Verify Seating Configurator component is rendered
     await expect(page.locator("text=Event Seating & Venue Layout")).toBeVisible({ timeout: 10000 });

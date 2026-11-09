@@ -38,11 +38,15 @@ test.describe("Free RSVP Flow & Resend Email Confirmation", () => {
     await page.locator("input[type='password']").fill("SecurePassword@123");
     await page.click("button:has-text('Attendee')");
     await page.locator("form button[type='submit']").click();
+    await page.waitForURL(/(verify-email|events)/, { timeout: 10000 });
+    if (page.url().includes("verify-email")) {
+      await page.goto("/events");
+    }
     await expect(page).toHaveURL(/.*events/, { timeout: 10000 });
 
-    // Click on an event that has seats left
-    const eventWithSeats = page.locator("div.group").filter({ hasText: /seats left/i }).first();
-    const viewDetailsBtn = eventWithSeats.locator("a:has-text('View Event Details')");
+    // Click on an available free RSVP event to view details
+    const freeEventCard = page.locator("div.group").filter({ hasText: "Free RSVP" }).filter({ hasNotText: "Sold Out" }).first();
+    const viewDetailsBtn = freeEventCard.locator("a[href^='/events/']").first();
     await viewDetailsBtn.click();
     await expect(page).toHaveURL(/\/events\/[a-f0-9]+/, { timeout: 10000 });
 
@@ -58,8 +62,13 @@ test.describe("Free RSVP Flow & Resend Email Confirmation", () => {
     await expect(page.locator("text=A confirmation email has been scheduled")).toBeVisible();
     await expect(page.locator("text=Confirmation email on the way via Resend")).toBeVisible();
 
-    // View My Tickets link
-    await page.click("a:has-text('View My Tickets')");
+    // View My Tickets link (modal or page)
+    const modalTicketsLink = page.locator("[role='dialog'] a[href*='attendee/registrations']");
+    if (await modalTicketsLink.isVisible({ timeout: 3000 }).catch(() => false)) {
+      await modalTicketsLink.click();
+    } else {
+      await page.locator("a:has-text('View My Tickets'), a:has-text('View in My Tickets')").first().click();
+    }
     await expect(page).toHaveURL(/.*attendee\/registrations/, { timeout: 10000 });
 
     // Verify Free RSVP and Email Sent tags

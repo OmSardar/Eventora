@@ -15,6 +15,11 @@ jobs:
         image: mongo:7.0
         ports:
           - 27017:27017
+        options: >-
+          --health-cmd mongosh
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     steps:
       - name: Checkout Code
@@ -25,11 +30,14 @@ jobs:
         with:
           node-version: 22
           cache: "npm"
+          cache-dependency-path: |
+            server/package-lock.json
+            client/package-lock.json
 
       - name: Install Dependencies
         run: |
-          npm install --prefix server
-          npm install --prefix client
+          npm ci --prefix server
+          npm ci --prefix client
 
       - name: Run Backend Tests (Unit, Integration, Security)
         run: npm test --prefix server
@@ -48,4 +56,43 @@ jobs:
         run: npm run build --prefix client
         env:
           NEXT_PUBLIC_API_URL: http://localhost:5000/api/v1
+          INTERNAL_API_URL: http://localhost:5000/api/v1
+          NEXT_PUBLIC_SITE_URL: http://localhost:3000
+
+      - name: Install Playwright Chromium & OS Dependencies
+        run: npx playwright install --with-deps chromium
+        working-directory: client
+
+      - name: Seed Test Database
+        run: node src/scripts/seed.js --local
+        working-directory: server
+        env:
+          NODE_ENV: test
+          MONGODB_URI: mongodb://localhost:27017/eventora_test
+
+      - name: Run Playwright E2E Tests
+        run: npm run test:e2e
+        working-directory: client
+        env:
+          CI: "true"
+          NODE_ENV: test
+          PORT: 3000
+          PLAYWRIGHT_TEST_BASE_URL: http://localhost:3000
+          MONGODB_URI: mongodb://localhost:27017/eventora_test
+          SESSION_SECRET: ci-test-session-secret-key-min-32-chars!
+          ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+          NEXT_PUBLIC_API_URL: http://localhost:5000/api/v1
+          INTERNAL_API_URL: http://localhost:5000/api/v1
+          NEXT_PUBLIC_SITE_URL: http://localhost:3000
+          AUTO_VERIFY_TEST_ACCOUNTS: "true"
+
+      - name: Upload Playwright Test Artifacts
+        uses: actions/upload-artifact@v4
+        if: ${{ failure() }}
+        with:
+          name: playwright-artifacts
+          path: |
+            client/playwright-report/
+            client/test-results/
+          retention-days: 14
 

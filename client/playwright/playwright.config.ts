@@ -1,10 +1,9 @@
 import { defineConfig, devices } from "@playwright/test";
 import path from "path";
-import { fileURLToPath } from "url";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 const baseURL = process.env.PLAYWRIGHT_TEST_BASE_URL || "http://localhost:3000";
+const serverCwd = path.resolve(__dirname, "../../server");
+const clientCwd = path.resolve(__dirname, "..");
 
 export default defineConfig({
   testDir: "./tests",
@@ -13,36 +12,43 @@ export default defineConfig({
   retries: 0,
   workers: 1,
   timeout: 30000,
-  reporter: "list",
+  reporter: process.env.CI
+    ? [["list"], ["html", { open: "never", outputFolder: "playwright-report" }]]
+    : "list",
   use: {
     baseURL,
-    trace: "on-first-retry",
+    trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },
   webServer: [
     {
       command: "node src/server.js",
-      cwd: path.resolve(__dirname, "../../server"),
+      cwd: serverCwd,
       url: "http://localhost:5000/api/v1/health",
-      reuseExistingServer: true,
-      timeout: 20000,
+      reuseExistingServer: !process.env.CI,
+      timeout: 60000,
       env: {
         ...process.env,
         PORT: "5000",
         NODE_ENV: "test",
-        MONGODB_URI: "mongodb://127.0.0.1:27017/eventora",
+        MONGODB_URI: process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/eventora",
         ALLOWED_ORIGINS: "http://localhost:3000,http://127.0.0.1:3000",
+        SESSION_SECRET: process.env.SESSION_SECRET || "ci-test-session-secret-key-min-32-chars!",
+        AUTO_VERIFY_TEST_ACCOUNTS: "true",
       },
     },
     {
       command: "npm run start",
-      cwd: path.resolve(__dirname, ".."),
+      cwd: clientCwd,
       url: "http://localhost:3000",
-      reuseExistingServer: true,
-      timeout: 25000,
+      reuseExistingServer: !process.env.CI,
+      timeout: 60000,
       env: {
         ...process.env,
+        PORT: "3000",
         NEXT_PUBLIC_API_URL: "http://localhost:5000/api/v1",
+        INTERNAL_API_URL: "http://localhost:5000/api/v1",
+        NEXT_PUBLIC_SITE_URL: baseURL,
       },
     },
   ],

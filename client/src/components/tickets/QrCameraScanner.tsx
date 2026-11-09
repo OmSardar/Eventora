@@ -231,30 +231,30 @@ export function QrCameraScanner({ onScan, isPaused = false }: QrCameraScannerPro
       <div id="temp-qr-file-processor" className="hidden" />
 
       {/* Main Viewfinder Box */}
-      <div className="relative overflow-hidden rounded-2xl border-2 border-border/80 bg-black shadow-xl">
+      <div className={`relative overflow-hidden rounded-2xl border-2 border-border/80 shadow-xl transition-colors ${isScanning ? "bg-black" : "bg-card"}`}>
         {/* HTML5 QR Container */}
         <div
           id={containerId}
-          className={`w-full aspect-square max-h-[380px] sm:max-h-[420px] transition-opacity duration-200 ${
+          className={`w-full max-w-md mx-auto aspect-square overflow-hidden transition-opacity duration-200 ${
             isScanning ? "opacity-100" : "opacity-0 absolute pointer-events-none"
           }`}
         />
 
         {/* Inactive Placeholder when camera is not running */}
         {!isScanning && (
-          <div className="flex flex-col items-center justify-center p-8 text-center aspect-square max-h-[380px] bg-gradient-to-b from-card/80 to-card">
-            <div className="h-16 w-16 rounded-2xl bg-primary/10 border border-primary/20 text-primary flex items-center justify-center mb-4 shadow-inner">
+          <div className="w-full flex flex-col items-center justify-center p-8 sm:p-12 text-center bg-gradient-to-b from-card/90 via-card to-card/80 min-h-[340px] sm:min-h-[380px]">
+            <div className="h-16 w-16 rounded-2xl bg-primary/10 border border-primary/20 text-primary flex items-center justify-center mb-4 shadow-sm">
               <Camera className="h-8 w-8" />
             </div>
-            <h3 className="text-base font-bold text-foreground">Mobile Camera Scanner</h3>
-            <p className="text-xs text-muted-foreground max-w-xs mt-1 mb-5 leading-relaxed">
+            <h3 className="text-base sm:text-lg font-bold text-foreground">Mobile Camera Scanner</h3>
+            <p className="text-xs text-muted-foreground max-w-sm mt-1.5 mb-6 leading-relaxed">
               Use your mobile phone or tablet back camera to scan ticket QR codes instantly at venue check-in.
             </p>
 
             <Button
               onClick={() => startScanner()}
               disabled={startingCamera}
-              className="gap-2 h-11 px-6 font-semibold text-xs shadow-md bg-primary hover:bg-primary/90 text-primary-foreground"
+              className="gap-2 h-11 px-7 font-semibold text-xs shadow-md bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl"
             >
               {startingCamera ? (
                 <>

@@ -60,6 +60,12 @@ export const SORT_OPTIONS = [
   { label: "Title: A to Z", value: "title" },
 ];
 
+export const AVAILABILITY_OPTIONS = [
+  { label: "All Seats", value: "all" },
+  { label: "Available", value: "available" },
+  { label: "Sold Out", value: "sold_out" },
+];
+
 export function EventsBrowseView() {
   const searchParams = useSearchParams();
 
@@ -67,15 +73,18 @@ export function EventsBrowseView() {
   const [selectedCategory, setSelectedCategory] = useState(searchParams.get("category") || "All");
   const [selectedLocation, setSelectedLocation] = useState(searchParams.get("location") || "All");
   const [selectedSort, setSelectedSort] = useState(searchParams.get("sort") || "soonest");
+  const [selectedAvailability, setSelectedAvailability] = useState(searchParams.get("availability") || "all");
 
   // Keep state in sync if user clicks link with search params
   useEffect(() => {
     const cat = searchParams.get("category");
     const loc = searchParams.get("location");
     const s = searchParams.get("search");
+    const avail = searchParams.get("availability");
     if (cat) setSelectedCategory(cat);
     if (loc) setSelectedLocation(loc);
     if (s) setSearchTerm(s);
+    if (avail) setSelectedAvailability(avail);
   }, [searchParams]);
 
   const queryParams = new URLSearchParams();
@@ -83,9 +92,10 @@ export function EventsBrowseView() {
   if (selectedCategory !== "All") queryParams.set("category", selectedCategory);
   if (selectedLocation !== "All") queryParams.set("location", selectedLocation);
   if (selectedSort !== "soonest") queryParams.set("sort", selectedSort);
+  if (selectedAvailability !== "all") queryParams.set("availability", selectedAvailability);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["events", searchTerm, selectedCategory, selectedLocation, selectedSort],
+    queryKey: ["events", searchTerm, selectedCategory, selectedLocation, selectedSort, selectedAvailability],
     queryFn: () =>
       api.get<{ events: EventItem[]; pagination: { total: number } }>(
         `/events?${queryParams.toString()}`
@@ -99,13 +109,15 @@ export function EventsBrowseView() {
     searchTerm.trim() !== "" ||
     selectedCategory !== "All" ||
     selectedLocation !== "All" ||
-    selectedSort !== "soonest";
+    selectedSort !== "soonest" ||
+    selectedAvailability !== "all";
 
   const clearAllFilters = () => {
     setSearchTerm("");
     setSelectedCategory("All");
     setSelectedLocation("All");
     setSelectedSort("soonest");
+    setSelectedAvailability("all");
   };
 
   return (
@@ -284,6 +296,52 @@ export function EventsBrowseView() {
               })}
             </div>
           </div>
+
+          {/* Availability Filter Row */}
+          <div className="flex flex-col lg:flex-row lg:items-center gap-2.5 pt-2 border-t border-border/40">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-foreground shrink-0 min-w-[100px]">
+              <Sparkles className="h-3.5 w-3.5 text-primary" />
+              <span>Availability:</span>
+            </div>
+
+            {/* Mobile Availability Dropdown */}
+            <div className="sm:hidden w-full">
+              <Select value={selectedAvailability} onValueChange={(val) => setSelectedAvailability(val)}>
+                <SelectTrigger className="text-xs h-10 rounded-lg" aria-label="Filter events by availability">
+                  <SelectValue placeholder="Select availability" />
+                </SelectTrigger>
+                <SelectContent>
+                  {AVAILABILITY_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Desktop Availability Pills */}
+            <div className="hidden sm:flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+              {AVAILABILITY_OPTIONS.map((opt) => {
+                const isActive = selectedAvailability === opt.value;
+                return (
+                  <Button
+                    key={opt.value}
+                    variant={isActive ? "secondary" : "ghost"}
+                    size="sm"
+                    onClick={() => setSelectedAvailability(opt.value)}
+                    className={`text-xs h-8 px-3 rounded-lg shrink-0 transition-all font-medium ${
+                      isActive
+                        ? "bg-primary/15 text-primary font-bold border border-primary/30"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {opt.label}
+                  </Button>
+                );
+              })}
+            </div>
+          </div>
         </div>
 
         {/* Active Filter Chips & Results Header */}
@@ -316,6 +374,19 @@ export function EventsBrowseView() {
                   onClick={() => setSelectedCategory("All")}
                   className="hover:bg-primary/20 rounded p-0.5 ml-1"
                   aria-label="Remove category filter"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
+            )}
+
+            {selectedAvailability !== "all" && (
+              <Badge variant="outline" className="text-[11px] gap-1 pl-2 pr-1 py-0.5 rounded-md border-primary/30 bg-primary/10 text-foreground">
+                <span>Seats: {selectedAvailability === "available" ? "Available Seats" : "Sold Out"}</span>
+                <button
+                  onClick={() => setSelectedAvailability("all")}
+                  className="hover:bg-primary/20 rounded p-0.5 ml-1"
+                  aria-label="Remove availability filter"
                 >
                   <X className="h-3 w-3" />
                 </button>

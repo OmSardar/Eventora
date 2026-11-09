@@ -37,10 +37,10 @@ server/
 │   │   └── validation/        # Zod request validators
 │   ├── app.js                 # Express application pipeline configuration
 │   └── server.js              # HTTP server bootstrap, background workers & graceful shutdown
-├── tests/                     # 212 automated tests across unit, integration, and security suites
-│   ├── integration/           # Multi-agent HTTP integration tests (104 tests)
+├── tests/                     # 222 automated tests across unit, integration, and security suites
+│   ├── integration/           # Multi-agent HTTP integration tests (106 tests)
 │   ├── security/              # Session expiry, CSRF, rate limit & RBAC tests (34 tests)
-│   └── unit/                  # Crypto, RFC 5545, worker & email unit tests (74 tests)
+│   └── unit/                  # Crypto, RFC 5545, worker, secret & email unit tests (82 tests)
 ├── .env.example               # Environment template with safe placeholders
 └── package.json               # ESM module manifest and npm scripts
 ```
@@ -103,7 +103,7 @@ All API endpoints are versioned under `/api/v1`:
 ### Registrations & Calendar (`/api/v1/registrations` & `/api/v1/events/:eventId/registrations`)
 - `POST /events/:eventId/registrations` — Free RSVP with hardware document locking preventing overselling.
 - `GET /registrations/me` — Attendee's registrations with populated booking and seat metadata.
-- `GET /registrations/:registrationId/calendar` (alias `.ics`) — **RFC 5545 .ics calendar pass download** (strictly verifies attendee ownership and blocks cancelled events).
+- `GET /registrations/:registrationId/calendar` (alias `.ics`) — **RFC 5545 .ics calendar pass download** (strictly verifies attendee ownership and blocks cancelled events). Attendees can import downloaded `.ics` files into Google Calendar, Apple Calendar, and Outlook; direct Google Calendar API integration is not implemented.
 - `POST /registrations/:registrationId/cancellation-request` — Attendee two-phase cancellation request.
 - `GET /organizer/cancellation-requests` — Organizer pending cancellation queue.
 - `POST /cancellation-requests/:requestId/approve` — Organizer cancellation approval (releases seats).
@@ -168,16 +168,16 @@ On `SIGTERM` or `SIGINT`:
 
 ## 6. Testing Strategy & Execution
 
-Eventora maintains **212 automated backend tests** running on Node.js native test runner (`node:test`):
+Eventora maintains **222 automated backend tests** running on Node.js native test runner (`node:test`):
 
 ```bash
 # Run all backend test suites (unit + integration + security)
 npm test --prefix server
 
-# Run unit tests only (74 tests: crypto, email, RFC 5545, seating math, refund worker)
+# Run unit tests only (82 tests: crypto, email, RFC 5545, seating math, refund worker, session secrets)
 npm run test:unit --prefix server
 
-# Run integration tests only (104 tests: full HTTP flows, concurrency, seating, cancellations)
+# Run integration tests only (106 tests: full HTTP flows, concurrency, seating, cancellations, pagination, filters)
 npm run test:integration --prefix server
 
 # Run security tests only (34 tests: RBAC, session expiry, CSRF, rate limits)

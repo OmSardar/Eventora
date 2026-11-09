@@ -62,22 +62,39 @@ export default function EventAttendeesPage() {
   const handleExportCsv = () => {
     if (!attendees.length) return;
     const headers = ["Attendee Name", "Email Address", "Registration Date", "Status"];
+
+    // Defense against CSV / Formula Injection (CWE-1236) and RFC 4180 escaping
+    const sanitizeCsvCell = (value: unknown): string => {
+      if (value === null || value === undefined) return '""';
+      let str = String(value);
+      // If cell starts with formula characters (=, +, -, @, \t, \r), prefix with single quote to prevent spreadsheet execution
+      if (/^[=+\-@\t\r]/.test(str)) {
+        str = "'" + str;
+      }
+      // Escape internal double quotes by doubling them per RFC 4180
+      const escaped = str.replace(/"/g, '""');
+      return `"${escaped}"`;
+    };
+
+    const headerLine = headers.map(sanitizeCsvCell).join(",");
     const rows = attendees.map((a) => [
-      `"${a.attendee?.name || ""}"`,
-      `"${a.attendee?.email || ""}"`,
-      `"${new Date(a.registeredAt).toISOString()}"`,
-      `"${a.status}"`,
-    ]);
-    const csvContent =
-      "data:text/csv;charset=utf-8," +
-      [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
-    const encodedUri = encodeURI(csvContent);
+      sanitizeCsvCell(a.attendee?.name || ""),
+      sanitizeCsvCell(a.attendee?.email || ""),
+      sanitizeCsvCell(new Date(a.registeredAt).toISOString()),
+      sanitizeCsvCell(a.status)
+    ].join(","));
+
+    // Prepend UTF-8 BOM (\uFEFF) for Microsoft Excel UTF-8 compatibility and join with CRLF (\r\n) per RFC 4180
+    const csvContent = "\uFEFF" + [headerLine, ...rows].join("\r\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `eventora_attendees_${eventId}.csv`);
+    link.href = url;
+    link.download = `eventora_attendees_${eventId}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   if (isLoading) {

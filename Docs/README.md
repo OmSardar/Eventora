@@ -1,8 +1,8 @@
 # Eventora Technical Documentation Index (`Docs/`)
 
-Welcome to the central technical documentation repository for **Eventora**, a production-grade Event Booking and RSVP Management platform.
+Welcome to the central technical documentation repository for **Eventora**, a production-grade Event Booking, Seating, and RSVP Management platform.
 
-This directory contains specifications, architectural designs, security threat models, database schemas, test strategies, and audit reports.
+This directory contains specifications, architectural designs, security threat models, database schemas, test strategies, and operational deployment guides.
 
 ---
 
@@ -10,7 +10,7 @@ This directory contains specifications, architectural designs, security threat m
 
 ```text
 Docs/
-├── 01-requirements/           # Business and functional requirements
+├── 01-requirements/           # Business and functional specifications
 │   ├── SRS.md                 # Software Requirements Specification (A1-G3 compliance)
 │   └── requirements-traceability.md # End-to-end requirement-to-code traceability matrix
 ├── 02-system-design/          # System and software architecture
@@ -32,16 +32,11 @@ Docs/
 │   └── deployment-guide.md    # Render, Vercel, MongoDB Atlas, and DNS setup guide
 ├── 08-seo/                    # Technical SEO and social sharing
 │   └── seo-implementation.md  # JSON-LD structured schemas, sitemaps, and robots.txt
-├── 09-production-readiness/   # Verification reports and audit trails
-│   ├── final-checklist.md     # Production release verification checklist
-│   ├── system-audit.md        # Initial compliance and security audit
+├── 09-production-readiness/   # Subsystem architectures & security designs
+│   ├── backend-image-upload-audit.md # Backend-only Cloudinary streaming & magic-bytes security
 │   ├── mfa-and-verification-architecture.md # Two-factor authentication & recovery codes
-│   ├── notification-architecture.md         # In-app notification delivery architecture
-│   ├── razorpay-test-mode-implementation.md # Payment gateway integration
-│   ├── razorpay-test-mode-audit.md          # Payment idempotency and webhook audit
-│   ├── razorpay-refund-correction-report.md # Automated refund state machine report
-│   ├── backend-image-upload-audit.md        # Backend-only Cloudinary streaming audit
-│   └── scope-correction-and-email-audit.md  # Resend transactional email audit
+│   ├── notification-architecture.md         # Resend & in-app notification delivery architecture
+│   └── razorpay-test-mode-implementation.md # Razorpay payment gateway integration
 ├── 10-seat-booking/           # Interactive seating & reservation subsystem
 │   ├── README.md              # Seating subsystem navigation guide
 │   ├── SEAT_BOOKING_ARCHITECTURE.md # Multi-seat reservation architecture
@@ -50,9 +45,8 @@ Docs/
 │   ├── BOOKING_STATE_MACHINE.md # Seat and Booking lifecycle transitions
 │   ├── CONCURRENCY_STRATEGY.md# MongoDB transaction strategy and race condition defense
 │   ├── MIGRATION_PLAN.md      # Backward compatibility and migration plan
-│   └── TEST_PLAN.md           # 20-client concurrency simulation test plan
-└── security/                  # Repository integrity reports
-    └── GIT_HISTORY_CLEANUP_REPORT.md # Git history hygiene verification
+│   └── TEST_PLAN.md           # Concurrency simulation test plan
+└── REPOSITORY_STRUCTURE.md    # Detailed codebase organization guide
 ```
 
 ---
@@ -81,13 +75,28 @@ Docs/
 - [`rate-limiting-policy.md`](./05-security/rate-limiting-policy.md): Distributed rate-limiting specifications across authentication, mutations, file uploads, ticket gate scans, and webhook callbacks.
 
 ### 6. Testing Strategy (`Docs/06-testing/`)
-- [`test-strategy.md`](./06-testing/test-strategy.md): Test pyramid, mocking policies, isolation strategies, 20-client concurrent race condition simulation, and automated regression suites.
+- [`test-strategy.md`](./06-testing/test-strategy.md): Test pyramid, mocking policies, isolation strategies, multi-client concurrent race condition simulation, and automated regression suites.
 
 ### 7. Deployment & CI/CD (`Docs/07-deployment/`)
 - [`deployment-guide.md`](./07-deployment/deployment-guide.md): Production deployment manual for Render (Backend Web Service), Vercel (Next.js Frontend), MongoDB Atlas (Replica Set), custom domains, SSL, and GitHub Actions CI.
 
-### 8. Interactive Seating Subsystem (`Docs/10-seat-booking/`)
+### 8. Technical SEO (`Docs/08-seo/`)
+- [`seo-implementation.md`](./08-seo/seo-implementation.md): Dynamic Schema.org JSON-LD structured event schemas, automated XML sitemaps, robots.txt routing, and social media OpenGraph cards.
+
+### 9. Subsystem Architectures (`Docs/09-production-readiness/`)
+- [`backend-image-upload-audit.md`](./09-production-readiness/backend-image-upload-audit.md): Backend-only Cloudinary streaming, binary magic-byte inspection (JPEG, PNG, WebP), and zero-client-credential architecture.
+- [`mfa-and-verification-architecture.md`](./09-production-readiness/mfa-and-verification-architecture.md): RFC 6238 TOTP authenticator integration, AES-256-GCM encryption at rest, email OTP, and single-use recovery code mechanisms.
+- [`notification-architecture.md`](./09-production-readiness/notification-architecture.md): Multi-channel notification engine, Resend transactional email integration, and in-app alert feeds.
+- [`razorpay-test-mode-implementation.md`](./09-production-readiness/razorpay-test-mode-implementation.md): Razorpay test mode checkout, HMAC signature verification, order pairing with seat holds, and idempotent webhook listeners.
+
+### 10. Interactive Seating Subsystem (`Docs/10-seat-booking/`)
 - Complete engineering specifications for interactive seat selection, temporary 10-minute seat holds, multi-seat atomic reservations, background hold reclamation, and gate-side QR ticket validation.
+  - [`SEAT_BOOKING_ARCHITECTURE.md`](./10-seat-booking/SEAT_BOOKING_ARCHITECTURE.md)
+  - [`DATABASE_DESIGN.md`](./10-seat-booking/DATABASE_DESIGN.md)
+  - [`API_SPECIFICATION.md`](./10-seat-booking/API_SPECIFICATION.md)
+  - [`BOOKING_STATE_MACHINE.md`](./10-seat-booking/BOOKING_STATE_MACHINE.md)
+  - [`CONCURRENCY_STRATEGY.md`](./10-seat-booking/CONCURRENCY_STRATEGY.md)
+  - [`TEST_PLAN.md`](./10-seat-booking/TEST_PLAN.md)
 
 ---
 
@@ -95,9 +104,18 @@ Docs/
 
 | Concern | Primary Technical Document |
 |---|---|
-| **P1 Event Cancellation Lifecycle** | [`Docs/09-production-readiness/system-audit.md`](./09-production-readiness/system-audit.md) |
+| **Event Cancellation & Refund Lifecycle** | [`Docs/02-system-design/architecture.md`](./02-system-design/architecture.md) & [`Docs/01-requirements/SRS.md`](./01-requirements/SRS.md) |
 | **Refund Reconciliation Worker** | [`Docs/10-seat-booking/CONCURRENCY_STRATEGY.md`](./10-seat-booking/CONCURRENCY_STRATEGY.md) |
 | **Add to Calendar (.ics) Download** | [`Docs/04-api-documentation/API.md`](./04-api-documentation/API.md) |
 | **Interactive Seating Map** | [`Docs/10-seat-booking/SEAT_BOOKING_ARCHITECTURE.md`](./10-seat-booking/SEAT_BOOKING_ARCHITECTURE.md) |
 | **Gate Ticket Verification** | [`Docs/10-seat-booking/API_SPECIFICATION.md`](./10-seat-booking/API_SPECIFICATION.md) |
 
+---
+
+## Technical Notes
+
+### Calendar (.ics) Integration
+Eventora supports downloading RFC 5545-compatible `.ics` calendar files. Attendees can import these files into Google Calendar, Apple Calendar, Microsoft Outlook, and other compatible applications. Direct Google Calendar API integration, one-click Google Calendar creation, and automatic calendar synchronization are NOT implemented. These capabilities are planned as future enhancements.
+
+### Hosting & External Health Monitoring
+An external Google Apps Script periodically sends a health-check request to the backend to reduce inactivity-related spin-down. This is an availability mitigation rather than an uptime guarantee. Occasional latency may still occur due to hosting conditions, restarts, or network performance. Render service deployment is configured in `render.yaml` specifying `plan: starter`.

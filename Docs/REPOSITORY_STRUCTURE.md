@@ -40,39 +40,30 @@ EVENTORA/
 │   ├── server_root.md                         # Reference architecture notes
 │   ├── README.md                              # Comprehensive backend guide
 │   ├── scripts/                               # Maintenance and database seeding utilities
-│   ├── tests/                                 # 35 test suites covering 212 automated tests
-│   │   ├── unit/                              # 74 unit tests (services, utils, models)
-│   │   ├── integration/                       # 104 integration tests (auth, events, tickets, seating)
+│   ├── tests/                                 # 38 test suites covering 222 automated tests
+│   │   ├── unit/                              # 82 unit tests (services, utils, models)
+│   │   ├── integration/                       # 106 integration tests (auth, events, tickets, seating)
 │   │   └── security/                          # 34 security tests (CSRF, RBAC, tamper protection)
 │   └── src/                                   # Express application source code
 │       ├── server.js                          # Application entry point, server startup & shutdown
-│       ├── config/                            # External service adapters & DB connection
-│       ├── middleware/                        # Express middleware (auth, RBAC, CSRF, validation)
-│       ├── models/                            # Mongoose database models & schemas
+│       ├── app.js                             # Express pipeline, middleware, and route registration
+│       ├── infrastructure/                    # Cross-cutting platform adapters (DB, Cloudinary, Pino)
 │       ├── modules/                           # Vertical-slice business domains
-│       ├── utils/                             # Shared utility libraries (crypto, QR, ICS, formatting)
-│       └── workers/                           # Autonomous background workers (seat holds, refunds)
+│       └── shared/                            # Kernel: middleware, errors, constants, Zod schemas, utils
 │
-└── Docs/                                      # Complete project documentation and audit evidence
+└── Docs/                                      # Complete technical project documentation
     ├── README.md                              # Documentation directory index and navigational map
     ├── REPOSITORY_STRUCTURE.md                # This architectural mapping file
-    ├── REPOSITORY_CLEANUP_REPORT.md           # Cleanup actions and dependency audit report
-    ├── DOCUMENTATION_AUDIT_REPORT.md          # Documentation synchronization audit report
-    ├── FINAL_INTEGRATION_VERIFICATION.md      # Test outputs and build verification results
-    ├── Architecture.md                        # Master system architecture specification
-    ├── High-Level Design (HLD).md             # High-level architecture and system components
-    ├── Low-Level Design (LLD).md              # Low-level service and module design
-    ├── Database Design & Schema Specification.md # Mongoose schemas and index definitions
-    ├── Threat Model & Security Specification.md  # STRIDE analysis and security architecture
-    ├── API_Contracts.md                       # REST API endpoint specifications
-    ├── API_Testing_Checklist.md               # API testing verification checklist
-    ├── Edge_Cases_and_Failure_Modes.md        # Concurrency and failure handling strategies
-    ├── Logging_and_Audit_Trail_Specification.md  # Observability and audit logging specs
-    ├── Performance_and_Scalability_Architecture.md # Scaling strategies and bottleneck analysis
-    ├── Project_Development_Plan.md            # Milestones and project delivery plan
-    ├── Design Decisions & Justifications.md   # Architectural trade-off decisions
-    ├── Design System Document.md              # UI/UX design tokens and standards
-    └── [Audit Artifacts]                     # Historical compliance, cancellation, and verification reports
+    ├── 01-requirements/                       # SRS and requirements traceability matrix
+    ├── 02-system-design/                      # Architecture, HLD, and LLD specifications
+    ├── 03-database-design/                    # Mongoose schemas, dictionaries, and index inventories
+    ├── 04-api-documentation/                  # REST API contract and OpenAPI 3.0 specification
+    ├── 05-security/                           # Threat model (STRIDE) and rate-limiting policies
+    ├── 06-testing/                            # Quality assurance and test strategy
+    ├── 07-deployment/                         # Production deployment and infrastructure guide
+    ├── 08-seo/                                # Schema.org JSON-LD, sitemaps, and SEO guide
+    ├── 09-production-readiness/               # Upload, MFA, notification, and payment designs
+    └── 10-seat-booking/                       # Interactive seating specifications and concurrency strategy
 ```
 
 ---
@@ -169,12 +160,12 @@ The backend follows an Express.js vertical-slice modular architecture where each
 
 ## 4. Test Suite Layout (`server/tests/` and `client/playwright/`)
 
-### Backend Automated Suites (212 Tests across 35 Suites)
+### Backend Automated Suites (222 Tests across 38 Suites)
 
-- `server/tests/unit/` (74 tests):
-  - Service-level isolation tests for auth, event validation, payment signature calculation, QR HMAC generation, RFC 5545 calendar folding, and seat reservation logic.
-- `server/tests/integration/` (104 tests):
-  - In-memory MongoDB tests exercising complete HTTP routes: registration flows, organizer event management, seating hold race conditions, webhook ingestion, event cancellation cascade, and .ics calendar downloads.
+- `server/tests/unit/` (82 tests):
+  - Service-level isolation tests for auth, event validation, payment signature calculation, QR HMAC generation, RFC 5545 calendar folding, session secret validation, and seat reservation logic.
+- `server/tests/integration/` (106 tests):
+  - In-memory MongoDB tests exercising complete HTTP routes: registration flows, organizer event management, seating hold race conditions, webhook ingestion, event cancellation cascade, roster pagination, availability filters, and .ics calendar downloads.
 - `server/tests/security/` (34 tests):
   - Verification of CSRF token enforcement, RBAC route gating, NoSQL injection resistance, XSS input sanitization, and payment signature tamper protection.
 

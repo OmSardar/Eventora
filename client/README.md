@@ -13,7 +13,7 @@ The Eventora frontend delivers a responsive user interface for discovering event
 - **Strict TypeScript Architecture:** Strict compiler rules (`tsconfig.json`), centralized domain types in `@/types`, and end-to-end type safety across API boundaries.
 - **Monochrome Design System:** Styled using Tailwind CSS with minimal monochrome design tokens, fully theme-adaptive light and dark modes (`next-themes`), and smooth scrolling physics via **Lenis** and **GSAP ScrollTrigger**.
 - **Interactive Seating Canvas:** Client-side SVG seating map supporting multi-seat selection, tier-based pricing, and real-time 10-minute hold countdown timers.
-- **Calendar Pass (.ics) Download:** Native client download helper streaming RFC 5545 `.ics` calendar files directly into Google Calendar, Apple Calendar, and Outlook.
+- **Calendar Pass (.ics) Download:** Native client download helper streaming RFC 5545 `.ics` calendar files. Attendees can import these files into Google Calendar, Apple Calendar, Microsoft Outlook, and other compatible applications. Direct Google Calendar API integration and automatic calendar synchronization are planned future enhancements (direct Google Calendar API integration is not implemented).
 - **Camera-Based Gate Scanner:** Integrated `html5-qrcode` scanner on `/tickets/verify` allowing event organizers to validate ticket QR codes at venue check-in.
 
 ---

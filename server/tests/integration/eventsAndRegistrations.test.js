@@ -192,5 +192,34 @@ describe('Event & Registration Business Rules (Integration)', () => {
     assert.equal(reRegisterRes.body.success, false);
     assert.match(reRegisterRes.body.error.message, /previously cancelled/i);
   });
+
+  test('Organizer attendee roster supports pagination metadata and limits', async () => {
+    const res = await organizerAgent.get(`/api/v1/events/${createdEventId}/attendees?page=1&limit=10`);
+    assert.equal(res.status, 200);
+    assert.equal(res.body.success, true);
+    assert.ok(res.body.data.pagination, 'Pagination metadata must be present');
+    assert.equal(res.body.data.pagination.page, 1);
+    assert.equal(res.body.data.pagination.limit, 10);
+    assert.equal(typeof res.body.data.pagination.total, 'number');
+    assert.equal(typeof res.body.data.pagination.totalPages, 'number');
+  });
+
+  test('Public event browsing supports availability filtering', async () => {
+    const resAvailable = await attendeeAgent.get('/api/v1/events?availability=available');
+    assert.equal(resAvailable.status, 200);
+    assert.equal(resAvailable.body.success, true);
+    assert.ok(Array.isArray(resAvailable.body.data.events));
+    for (const ev of resAvailable.body.data.events) {
+      assert.ok(ev.seatsBooked < ev.seatLimit, 'Available events must have seatsBooked < seatLimit');
+    }
+
+    const resSoldOut = await attendeeAgent.get('/api/v1/events?availability=sold_out');
+    assert.equal(resSoldOut.status, 200);
+    assert.equal(resSoldOut.body.success, true);
+    assert.ok(Array.isArray(resSoldOut.body.data.events));
+    for (const ev of resSoldOut.body.data.events) {
+      assert.ok(ev.seatsBooked >= ev.seatLimit, 'Sold out events must have seatsBooked >= seatLimit');
+    }
+  });
 });
 

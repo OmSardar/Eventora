@@ -562,7 +562,8 @@ export async function getEvents({
   sort,
   page = 1,
   limit = 12,
-  includePast = false
+  includePast = false,
+  availability
 }) {
   const query = {
     status: EVENT_STATUS.PUBLISHED
@@ -574,6 +575,12 @@ export async function getEvents({
 
   if (category && category !== 'All') {
     query.category = category;
+  }
+
+  if (availability === 'available' || availability === 'open') {
+    query.$expr = { $lt: ['$seatsBooked', '$seatLimit'] };
+  } else if (availability === 'sold_out') {
+    query.$expr = { $gte: ['$seatsBooked', '$seatLimit'] };
   }
 
   // Location / City Filtering

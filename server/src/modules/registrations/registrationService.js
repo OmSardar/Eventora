@@ -312,7 +312,7 @@ export async function getAttendeeRegistrations(attendeeId) {
   });
 }
 
-export async function getEventAttendees(eventId, organizerId) {
+export async function getEventAttendees(eventId, organizerId, options = {}) {
   if (!mongoose.Types.ObjectId.isValid(eventId)) {
     throw new BadRequestError('Invalid event ID format.');
   }
@@ -327,12 +327,29 @@ export async function getEventAttendees(eventId, organizerId) {
     throw new ForbiddenError('You are not authorized to view attendees for this event.');
   }
 
-  const registrations = await Registration.find({
+  const regQuery = {
     eventId: new mongoose.Types.ObjectId(eventId)
-  })
+  };
+
+  const total = await Registration.countDocuments(regQuery);
+
+  let queryBuilder = Registration.find(regQuery)
     .populate('attendeeId', 'name email createdAt')
-    .sort({ createdAt: -1 })
-    .lean();
+    .sort({ createdAt: -1 });
+
+  let pageNum = null;
+  let limitNum = null;
+  let totalPages = 1;
+
+  if (options && (options.page !== undefined || options.limit !== undefined)) {
+    pageNum = Math.max(1, parseInt(options.page, 10) || 1);
+    limitNum = Math.min(100, Math.max(1, parseInt(options.limit, 10) || 20));
+    const skip = (pageNum - 1) * limitNum;
+    queryBuilder = queryBuilder.skip(skip).limit(limitNum);
+    totalPages = Math.ceil(total / limitNum) || 1;
+  }
+
+  const registrations = await queryBuilder.lean();
 
   return {
     event: {
@@ -342,6 +359,14 @@ export async function getEventAttendees(eventId, organizerId) {
       seatLimit: event.seatLimit,
       seatsBooked: event.seatsBooked,
       remainingSeats: Math.max(0, event.seatLimit - event.seatsBooked)
+    },
+    pagination: {
+      total,
+      page: pageNum || 1,
+      limit: limitNum || total,
+      totalPages,
+      hasNextPage: pageNum ? pageNum < totalPages : false,
+      hasPrevPage: pageNum ? pageNum > 1 : false
     },
     attendees: registrations.map((r) => ({
       registrationId: r._id,

@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/select";
 import { ImageUploadField } from "@/components/shared/ImageUploadField";
 import { SeatingConfigurator, SeatingConfigPayload } from "@/components/seating/SeatingConfigurator";
-import { AlertCircle, ArrowLeft, Sparkles } from "lucide-react";
+import { AlertCircle, ArrowLeft, Clock, Sparkles } from "lucide-react";
 
 const createEventSchema = z.object({
   title: z.string().min(3, "Title must be at least 3 characters").max(200),
@@ -57,6 +57,7 @@ const createEventSchema = z.object({
       publicId: z.string().nullable().optional().default(null),
     })
     .optional(),
+  registrationDeadline: z.string().nullable().optional(),
 }).superRefine((data, ctx) => {
   if (data.isPaid && (!data.ticketPrice || data.ticketPrice <= 0)) {
     ctx.addIssue({
@@ -122,6 +123,7 @@ export default function CreateEventPage() {
         seatingType: seatingConfig?.seatingType || "ASSIGNED_SEATING",
         maxTicketsPerBooking: seatingConfig?.maxTicketsPerBooking || 6,
         seatingConfig: seatingConfig?.seatingType === "ASSIGNED_SEATING" ? seatingConfig : null,
+        registrationDeadline: data.registrationDeadline || null,
       };
       await api.post("/events", payload);
       queryClient.invalidateQueries({ queryKey: ["organizer-events"] });
@@ -256,7 +258,7 @@ export default function CreateEventPage() {
                   max="100000"
                   placeholder="e.g. 100"
                   className="text-xs"
-                  {...register("seatLimit")}
+                  {...register("seatLimit", { valueAsNumber: true })}
                 />
                 {errors.seatLimit && (
                   <p className="text-[11px] text-destructive">{errors.seatLimit.message}</p>
@@ -334,6 +336,26 @@ export default function CreateEventPage() {
               )}
             </div>
 
+            {/* Registration Deadline (Optional) */}
+            <div className="space-y-1.5 rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
+              <div className="flex items-center gap-2 mb-1">
+                <Clock className="h-3.5 w-3.5 text-amber-500 shrink-0" aria-hidden="true" />
+                <label className="text-xs font-semibold text-foreground">
+                  Registration Deadline
+                  <span className="ml-1.5 font-normal text-muted-foreground">(Optional)</span>
+                </label>
+              </div>
+              <Input
+                type="datetime-local"
+                className="text-xs"
+                max={watch("eventDate") || maxDateTime}
+                {...register("registrationDeadline")}
+              />
+              <p className="text-[11px] text-muted-foreground">
+                After this date &amp; time, attendees will no longer be able to register. Leave blank for no deadline.
+              </p>
+            </div>
+
             {/* Venue */}
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-foreground">Venue Location *</label>
@@ -378,10 +400,15 @@ export default function CreateEventPage() {
             {/* Dedicated Seating Configuration Section */}
             <SeatingConfigurator
               basePrice={watch("ticketPrice") || 500}
-              seatLimit={watch("seatLimit") || 50}
+              seatLimit={Number(watch("seatLimit")) || 50}
               onChange={(cfg) => {
                 setSeatingConfig(cfg);
-                if (cfg.totalSeats) {
+                // Only sync seatLimit from configurator if the user is not actively typing in the seatLimit input
+                if (
+                  cfg.totalSeats &&
+                  typeof document !== "undefined" &&
+                  document.activeElement?.getAttribute("name") !== "seatLimit"
+                ) {
                   setValue("seatLimit", cfg.totalSeats);
                 }
               }}

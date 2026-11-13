@@ -22,7 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ImageUploadField } from "@/components/shared/ImageUploadField";
-import { AlertCircle, ArrowLeft, ShieldAlert } from "lucide-react";
+import { AlertCircle, ArrowLeft, CheckCircle, Clock, ShieldAlert } from "lucide-react";
 
 const updateEventSchema = z.object({
   title: z.string().min(3).max(200).optional(),
@@ -70,6 +70,11 @@ export default function EditEventPage() {
   const eventId = params.eventId as string;
 
   const [serverError, setServerError] = useState<string | null>(null);
+
+  // Deadline panel state
+  const [deadlineValue, setDeadlineValue] = useState<string>("");
+  const [deadlineSuccess, setDeadlineSuccess] = useState<string | null>(null);
+  const [deadlineError, setDeadlineError] = useState<string | null>(null);
 
   // Compute allowed date boundaries: min 12 hours from now, max 3 months (90 days)
   const { minDateTime, maxDateTime } = React.useMemo(() => {
@@ -123,6 +128,13 @@ export default function EditEventPage() {
         image: existingImage,
         eventDate: new Date(event.eventDate).toISOString().slice(0, 16),
       });
+
+      // Pre-fill deadline input if already set
+      if (event.registrationDeadline) {
+        setDeadlineValue(
+          new Date(event.registrationDeadline).toISOString().slice(0, 16)
+        );
+      }
     }
   }, [event, reset]);
 
@@ -136,6 +148,25 @@ export default function EditEventPage() {
     },
     onError: (err: Error) => {
       setServerError(err.message || "Failed to update event");
+    },
+  });
+
+  const deadlineMutation = useMutation({
+    mutationFn: (deadline: string | null) =>
+      api.patch(`/organizer/events/${eventId}/registration-deadline`, {
+        registrationDeadline: deadline,
+      }),
+    onSuccess: (_data, deadline) => {
+      queryClient.invalidateQueries({ queryKey: ["event", eventId] });
+      setDeadlineSuccess(
+        deadline ? "Registration deadline saved." : "Registration deadline removed."
+      );
+      setDeadlineError(null);
+      setTimeout(() => setDeadlineSuccess(null), 4000);
+    },
+    onError: (err: Error) => {
+      setDeadlineError(err.message || "Failed to save deadline");
+      setDeadlineSuccess(null);
     },
   });
 
@@ -369,6 +400,85 @@ export default function EditEventPage() {
               Save Changes
             </Button>
           </form>
+        </CardContent>
+      </Card>
+
+      {/* ── Registration Deadline Card ───────────────────────────────── */}
+      <Card className="border-border/80 shadow-md mt-6">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Clock className="h-4 w-4 text-amber-500" aria-hidden="true" />
+            <CardTitle className="text-base font-semibold">Registration Deadline</CardTitle>
+          </div>
+          <CardDescription className="text-xs mt-1">
+            Optionally set a cut-off date after which attendees can no longer register. Leave blank to remove any existing deadline.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {deadlineSuccess && (
+            <div className="flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-3 text-xs text-emerald-600 dark:text-emerald-400">
+              <CheckCircle className="h-4 w-4 shrink-0" />
+              <span>{deadlineSuccess}</span>
+            </div>
+          )}
+          {deadlineError && (
+            <div className="flex items-center gap-2 rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-xs text-destructive">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span>{deadlineError}</span>
+            </div>
+          )}
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-foreground">
+              Deadline Date &amp; Time
+              {event.registrationDeadline && (
+                <span className="ml-2 font-normal text-muted-foreground">
+                  (currently: {new Date(event.registrationDeadline).toLocaleString()})
+                </span>
+              )}
+            </label>
+            <Input
+              type="datetime-local"
+              className="text-xs"
+              value={deadlineValue}
+              max={new Date(event.eventDate).toISOString().slice(0, 16)}
+              onChange={(e) => setDeadlineValue(e.target.value)}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Must be before the event date ({new Date(event.eventDate).toLocaleString()}).
+            </p>
+          </div>
+
+          <div className="flex gap-3">
+            <Button
+              type="button"
+              className="text-xs font-semibold"
+              isLoading={deadlineMutation.isPending}
+              disabled={deadlineMutation.isPending || !deadlineValue}
+              onClick={() => {
+                setDeadlineError(null);
+                deadlineMutation.mutate(deadlineValue || null);
+              }}
+            >
+              Save Deadline
+            </Button>
+            {event.registrationDeadline && (
+              <Button
+                type="button"
+                variant="outline"
+                className="text-xs text-destructive border-destructive/30 hover:bg-destructive/10"
+                isLoading={deadlineMutation.isPending}
+                disabled={deadlineMutation.isPending}
+                onClick={() => {
+                  setDeadlineValue("");
+                  setDeadlineError(null);
+                  deadlineMutation.mutate(null);
+                }}
+              >
+                Remove Deadline
+              </Button>
+            )}
+          </div>
         </CardContent>
       </Card>
     </div>

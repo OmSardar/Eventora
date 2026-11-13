@@ -55,6 +55,7 @@ export async function createEvent({
   seatingType,
   maxTicketsPerBooking,
   seatingConfig,
+  registrationDeadline,
   organizerId,
   ipAddress,
   userAgent
@@ -69,6 +70,18 @@ export async function createEvent({
   }
   if (parsedDate.getTime() > maxAllowed) {
     throw new BadRequestError('Event date cannot be scheduled more than 3 months in advance.');
+  }
+
+  // Validate optional registration deadline
+  let parsedDeadline = null;
+  if (registrationDeadline) {
+    parsedDeadline = new Date(registrationDeadline);
+    if (isNaN(parsedDeadline.getTime())) {
+      throw new BadRequestError('Invalid date format for registration deadline.');
+    }
+    if (parsedDeadline >= parsedDate) {
+      throw new BadRequestError('Registration deadline must be before the event date.');
+    }
   }
 
   const finalImage =
@@ -90,7 +103,8 @@ export async function createEvent({
     ticketPrice: isPaid ? Number(ticketPrice) || 0 : 0,
     currency: currency || 'INR',
     image: finalImage,
-    bannerUrl: bannerUrl || finalImage.url || ''
+    bannerUrl: bannerUrl || finalImage.url || '',
+    registrationDeadline: parsedDeadline
   });
 
   if (seatingType === 'ASSIGNED_SEATING') {

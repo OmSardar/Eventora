@@ -151,3 +151,26 @@ export async function downloadCalendarIcs(req, res, next) {
   }
 }
 
+export async function updateRegistrationDeadline(req, res, next) {
+  try {
+    const { eventId } = req.params;
+    const organizerId = req.user.id;
+    const { registrationDeadline } = req.body;
+
+    const event = await registrationService.updateRegistrationDeadline({
+      eventId,
+      organizerId,
+      registrationDeadline
+    });
+
+    res.status(200).json({
+      success: true,
+      message: registrationDeadline
+        ? 'Registration deadline updated successfully.'
+        : 'Registration deadline removed successfully.',
+      data: { event }
+    });
+  } catch (error) {
+    next(error);
+  }
+}

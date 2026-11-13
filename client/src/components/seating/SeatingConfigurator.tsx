@@ -121,6 +121,23 @@ export function SeatingConfigurator({
     ]
   );
 
+  // Keep latest onChange in ref to avoid infinite re-render cycles
+  const onChangeRef = React.useRef(onChange);
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  });
+
+  // Sync internal capacity when parent seatLimit changes
+  useEffect(() => {
+    const num = Number(seatLimit);
+    if (!isNaN(num) && num > 0) {
+      setTotalSeats(num);
+      if (generationMode === "AUTOMATIC") {
+        setRows(Math.max(1, Math.ceil(num / seatsPerRow)));
+      }
+    }
+  }, [seatLimit, generationMode, seatsPerRow]);
+
   // Generate preview tiles
   const previewData = useMemo(() => {
     if (seatingType !== "ASSIGNED_SEATING") return [];
@@ -208,8 +225,19 @@ export function SeatingConfigurator({
       };
     }
 
-    onChange(payload);
-  }, [seatingType, generationMode, computedTotalSeats, rows, seatsPerRow, startingRowLabel, category, price, maxTicketsPerBooking, customSections, onChange]);
+    onChangeRef.current?.(payload);
+  }, [
+    seatingType,
+    generationMode,
+    computedTotalSeats,
+    rows,
+    seatsPerRow,
+    startingRowLabel,
+    category,
+    price,
+    maxTicketsPerBooking,
+    customSections,
+  ]);
 
   return (
     <div className="space-y-6 rounded-2xl border border-border/80 bg-card p-5 sm:p-6 shadow-sm">

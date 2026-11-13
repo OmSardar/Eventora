@@ -18,6 +18,7 @@ import {
   Armchair,
   Calendar,
   CheckCircle,
+  Clock,
   Compass,
   Mail,
   MapPin,
@@ -138,6 +139,14 @@ export function EventDetailView({ eventId, initialEvent }: EventDetailViewProps)
   const isPast = new Date(event.eventDate).getTime() < Date.now();
   const remainingSeats = Math.max(0, event.seatLimit - (event.seatsBooked || 0));
   const isSoldOut = remainingSeats === 0;
+
+  // Registration deadline
+  const registrationDeadline = event.registrationDeadline
+    ? new Date(event.registrationDeadline)
+    : null;
+  const isDeadlinePassed = registrationDeadline
+    ? registrationDeadline.getTime() <= Date.now()
+    : false;
 
   const fallbackBanner =
     "https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&w=1200&q=80";
@@ -279,6 +288,8 @@ export function EventDetailView({ eventId, initialEvent }: EventDetailViewProps)
                   <Badge variant="destructive">Sold Out</Badge>
                 ) : isCancelled ? (
                   <Badge variant="destructive">Cancelled</Badge>
+                ) : isDeadlinePassed ? (
+                  <Badge variant="destructive">Closed</Badge>
                 ) : (
                   <Badge variant="success">Available</Badge>
                 )}
@@ -311,6 +322,24 @@ export function EventDetailView({ eventId, initialEvent }: EventDetailViewProps)
                   {remainingSeats} {remainingSeats === 1 ? "seat" : "seats"} left
                 </div>
               </div>
+
+              {/* Registration Deadline row */}
+              {registrationDeadline && (
+                <div
+                  className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs ${
+                    isDeadlinePassed
+                      ? "border-destructive/30 bg-destructive/10 text-destructive"
+                      : "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                  }`}
+                >
+                  <Clock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  <span suppressHydrationWarning>
+                    {isDeadlinePassed
+                      ? `Registration closed on ${registrationDeadline.toLocaleString()}`
+                      : `Deadline: ${registrationDeadline.toLocaleString()}`}
+                  </span>
+                </div>
+              )}
 
               {/* Error Alert */}
               {errorMessage && (
@@ -352,6 +381,16 @@ export function EventDetailView({ eventId, initialEvent }: EventDetailViewProps)
                   ) : isPast ? (
                     <div className="rounded-lg bg-muted p-4 text-center text-xs text-muted-foreground">
                       This event occurred in the past and is no longer accepting RSVPs.
+                    </div>
+                  ) : isDeadlinePassed ? (
+                    <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-center text-xs text-destructive space-y-1">
+                      <div className="flex items-center justify-center gap-1.5 font-semibold">
+                        <Clock className="h-4 w-4" aria-hidden="true" />
+                        <span>Registration Closed</span>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">
+                        The registration deadline for this event has passed.
+                      </p>
                     </div>
                   ) : isCancelledRegistration ? (
                     <div className="space-y-3">

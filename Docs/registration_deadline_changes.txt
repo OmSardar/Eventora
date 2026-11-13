@@ -1,0 +1,311 @@
+Registration Deadline Feature Notes
+
+I added an optional registration deadline to events so users can't register once the deadline passes. Here are all the changes and the prompts I used with ChatGPT.
+
+1. Event.js (server/src/modules/events/Event.js)
+Prompt:
+"Add an optional registrationDeadline field to the Event schema that defaults to null."
+
+Before:
+    bannerUrl: {
+      type: String,
+      trim: true,
+      default: ''
+    }
+  },
+
+After:
+    bannerUrl: {
+      type: String,
+      trim: true,
+      default: ''
+    },
+    registrationDeadline: {
+      type: Date,
+      default: null
+    }
+  },
+
+2. eventValidation.js (server/src/shared/validation/eventValidation.js)
+Prompt:
+"In createEventSchema, add an optional registrationDeadline that accepts a valid date string or null."
+
+Before:
+  image: eventImageSchema.optional()
+}).superRefine((data, ctx) => {
+
+After:
+  image: eventImageSchema.optional(),
+  registrationDeadline: z
+    .string()
+    .refine((val) => !isNaN(Date.parse(val)), { message: 'Invalid date format for registration deadline' })
+    .nullable()
+    .optional()
+}).superRefine((data, ctx) => {
+
+3. eventController.js (server/src/modules/events/eventController.js)
+Prompt:
+"In createEvent, extract registrationDeadline from req.validatedBody and pass it to eventService.createEvent."
+
+Before:
+    const {
+      title,
+      description,
+      eventDate,
+      venue,
+      seatLimit,
+      category,
+      bannerUrl,
+      image,
+      isPaid,
+      ticketPrice,
+      currency,
+      seatingType,
+      maxTicketsPerBooking,
+      seatingConfig
+    } = req.validatedBody;
+
+After:
+    const {
+      title,
+      description,
+      eventDate,
+      venue,
+      seatLimit,
+      category,
+      bannerUrl,
+      image,
+      isPaid,
+      ticketPrice,
+      currency,
+      seatingType,
+      maxTicketsPerBooking,
+      seatingConfig,
+      registrationDeadline
+    } = req.validatedBody;
+
+4. eventService.js (server/src/modules/events/eventService.js)
+Prompt:
+"In createEvent, validate that if registrationDeadline is passed, it is a valid date and comes before eventDate. Then save it to the event."
+
+Before:
+  const finalImage =
+    image || (bannerUrl ? { source: 'URL', url: bannerUrl, publicId: null } : { source: 'URL', url: '', publicId: null });
+
+  const event = await Event.create({
+    title,
+    description,
+    eventDate: parsedDate,
+    venue,
+    seatLimit: Number(seatLimit),
+    seatsBooked: 0,
+    organizerId: new mongoose.Types.ObjectId(organizerId),
+    status: EVENT_STATUS.PUBLISHED,
+    category: category || 'General',
+    seatingType: seatingType || 'GENERAL_ADMISSION',
+    maxTicketsPerBooking: maxTicketsPerBooking ? Number(maxTicketsPerBooking) : 6,
+    isPaid: Boolean(isPaid),
+    ticketPrice: isPaid ? Number(ticketPrice) || 0 : 0,
+    currency: currency || 'INR',
+    image: finalImage,
+    bannerUrl: bannerUrl || finalImage.url || ''
+  });
+
+After:
+  let parsedDeadline = null;
+  if (registrationDeadline) {
+    parsedDeadline = new Date(registrationDeadline);
+    if (isNaN(parsedDeadline.getTime())) {
+      throw new BadRequestError('Invalid date format for registration deadline.');
+    }
+    if (parsedDeadline >= parsedDate) {
+      throw new BadRequestError('Registration deadline must be before the event date.');
+    }
+  }
+
+  const finalImage =
+    image || (bannerUrl ? { source: 'URL', url: bannerUrl, publicId: null } : { source: 'URL', url: '', publicId: null });
+
+  const event = await Event.create({
+    title,
+    description,
+    eventDate: parsedDate,
+    venue,
+    seatLimit: Number(seatLimit),
+    seatsBooked: 0,
+    organizerId: new mongoose.Types.ObjectId(organizerId),
+    status: EVENT_STATUS.PUBLISHED,
+    category: category || 'General',
+    seatingType: seatingType || 'GENERAL_ADMISSION',
+    maxTicketsPerBooking: maxTicketsPerBooking ? Number(maxTicketsPerBooking) : 6,
+    isPaid: Boolean(isPaid),
+    ticketPrice: isPaid ? Number(ticketPrice) || 0 : 0,
+    currency: currency || 'INR',
+    image: finalImage,
+    bannerUrl: bannerUrl || finalImage.url || '',
+    registrationDeadline: parsedDeadline
+  });
+
+5. registrationRoutes.js (server/src/modules/registrations/registrationRoutes.js)
+Prompt:
+"Add an organizer route PATCH /organizer/events/:eventId/registration-deadline with auth, organizer role, verified email, and CSRF protection."
+
+Added:
+router.patch(
+  '/organizer/events/:eventId/registration-deadline',
+  authenticate,
+  requireRole(ROLES.ORGANIZER),
+  requireVerifiedEmail,
+  csrfProtection,
+  registrationController.updateRegistrationDeadline
+);
+
+6. registrationController.js (server/src/modules/registrations/registrationController.js)
+Prompt:
+"Add updateRegistrationDeadline controller that takes eventId, organizerId, and registrationDeadline and calls registrationService.updateRegistrationDeadline."
+
+Added:
+export async function updateRegistrationDeadline(req, res, next) {
+  try {
+    const { eventId } = req.params;
+    const organizerId = req.user.id;
+    const { registrationDeadline } = req.body;
+
+    const event = await registrationService.updateRegistrationDeadline({
+      eventId,
+      organizerId,
+      registrationDeadline
+    });
+
+    res.status(200).json({
+      success: true,
+      message: registrationDeadline
+        ? 'Registration deadline updated successfully.'
+        : 'Registration deadline removed successfully.',
+      data: { event }
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+7. registrationService.js (server/src/modules/registrations/registrationService.js)
+Prompt:
+"In registrationService:
+1. In registerForEvent, call assertRegistrationOpen(event) and add a check in the atomic findOneAndUpdate that registrationDeadline is null or > now.
+2. Add assertRegistrationOpen(event) to throw error if deadline has passed.
+3. Add updateRegistrationDeadline function to update or clear the deadline for an organizer's event."
+
+Added in atomic query:
+        $or: [
+          {
+            registrationDeadline: null
+          },
+          {
+            registrationDeadline: {
+              $gt: now
+            }
+          }
+        ],
+
+Added functions:
+export function assertRegistrationOpen(event) {
+  if (
+    event.registrationDeadline &&
+    new Date() >= new Date(event.registrationDeadline)
+  ) {
+    throw new BadRequestError(
+      'Registration for this event has closed.'
+    );
+  }
+}
+
+export async function updateRegistrationDeadline({
+  eventId,
+  organizerId,
+  registrationDeadline
+}) {
+  if (!mongoose.Types.ObjectId.isValid(eventId)) {
+    throw new BadRequestError('Invalid event ID format.');
+  }
+
+  const event = await Event.findById(eventId);
+  if (!event) {
+    throw new NotFoundError('Event not found.');
+  }
+
+  if (event.organizerId.toString() !== organizerId.toString()) {
+    throw new ForbiddenError('You are not authorized to update this event.');
+  }
+
+  if (event.status === EVENT_STATUS.CANCELLED) {
+    throw new BadRequestError('Cannot set a registration deadline on a cancelled event.');
+  }
+
+  if (registrationDeadline) {
+    const deadline = new Date(registrationDeadline);
+    if (isNaN(deadline.getTime())) {
+      throw new BadRequestError('Invalid date format for registration deadline.');
+    }
+    if (deadline >= new Date(event.eventDate)) {
+      throw new BadRequestError('Registration deadline must be before the event date.');
+    }
+    event.registrationDeadline = deadline;
+  } else {
+    event.registrationDeadline = null;
+  }
+
+  await event.save();
+  return event;
+}
+
+8. types/index.ts (client/src/types/index.ts)
+Prompt:
+"Add registrationDeadline?: string | null; to EventItem interface."
+
+Before:
+  bannerUrl?: string;
+  image?: EventImage;
+  organizerId: {
+
+After:
+  bannerUrl?: string;
+  image?: EventImage;
+  registrationDeadline?: string | null;
+  organizerId: {
+
+9. create/page.tsx (client/src/app/(organizer)/organizer/events/create/page.tsx)
+Prompt:
+"Add an optional Registration Deadline datetime picker below Date & Start Time on the create event page. Validate it in Zod and include it in the onSubmit payload."
+
+Added:
+            <div className="space-y-1.5 rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
+              <div className="flex items-center gap-2 mb-1">
+                <Clock className="h-3.5 w-3.5 text-amber-500 shrink-0" aria-hidden="true" />
+                <label className="text-xs font-semibold text-foreground">
+                  Registration Deadline
+                  <span className="ml-1.5 font-normal text-muted-foreground">(Optional)</span>
+                </label>
+              </div>
+              <Input
+                type="datetime-local"
+                className="text-xs"
+                max={watch("eventDate") || maxDateTime}
+                {...register("registrationDeadline")}
+              />
+              <p className="text-[11px] text-muted-foreground">
+                After this date &amp; time, attendees will no longer be able to register. Leave blank for no deadline.
+              </p>
+            </div>
+
+10. edit/page.tsx (client/src/app/(organizer)/organizer/events/[eventId]/edit/page.tsx)
+Prompt:
+"On the edit event page, add a separate card to update or remove the registration deadline using PATCH /organizer/events/:eventId/registration-deadline."
+
+Added mutation & UI card to manage deadline.
+
+11. EventDetailView.tsx (client/src/components/events/EventDetailView.tsx)
+Prompt:
+"In EventDetailView, if registrationDeadline has passed, show a 'Closed' badge, display a closed banner, and disable/replace the RSVP button with 'Registration Closed'."
+
+Added deadline state check, badge in header, info row, and prevented RSVP.

@@ -20,6 +20,15 @@ router.post(
   registrationController.registerForEvent
 );
 
+router.patch(
+  '/organizer/events/:eventId/registration-deadline',
+  authenticate,
+  requireRole(ROLES.ORGANIZER),
+  requireVerifiedEmail,
+  csrfProtection,
+  registrationController.updateRegistrationDeadline
+);
+
 router.get(
   '/registrations/me',
   authenticate,

@@ -87,6 +87,7 @@ export interface EventItem {
   currency?: string;
   bannerUrl?: string;
   image?: EventImage;
+  registrationDeadline?: string | null;
   organizerId: {
     _id: string;
     id?: string;

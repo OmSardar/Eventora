@@ -70,7 +70,12 @@ export const createEventSchema = z.object({
     })
     .optional()
     .default(''),
-  image: eventImageSchema.optional()
+  image: eventImageSchema.optional(),
+  registrationDeadline: z
+    .string()
+    .refine((val) => !isNaN(Date.parse(val)), { message: 'Invalid date format for registration deadline' })
+    .nullable()
+    .optional()
 }).superRefine((data, ctx) => {
   if (data.isPaid && (!data.ticketPrice || data.ticketPrice <= 0)) {
     ctx.addIssue({

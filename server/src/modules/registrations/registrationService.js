@@ -42,6 +42,194 @@ function canUseReplicaSetTransactions() {
  * Registers an attendee for an event with atomic capacity guarantee.
  * After the registration is successfully persisted, triggers a confirmation email via Resend.
  */
+// export async function registerForEvent({
+//   eventId,
+//   attendeeId,
+//   ipAddress,
+//   userAgent
+// }) {
+//   if (!mongoose.Types.ObjectId.isValid(eventId)) {
+//     throw new BadRequestError('Invalid event ID format.');
+//   }
+
+//   // 1. Verify event exists
+//   // const event = await Event.findById(eventId);
+//   // if (!event) {
+//   //   throw new NotFoundError('Event not found.');
+//   // }
+
+//   const event = await Event.findById(eventId);
+
+//   if (!event) {
+//     throw new NotFoundError('Event not found.');
+//   }
+
+//   // Registration deadline check
+//   assertRegistrationOpen(event);
+
+//   // 2. Business rule: Event must be published
+//   if (event.status !== EVENT_STATUS.PUBLISHED) {
+//     throw new BadRequestError('Cannot register for a cancelled or unpublished event.');
+//   }
+
+//   // 3. Business rule: Event must be in the future
+//   if (new Date(event.eventDate).getTime() <= Date.now()) {
+//     throw new BadRequestError('Cannot register for a past event.');
+//   }
+
+//   // 4. Business rule: Event must be free for direct RSVP endpoint
+//   if (event.isPaid && event.ticketPrice > 0) {
+//     throw new BadRequestError('This is a paid event. Please complete booking through Razorpay checkout.');
+//   }
+
+//   // 5. Check if attendee is already registered or previously cancelled
+//   const existingRegistration = await Registration.findOne({
+//     eventId: new mongoose.Types.ObjectId(eventId),
+//     attendeeId: new mongoose.Types.ObjectId(attendeeId)
+//   });
+
+//   if (existingRegistration) {
+//     if (existingRegistration.status === REGISTRATION_STATUS.CANCELLED) {
+//       throw new BadRequestError('You have previously cancelled your registration for this event and cannot re-register.');
+//     }
+//     if (existingRegistration.status === REGISTRATION_STATUS.CANCELLATION_REQUESTED) {
+//       throw new ConflictError('A cancellation request is pending for this event.');
+//     }
+//     throw new ConflictError('You are already registered for this event.');
+//   }
+
+//   // 5. Atomic seat reservation
+//   const useReplicaSet = canUseReplicaSetTransactions();
+//   let session = null;
+//   let seatAllocated = false;
+//   let registration = null;
+
+//   if (useReplicaSet) {
+//     session = await mongoose.startSession();
+//     session.startTransaction();
+//   }
+
+//   let updatedEvent = null;
+
+//   try {
+//     // Atomically reserve seat ONLY if seatsBooked < seatLimit
+//     updatedEvent = await Event.findOneAndUpdate(
+//       {
+//         _id: new mongoose.Types.ObjectId(eventId),
+//         status: EVENT_STATUS.PUBLISHED,
+//         eventDate: { $gt: new Date() },
+//         $expr: { $lt: ['$seatsBooked', '$seatLimit'] }
+//       },
+//       { $inc: { seatsBooked: 1 } },
+//       { new: true, session: session || undefined }
+//     );
+
+//     if (!updatedEvent) {
+//       throw new BadRequestError('Event is sold out. No seats remaining.');
+//     }
+//     seatAllocated = true;
+
+//     // Insert registration
+//     if (useReplicaSet) {
+//       const [newReg] = await Registration.create(
+//         [
+//           {
+//             eventId: new mongoose.Types.ObjectId(eventId),
+//             attendeeId: new mongoose.Types.ObjectId(attendeeId),
+//             status: REGISTRATION_STATUS.CONFIRMED,
+//             confirmationEmailSent: false
+//           }
+//         ],
+//         { session }
+//       );
+//       registration = newReg;
+//       await session.commitTransaction();
+//     } else {
+//       registration = await Registration.create({
+//         eventId: new mongoose.Types.ObjectId(eventId),
+//         attendeeId: new mongoose.Types.ObjectId(attendeeId),
+//         status: REGISTRATION_STATUS.CONFIRMED,
+//         confirmationEmailSent: false
+//       });
+//     }
+
+//     await logAuditEvent({
+//       action: 'EVENT_REGISTRATION_CREATED',
+//       actorId: attendeeId,
+//       actorRole: 'ATTENDEE',
+//       resourceId: registration._id,
+//       resourceType: 'Registration',
+//       ipAddress,
+//       userAgent,
+//       details: { eventId, eventTitle: updatedEvent.title }
+//     });
+//   } catch (error) {
+//     if (useReplicaSet && session) {
+//       try {
+//         await session.abortTransaction();
+//       } catch (_) { }
+//     } else if (seatAllocated && !registration) {
+//       // Roll back seat allocation on standalone or non-transactional instance
+//       try {
+//         await Event.findByIdAndUpdate(eventId, { $inc: { seatsBooked: -1 } });
+//       } catch (_) { }
+//     }
+
+//     if (error.code === 11000) {
+//       throw new ConflictError('You are already registered for this event.');
+//     }
+//     throw error;
+//   } finally {
+//     if (session) {
+//       session.endSession();
+//     }
+//   }
+
+//   // 6. Post-persistence notification & Resend email confirmation
+//   // Executed strictly after successful registration persistence and outside of transaction
+//   try {
+//     const attendeeUser = await User.findById(attendeeId).select('name email');
+
+//     // Trigger transactional confirmation email via Resend
+//     if (attendeeUser && attendeeUser.email) {
+//       sendRegistrationConfirmationEmail({
+//         registrationId: registration._id.toString(),
+//         attendee: {
+//           name: attendeeUser.name,
+//           email: attendeeUser.email
+//         },
+//         event: updatedEvent
+//       }).catch((emailErr) => {
+//         logger.error(
+//           { err: emailErr?.message, registrationId: registration._id },
+//           'Non-blocking confirmation email delivery failed'
+//         );
+//       });
+//     }
+
+//     // In-app alert for attendee
+//     dispatchNotification({
+//       userId: attendeeId,
+//       type: NOTIFICATION_TYPE.BOOKING_CONFIRMED,
+//       title: 'Booking Confirmed!',
+//       message: `Your seat for "${updatedEvent.title}" has been confirmed. A confirmation email has been scheduled.`,
+//       eventId: updatedEvent._id,
+//       registrationId: registration._id
+//     });
+//   } catch (notificationErr) {
+//     // Non-blocking: registration is already safely committed
+//     logger.warn({ err: notificationErr?.message }, 'Post-registration notification dispatch failed safely');
+//   }
+
+//   return {
+//     registration,
+//     event: updatedEvent
+//   };
+// }
+
+
+
+
 export async function registerForEvent({
   eventId,
   attendeeId,
@@ -54,23 +242,33 @@ export async function registerForEvent({
 
   // 1. Verify event exists
   const event = await Event.findById(eventId);
+
   if (!event) {
     throw new NotFoundError('Event not found.');
   }
 
+  // Registration deadline check
+  assertRegistrationOpen(event);
+
   // 2. Business rule: Event must be published
   if (event.status !== EVENT_STATUS.PUBLISHED) {
-    throw new BadRequestError('Cannot register for a cancelled or unpublished event.');
+    throw new BadRequestError(
+      'Cannot register for a cancelled or unpublished event.'
+    );
   }
 
   // 3. Business rule: Event must be in the future
   if (new Date(event.eventDate).getTime() <= Date.now()) {
-    throw new BadRequestError('Cannot register for a past event.');
+    throw new BadRequestError(
+      'Cannot register for a past event.'
+    );
   }
 
   // 4. Business rule: Event must be free for direct RSVP endpoint
   if (event.isPaid && event.ticketPrice > 0) {
-    throw new BadRequestError('This is a paid event. Please complete booking through Razorpay checkout.');
+    throw new BadRequestError(
+      'This is a paid event. Please complete booking through Razorpay checkout.'
+    );
   }
 
   // 5. Check if attendee is already registered or previously cancelled
@@ -81,16 +279,28 @@ export async function registerForEvent({
 
   if (existingRegistration) {
     if (existingRegistration.status === REGISTRATION_STATUS.CANCELLED) {
-      throw new BadRequestError('You have previously cancelled your registration for this event and cannot re-register.');
+      throw new BadRequestError(
+        'You have previously cancelled your registration for this event and cannot re-register.'
+      );
     }
-    if (existingRegistration.status === REGISTRATION_STATUS.CANCELLATION_REQUESTED) {
-      throw new ConflictError('A cancellation request is pending for this event.');
+
+    if (
+      existingRegistration.status ===
+      REGISTRATION_STATUS.CANCELLATION_REQUESTED
+    ) {
+      throw new ConflictError(
+        'A cancellation request is pending for this event.'
+      );
     }
-    throw new ConflictError('You are already registered for this event.');
+
+    throw new ConflictError(
+      'You are already registered for this event.'
+    );
   }
 
-  // 5. Atomic seat reservation
+  // 6. Atomic seat reservation
   const useReplicaSet = canUseReplicaSetTransactions();
+
   let session = null;
   let seatAllocated = false;
   let registration = null;
@@ -103,21 +313,63 @@ export async function registerForEvent({
   let updatedEvent = null;
 
   try {
-    // Atomically reserve seat ONLY if seatsBooked < seatLimit
+    /*
+     * Use one timestamp for the atomic registration check.
+     *
+     * This ensures that the event must:
+     * - still be published
+     * - still be in the future
+     * - still be before the registration deadline
+     * - still have available seats
+     */
+    const now = new Date();
+
     updatedEvent = await Event.findOneAndUpdate(
       {
         _id: new mongoose.Types.ObjectId(eventId),
+
         status: EVENT_STATUS.PUBLISHED,
-        eventDate: { $gt: new Date() },
-        $expr: { $lt: ['$seatsBooked', '$seatLimit'] }
+
+        eventDate: {
+          $gt: now
+        },
+
+        // Registration deadline:
+        // - null means the organizer did not configure a deadline
+        // - otherwise deadline must still be in the future
+        $or: [
+          {
+            registrationDeadline: null
+          },
+          {
+            registrationDeadline: {
+              $gt: now
+            }
+          }
+        ],
+
+        // Atomically make sure seats are still available
+        $expr: {
+          $lt: ['$seatsBooked', '$seatLimit']
+        }
       },
-      { $inc: { seatsBooked: 1 } },
-      { new: true, session: session || undefined }
+      {
+        $inc: {
+          seatsBooked: 1
+        }
+      },
+      {
+        new: true,
+        session: session || undefined
+      }
     );
 
     if (!updatedEvent) {
-      throw new BadRequestError('Event is sold out. No seats remaining.');
+      throw new BadRequestError(
+        'Registration is closed or the event is sold out.'
+      );
     }
+
     seatAllocated = true;
 
     // Insert registration
@@ -133,7 +385,9 @@ export async function registerForEvent({
         ],
         { session }
       );
+
       registration = newReg;
+
       await session.commitTransaction();
     } else {
       registration = await Registration.create({
@@ -152,7 +406,10 @@ export async function registerForEvent({
       resourceType: 'Registration',
       ipAddress,
       userAgent,
-      details: { eventId, eventTitle: updatedEvent.title }
+      details: {
+        eventId,
+        eventTitle: updatedEvent.title
+      }
     });
   } catch (error) {
     if (useReplicaSet && session) {
@@ -162,13 +419,23 @@ export async function registerForEvent({
     } else if (seatAllocated && !registration) {
       // Roll back seat allocation on standalone or non-transactional instance
       try {
-        await Event.findByIdAndUpdate(eventId, { $inc: { seatsBooked: -1 } });
+        await Event.findByIdAndUpdate(
+          eventId,
+          {
+            $inc: {
+              seatsBooked: -1
+            }
+          }
+        );
       } catch (_) {}
     }
 
     if (error.code === 11000) {
-      throw new ConflictError('You are already registered for this event.');
+      throw new ConflictError(
+        'You are already registered for this event.'
+      );
     }
+
     throw error;
   } finally {
     if (session) {
@@ -176,10 +443,12 @@ export async function registerForEvent({
     }
   }
 
-  // 6. Post-persistence notification & Resend email confirmation
-  // Executed strictly after successful registration persistence and outside of transaction
+  // 7. Post-persistence notification & Resend email confirmation
+  // Executed strictly after successful registration persistence
+  // and outside of transaction
   try {
-    const attendeeUser = await User.findById(attendeeId).select('name email');
+    const attendeeUser = await User.findById(attendeeId)
+      .select('name email');
 
     // Trigger transactional confirmation email via Resend
     if (attendeeUser && attendeeUser.email) {
@@ -192,7 +461,10 @@ export async function registerForEvent({
         event: updatedEvent
       }).catch((emailErr) => {
         logger.error(
-          { err: emailErr?.message, registrationId: registration._id },
+          {
+            err: emailErr?.message,
+            registrationId: registration._id
+          },
           'Non-blocking confirmation email delivery failed'
         );
       });
@@ -209,7 +481,12 @@ export async function registerForEvent({
     });
   } catch (notificationErr) {
     // Non-blocking: registration is already safely committed
-    logger.warn({ err: notificationErr?.message }, 'Post-registration notification dispatch failed safely');
+    logger.warn(
+      {
+        err: notificationErr?.message
+      },
+      'Post-registration notification dispatch failed safely'
+    );
   }
 
   return {
@@ -374,10 +651,10 @@ export async function getEventAttendees(eventId, organizerId, options = {}) {
       registeredAt: r.createdAt,
       attendee: r.attendeeId
         ? {
-            id: r.attendeeId._id,
-            name: r.attendeeId.name,
-            email: r.attendeeId.email
-          }
+          id: r.attendeeId._id,
+          name: r.attendeeId.name,
+          email: r.attendeeId.email
+        }
         : null,
       cancellationReason: r.cancellationReason
     }))
@@ -761,4 +1038,55 @@ export async function getRegistrationCalendarIcs({ registrationId, attendeeId })
     icsContent,
     filename
   };
+}
+
+
+export function assertRegistrationOpen(event) {
+  if (
+    event.registrationDeadline &&
+    new Date() >= new Date(event.registrationDeadline)
+  ) {
+    throw new BadRequestError(
+      'Registration for this event has closed.'
+    );
+  }
+}
+
+export async function updateRegistrationDeadline({
+  eventId,
+  organizerId,
+  registrationDeadline
+}) {
+  if (!mongoose.Types.ObjectId.isValid(eventId)) {
+    throw new BadRequestError('Invalid event ID format.');
+  }
+
+  const event = await Event.findById(eventId);
+  if (!event) {
+    throw new NotFoundError('Event not found.');
+  }
+
+  if (event.organizerId.toString() !== organizerId.toString()) {
+    throw new ForbiddenError('You are not authorized to update this event.');
+  }
+
+  if (event.status === EVENT_STATUS.CANCELLED) {
+    throw new BadRequestError('Cannot set a registration deadline on a cancelled event.');
+  }
+
+  if (registrationDeadline) {
+    const deadline = new Date(registrationDeadline);
+    if (isNaN(deadline.getTime())) {
+      throw new BadRequestError('Invalid date format for registration deadline.');
+    }
+    if (deadline >= new Date(event.eventDate)) {
+      throw new BadRequestError('Registration deadline must be before the event date.');
+    }
+    event.registrationDeadline = deadline;
+  } else {
+    event.registrationDeadline = null;
+  }
+
+  await event.save();
+  return event;
 }

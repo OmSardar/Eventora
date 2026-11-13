@@ -147,6 +147,10 @@ const eventSchema = new mongoose.Schema(
       type: String,
       trim: true,
       default: ''
+    },
+    registrationDeadline: {
+      type: Date,
+      default: null
     }
   },
   {

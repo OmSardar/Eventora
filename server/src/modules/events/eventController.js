@@ -51,7 +51,8 @@ export async function createEvent(req, res, next) {
       currency,
       seatingType,
       maxTicketsPerBooking,
-      seatingConfig
+      seatingConfig,
+      registrationDeadline
     } = req.validatedBody;
     const organizerId = req.user.id;
     const ipAddress = req.ip;
@@ -72,6 +73,7 @@ export async function createEvent(req, res, next) {
       seatingType,
       maxTicketsPerBooking,
       seatingConfig,
+      registrationDeadline,
       organizerId,
       ipAddress,
       userAgent
